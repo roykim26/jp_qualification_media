@@ -10,7 +10,8 @@ export type PublicQualificationView = {
   officialVerifiedAt: string | null;
 };
 
-export type QualificationSection = 'overview' | 'application' | 'exam-content';
+export type QualificationSection =
+  'overview' | 'annual' | 'application' | 'exam-content' | 'pass-rate';
 
 export type QualificationDirectoryItem = Qualification & {
   status: PublicQualificationView['status'];
@@ -23,19 +24,40 @@ const statusLabels = {
 
 const sectionConfig: Record<
   Exclude<QualificationSection, 'overview'>,
-  { title: string; intro: string; factKeys: string[] }
+  { title: string; intro: string; factKeyPrefixes: string[] }
 > = {
+  annual: {
+    title: '年度試験日程',
+    intro:
+      '選択した年度の申込開始、締切、試験日、合格発表などを公式情報から整理します。別年度の情報は混在させません。',
+    factKeyPrefixes: [
+      'application_open',
+      'application_start',
+      'application_deadline',
+      'exam_schedule',
+      'exam_date',
+      'result_date',
+      'suspension_period',
+    ],
+  },
   application: {
     title: '申込み・受験資格',
     intro:
       '公式の申込みルール、申請方法、受験資格を整理します。未確認の申込期限は推測・補完しません。',
-    factKeys: ['application_rule', 'application_deadline', 'eligibility'],
+    factKeyPrefixes: [
+      'application_rule',
+      'application_open',
+      'application_start',
+      'application_deadline',
+      'eligibility',
+      'fee',
+    ],
   },
   'exam-content': {
     title: '試験内容',
     intro:
       '公式の試験方式、出題範囲、試験内容を整理します。公式確認のない情報は表示しません。',
-    factKeys: [
+    factKeyPrefixes: [
       'exam_method',
       'exam_content',
       'exam_subjects',
@@ -43,6 +65,19 @@ const sectionConfig: Record<
       'exam_time',
       'question_format',
       'question_count',
+    ],
+  },
+  'pass-rate': {
+    title: '合格率・合格基準',
+    intro:
+      '公式発表された合格率、受験者数、合格者数、合格基準を年度と実施区分ごとに表示します。未確認値は推定しません。',
+    factKeyPrefixes: [
+      'pass_rate',
+      'passing_standard',
+      'pass_mark',
+      'applicants',
+      'examinees',
+      'passed',
     ],
   },
 };
@@ -238,22 +273,37 @@ export function renderQualificationPage(view: PublicQualificationView): string {
 export function renderQualificationSectionPage(
   view: PublicQualificationView,
   section: QualificationSection,
+  year?: number,
 ): string {
   const { qualification } = view;
   const sectionMeta = section === 'overview' ? null : sectionConfig[section];
   const factsForPage = sectionMeta
-    ? view.facts.filter((fact) => sectionMeta.factKeys.includes(fact.factKey))
+    ? view.facts.filter(
+        (fact) =>
+          (section !== 'annual' || fact.examYear === year) &&
+          sectionMeta.factKeyPrefixes.some((prefix) =>
+            fact.factKey.startsWith(prefix),
+          ),
+      )
     : view.facts;
   const facts = factsForPage.length
     ? `<section><h2>公式確認済み情報</h2><div class="facts">${factsForPage.map(renderFact).join('')}</div></section>`
     : `<section class="empty-state"><p class="status">公式発表待ち</p><h2>${sectionMeta ? `${sectionMeta.title}の公式情報は未確認です` : '現在、公開できる公式情報はありません'}</h2><p>${sectionMeta?.intro ?? 'ITパスポート試験の動的情報は、公式発表を確認し、必要な審査を完了した後に掲載します。未確認の日付や費用は表示しません。'}</p></section>`;
   const basePath = `/shikaku/${qualification.slug}`;
-  const subnav = `<nav class="subnav"><a href="${basePath}/">概要</a><a href="${basePath}/application/">申込み・条件</a><a href="${basePath}/exam-content/">試験内容</a></nav>`;
+  const availableYears = view.facts
+    .map((fact) => fact.examYear)
+    .filter((value): value is number => Number.isInteger(value));
+  const navigationYear = year ?? Math.max(...availableYears, 2026);
+  const pageTitle =
+    section === 'annual' && year
+      ? `${year}年 ${sectionMeta?.title}`
+      : sectionMeta?.title;
+  const subnav = `<nav class="subnav"><a href="${basePath}/">概要</a><a href="${basePath}/${navigationYear}/">年度日程</a><a href="${basePath}/application/">申込み・条件</a><a href="${basePath}/exam-content/">試験内容</a><a href="${basePath}/pass-rate/">合格率</a></nav>`;
   return `<!doctype html>
 <html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(qualification.officialNameJa)} | 公式情報</title>
 <style>
 :root{font-family:system-ui,-apple-system,"Hiragino Kaku Gothic ProN",sans-serif;color:#172033;background:#f6f8fb}body{margin:0}.wrap{max-width:960px;margin:auto;padding:24px}.top{display:flex;justify-content:space-between;gap:16px;align-items:center}.brand{font-weight:700;color:#2457a6;text-decoration:none}.hero,.fact,.empty-state,.source-module{background:#fff;border:1px solid #dce3ed;border-radius:14px;padding:24px;box-shadow:0 4px 16px #1720330b}.hero{margin-top:24px}.eyebrow{color:#65738a;font-size:.9rem}.status{display:inline-block;border-radius:999px;background:#fff3cd;color:#805b00;padding:6px 12px;font-weight:700}.subnav{display:flex;gap:16px;flex-wrap:wrap;margin:18px 0}.facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:16px}.fact{padding:18px}.fact h3{font-size:1rem;color:#51627b}.fact-value{font-size:1.25rem;font-weight:700}.empty-state,.source-module{margin-top:20px}.empty-state{border-left:5px solid #d99a00}.source-module ul{padding-left:1.2rem}.source-module li{margin:.8rem 0}.source-module li span{display:block;color:#65738a;font-size:.9rem}details{margin-top:14px;color:#51627b}summary{cursor:pointer;font-weight:600}a{color:#2457a6}footer{margin-top:32px;color:#65738a;font-size:.9rem}@media(max-width:600px){.wrap{padding:16px}.hero,.fact,.empty-state,.source-module{padding:18px}}
-</style></head><body><main class="wrap"><nav class="top"><a class="brand" href="/">資格試験の公式情報</a><a href="/shikaku/">資格を探す</a></nav><header class="hero"><p class="eyebrow">${escapeHtml(qualification.field)} / ${escapeHtml(qualification.category)}</p><h1>${escapeHtml(qualification.officialNameJa)}</h1>${sectionMeta ? `<p>${escapeHtml(sectionMeta.title)}</p>` : ''}<p>${qualification.aliasesJa.map(escapeHtml).join(' / ') || '公式情報を整理して掲載します。'}</p><p class="status">${statusLabels[view.status]}</p><p>公式情報確認日: ${escapeHtml(formatVerifiedAt(view.officialVerifiedAt))}</p></header>${subnav}${facts}${renderSourceModule(qualification.slug)}<footer>動的事実は、承認済みで公式スナップショットに紐づく内容のみ表示します。日付、費用、制度情報は試験実施機関の最新発表をご確認ください。</footer></main></body></html>`;
+</style></head><body><main class="wrap"><nav class="top"><a class="brand" href="/">資格試験の公式情報</a><a href="/shikaku/">資格を探す</a></nav><header class="hero"><p class="eyebrow">${escapeHtml(qualification.field)} / ${escapeHtml(qualification.category)}</p><h1>${escapeHtml(qualification.officialNameJa)}</h1>${pageTitle ? `<p>${escapeHtml(pageTitle)}</p>` : ''}<p>${qualification.aliasesJa.map(escapeHtml).join(' / ') || '公式情報を整理して掲載します。'}</p><p class="status">${statusLabels[view.status]}</p><p>公式情報確認日: ${escapeHtml(formatVerifiedAt(view.officialVerifiedAt))}</p></header>${subnav}${facts}${renderSourceModule(qualification.slug)}<footer>動的事実は、承認済みで公式スナップショットに紐づく内容のみ表示します。日付、費用、制度情報は試験実施機関の最新発表をご確認ください。</footer></main></body></html>`;
 }
 
 export function renderQualificationDirectory(
@@ -262,7 +312,7 @@ export function renderQualificationDirectory(
   const cards = items
     .map(
       (item) =>
-        `<article class="directory-card"><p class="eyebrow">${escapeHtml(item.field)} / ${escapeHtml(item.category)}</p><h2><a href="/shikaku/${escapeHtml(item.slug)}/">${escapeHtml(item.officialNameJa)}</a></h2><p>${item.aliasesJa.map(escapeHtml).join(' / ') || '公式情報を整理して掲載します。'}</p><p class="status">${statusLabels[item.status]}</p><a href="/shikaku/${escapeHtml(item.slug)}/application/">申込み・条件</a> · <a href="/shikaku/${escapeHtml(item.slug)}/exam-content/">試験内容</a></article>`,
+        `<article class="directory-card"><p class="eyebrow">${escapeHtml(item.field)} / ${escapeHtml(item.category)}</p><h2><a href="/shikaku/${escapeHtml(item.slug)}/">${escapeHtml(item.officialNameJa)}</a></h2><p>${item.aliasesJa.map(escapeHtml).join(' / ') || '公式情報を整理して掲載します。'}</p><p class="status">${statusLabels[item.status]}</p><a href="/shikaku/${escapeHtml(item.slug)}/2026/">年度日程</a> · <a href="/shikaku/${escapeHtml(item.slug)}/application/">申込み・条件</a> · <a href="/shikaku/${escapeHtml(item.slug)}/exam-content/">試験内容</a> · <a href="/shikaku/${escapeHtml(item.slug)}/pass-rate/">合格率</a></article>`,
     )
     .join('');
   return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>資格を探す | 公式情報</title><style>:root{font-family:system-ui,-apple-system,"Hiragino Kaku Gothic ProN",sans-serif;color:#172033;background:#f6f8fb}body{margin:0}.wrap{max-width:960px;margin:auto;padding:24px}.top{display:flex;justify-content:space-between;gap:16px}.brand,a{color:#2457a6;text-decoration:none}.brand{font-weight:700}.hero,.directory-card{background:#fff;border:1px solid #dce3ed;border-radius:14px;padding:24px;box-shadow:0 4px 16px #1720330b}.hero{margin-top:24px}.directory{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;margin-top:20px}.directory-card{padding:20px}.eyebrow{color:#65738a;font-size:.9rem}.status{display:inline-block;border-radius:999px;background:#fff3cd;color:#805b00;padding:6px 12px;font-weight:700}</style></head><body><main class="wrap"><nav class="top"><a class="brand" href="/">資格試験の公式情報</a><a href="/shikaku/">資格を探す</a></nav><header class="hero"><p class="eyebrow">公式情報を資格別に整理</p><h1>資格を探す</h1><p>試験の公式情報、申込み条件、試験内容を資格ごとに確認できます。未確認の動的事実は表示していません。</p></header><section class="directory">${cards}</section></main></body></html>`;

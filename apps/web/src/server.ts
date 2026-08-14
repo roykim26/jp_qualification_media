@@ -20,7 +20,7 @@ const server = createServer(async (req, res) => {
   try {
     const pathname = new URL(req.url ?? '/', 'http://127.0.0.1').pathname;
     const routeMatch = pathname.match(
-      /^\/shikaku\/([^/]+)(?:\/(application|exam-content))?\/?$/,
+      /^\/shikaku\/([^/]+)(?:\/(application|exam-content|pass-rate|\d{4}))?\/?$/,
     );
     if (pathname === '/shikaku' || pathname === '/shikaku/') {
       const directoryItems = await Promise.all(
@@ -45,12 +45,19 @@ const server = createServer(async (req, res) => {
     }
     if (routeMatch) {
       const slug = routeMatch[1];
-      const section: QualificationSection =
-        routeMatch[2] === 'application'
+      const routePart = routeMatch[2];
+      const year = /^\d{4}$/.test(routePart ?? '')
+        ? Number(routePart)
+        : undefined;
+      const section: QualificationSection = year
+        ? 'annual'
+        : routePart === 'application'
           ? 'application'
-          : routeMatch[2] === 'exam-content'
+          : routePart === 'exam-content'
             ? 'exam-content'
-            : 'overview';
+            : routePart === 'pass-rate'
+              ? 'pass-rate'
+              : 'overview';
       if (
         ![
           'takken',
@@ -66,7 +73,7 @@ const server = createServer(async (req, res) => {
       }
       const view = await readQualification(slug);
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
-      return res.end(renderQualificationSectionPage(view, section));
+      return res.end(renderQualificationSectionPage(view, section, year));
     }
     if (pathname === '/') {
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });

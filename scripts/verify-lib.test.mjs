@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { launchGate } from './verify-lib.mjs';
+import { launchGate, qualificationWebRoutes } from './verify-lib.mjs';
 import baseline from '../config/release-gate-baseline.json' with { type: 'json' };
 
 test('launch gate contains six unique qualifications with positive fact baselines', () => {
@@ -23,6 +23,8 @@ test('launch gate contains six unique qualifications with positive fact baseline
     ),
   );
   assert.ok(launchGate.every((item) => item.pageContains.length > 0));
+  assert.equal(qualificationWebRoutes.length, 5);
+  assert.equal(launchGate.length * qualificationWebRoutes.length, 30);
   assert.equal(baseline.version, 1);
   assert.deepEqual(launchGate, baseline.qualifications);
 });

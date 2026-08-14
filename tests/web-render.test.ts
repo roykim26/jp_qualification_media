@@ -87,6 +87,79 @@ describe('IT Passport public page rendering', () => {
     expect(examContent).toContain('試験内容');
     expect(examContent).toContain('更新・訂正について');
   });
+
+  it('keeps annual facts isolated by year and exposes the five page types', () => {
+    const view = {
+      qualification: itPassport,
+      status: 'verified' as const,
+      officialVerifiedAt: '2026-08-11T00:00:00.000Z',
+      facts: [
+        {
+          qualificationSlug: 'it-passport' as const,
+          examLevelId: null,
+          examYear: 2026,
+          factKey: 'application_open_2026_may_sessions',
+          valueType: 'datetime' as const,
+          normalizedValue: '2026-03-24T21:30:00+09:00',
+          displayValue: '2026年度の申込情報',
+          status: 'approved' as const,
+          riskLevel: 'high' as const,
+          sourceId: 'source:it-passport:jitec-application',
+          sourceSnapshotId: 'snapshot:official:2026',
+          synthetic: false,
+          verifiedAt: '2026-08-11T00:00:00.000Z',
+        },
+        {
+          qualificationSlug: 'it-passport' as const,
+          examLevelId: null,
+          examYear: 2025,
+          factKey: 'exam_date',
+          valueType: 'date' as const,
+          normalizedValue: '2025-12-01',
+          displayValue: '2025年度の試験日',
+          status: 'approved' as const,
+          riskLevel: 'high' as const,
+          sourceId: 'source:it-passport:jitec-home',
+          sourceSnapshotId: 'snapshot:official:2025',
+          synthetic: false,
+          verifiedAt: '2025-12-01T00:00:00.000Z',
+        },
+        {
+          qualificationSlug: 'it-passport' as const,
+          examLevelId: null,
+          examYear: 2026,
+          factKey: 'passing_standard',
+          valueType: 'text' as const,
+          normalizedValue: 'official-standard',
+          displayValue: '公式合格基準',
+          status: 'approved' as const,
+          riskLevel: 'high' as const,
+          sourceId: 'source:it-passport:ipa',
+          sourceSnapshotId: 'snapshot:official:standard',
+          synthetic: false,
+          verifiedAt: '2026-08-11T00:00:00.000Z',
+        },
+      ],
+    };
+
+    const annual = renderQualificationSectionPage(view, 'annual', 2026);
+    expect(annual).toContain('2026年度の申込情報');
+    expect(annual).not.toContain('2025年度の試験日');
+    expect(annual).not.toContain('公式合格基準');
+    expect(annual).toContain('2026年 年度試験日程');
+
+    const application = renderQualificationSectionPage(view, 'application');
+    expect(application).toContain('2026年度の申込情報');
+
+    const passRate = renderQualificationSectionPage(view, 'pass-rate');
+    expect(passRate).toContain('公式合格基準');
+    expect(passRate).not.toContain('2026年度の申込情報');
+
+    expect(passRate).toContain('/shikaku/it-passport/2026/');
+    expect(passRate).toContain('/shikaku/it-passport/application/');
+    expect(passRate).toContain('/shikaku/it-passport/exam-content/');
+    expect(passRate).toContain('/shikaku/it-passport/pass-rate/');
+  });
 });
 
 describe('shared qualification page rendering', () => {

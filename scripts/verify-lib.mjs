@@ -4,6 +4,13 @@ import { Client } from 'pg';
 import baseline from '../config/release-gate-baseline.json' with { type: 'json' };
 
 export const launchGate = baseline.qualifications;
+export const qualificationWebRoutes = [
+  { suffix: '', marker: '概要' },
+  { suffix: '2026/', marker: '2026年 年度試験日程' },
+  { suffix: 'application/', marker: '申込み・受験資格' },
+  { suffix: 'exam-content/', marker: '試験内容' },
+  { suffix: 'pass-rate/', marker: '合格率・合格基準' },
+];
 
 export function createRuntime(databaseUrl) {
   const apiPort = Number(process.env.VERIFY_API_PORT ?? 4191);
@@ -87,20 +94,31 @@ export async function verifyQualification(
     api.facts.some((fact) => fact.status !== 'approved' || fact.synthetic)
   )
     errors.push(`API status=${api.status}, facts=${api.facts?.length}`);
-  const webResponse = await waitFor(
-    `http://127.0.0.1:${runtime.webPort}/shikaku/${gate.slug}/`,
-  );
-  const html = await webResponse.text();
-  if (!html.includes('公式確認済み'))
-    errors.push('Web verified marker missing');
-  if (!html.includes(gate.pageContains))
-    errors.push(`Web missing ${gate.pageContains}`);
+  const webPages = [];
+  for (const route of qualificationWebRoutes) {
+    const webResponse = await waitFor(
+      `http://127.0.0.1:${runtime.webPort}/shikaku/${gate.slug}/${route.suffix}`,
+    );
+    const html = await webResponse.text();
+    if (!html.includes('公式確認済み'))
+      errors.push(`Web ${route.suffix || 'overview'} verified marker missing`);
+    if (!html.includes(gate.pageContains))
+      errors.push(
+        `Web ${route.suffix || 'overview'} missing ${gate.pageContains}`,
+      );
+    if (route.suffix && !html.includes(route.marker))
+      errors.push(`Web ${route.suffix} missing ${route.marker}`);
+    webPages.push({
+      path: `/shikaku/${gate.slug}/${route.suffix}`,
+      status: webResponse.status,
+    });
+  }
   return {
     slug: gate.slug,
     passed: errors.length === 0,
     database,
     api: { status: api.status, facts: api.facts?.length },
-    web: { status: webResponse.status, pageContains: gate.pageContains },
+    web: { status: 'verified', pages: webPages },
     errors,
   };
 }
