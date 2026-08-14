@@ -1,6 +1,8 @@
 import { createServer } from 'node:http';
 import {
   renderErrorPage,
+  renderHomePage,
+  renderNotFoundPage,
   renderQualificationDirectory,
   renderQualificationSectionPage,
   type QualificationSection,
@@ -68,8 +70,8 @@ const server = createServer(async (req, res) => {
           'fp',
         ].includes(slug)
       ) {
-        res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
-        return res.end('not found');
+        res.writeHead(404, { 'content-type': 'text/html; charset=utf-8' });
+        return res.end(renderNotFoundPage());
       }
       const view = await readQualification(slug);
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
@@ -77,12 +79,10 @@ const server = createServer(async (req, res) => {
     }
     if (pathname === '/') {
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
-      return res.end(
-        '<!doctype html><meta charset="utf-8"><title>資格試験の公式情報</title><main style="max-width:760px;margin:4rem auto;font-family:system-ui;padding:1rem"><h1>資格試験の公式情報を、わかりやすく整理。</h1><p><a href="/shikaku/">資格を探す</a></p></main>',
-      );
+      return res.end(renderHomePage());
     }
-    res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
-    return res.end('not found');
+    res.writeHead(404, { 'content-type': 'text/html; charset=utf-8' });
+    return res.end(renderNotFoundPage());
   } catch {
     res.writeHead(502, { 'content-type': 'text/html; charset=utf-8' });
     return res.end(renderErrorPage());

@@ -4,6 +4,8 @@ import {
   type ServerResponse,
 } from 'node:http';
 import { Pool } from 'pg';
+import { uiStyles } from '../../../packages/ui/src/index.js';
+import { adminStyles } from './styles.js';
 
 const port = Number(process.env.ADMIN_PORT ?? 3001);
 const reviewerId = process.env.ADMIN_REVIEWER_ID;
@@ -46,36 +48,58 @@ function page(
   const cards = rows
     .map(
       (row) => `
-    <article class="card" data-id="${escapeHtml(row.id)}">
+    <article class="card review-card" data-id="${escapeHtml(row.id)}">
       <h2>${escapeHtml(row.fact_key)} · ${escapeHtml(row.exam_year)}</h2>
-      <p><b>机构：</b>${escapeHtml(row.provider_id || '未指定')}　<b>级别：</b>${escapeHtml(row.exam_level_id || '共通')}　<b>科目：</b>${escapeHtml(row.exam_component || '共通')}　<b>实施方式：</b>${escapeHtml(row.delivery_mode || '未指定')}</p>
+      <p class="review-meta"><span><b>机构：</b>${escapeHtml(row.provider_id || '未指定')}</span><span><b>级别：</b>${escapeHtml(row.exam_level_id || '共通')}</span><span><b>科目：</b>${escapeHtml(row.exam_component || '共通')}</span><span><b>实施方式：</b>${escapeHtml(row.delivery_mode || '未指定')}</span></p>
       <p><b>候选值：</b>${escapeHtml(row.display_value)}</p>
-      ${row.evidence_text ? `<blockquote><b>官方原文：</b>${escapeHtml(row.evidence_text)}</blockquote>` : ''}
+      ${row.evidence_text ? `<blockquote class="review-evidence"><b>官方原文：</b>${escapeHtml(row.evidence_text)}</blockquote>` : ''}
       <p><b>风险：</b>${escapeHtml(row.risk_level)}　<b>状态：</b>${escapeHtml(row.status)}</p>
-      <p><b>官方来源：</b><a href="${escapeHtml(row.canonical_url)}" target="_blank" rel="noreferrer">${escapeHtml(row.canonical_url)}</a></p>
+      <p class="review-source"><b>官方来源：</b><a href="${escapeHtml(row.canonical_url)}" target="_blank" rel="noreferrer">${escapeHtml(row.canonical_url)}</a></p>
       <p><b>快照：</b>${escapeHtml(row.snapshot_hash)}</p>
-      <textarea placeholder="必须填写人工复核理由" aria-label="review reason"></textarea>
-      <div class="actions">
-        <button data-decision="approve">批准</button>
-        <button data-decision="reject">拒绝</button>
-        <button data-decision="defer">延期</button>
+      <div class="field"><label for="reason-${escapeHtml(row.id)}">人工复核理由</label><textarea id="reason-${escapeHtml(row.id)}" placeholder="例如：已逐项核对官方原文和适用年度" aria-describedby="help-${escapeHtml(row.id)} error-${escapeHtml(row.id)}" required></textarea><p id="help-${escapeHtml(row.id)}" class="field__help">批准、拒绝或延期前必须填写。</p><p id="error-${escapeHtml(row.id)}" class="field__error" aria-live="polite"></p></div>
+      <div class="review-actions">
+        <button type="button" data-decision="approve">批准候选</button>
+        <button type="button" data-decision="reject">拒绝候选</button>
+        <button type="button" data-decision="defer">延期审核</button>
       </div>
-      <output></output>
+      <output aria-live="polite" aria-atomic="true"></output>
     </article>`,
     )
     .join('');
-  return `<!doctype html><meta charset="utf-8"><title>${qualificationTitle}审核队列</title>
-  <style>body{font:16px system-ui;max-width:1000px;margin:2rem auto;padding:0 1rem;background:#f6f7f9}.card{background:white;border:1px solid #ddd;border-radius:8px;padding:1rem;margin:1rem 0}.actions{display:flex;gap:.5rem;margin-top:.7rem}button{padding:.5rem .9rem;cursor:pointer}textarea{width:100%;min-height:4rem;margin-top:.5rem}output{display:block;margin-top:.7rem}</style>
-  <h1>${qualificationTitle}人工审核队列</h1><p>高风险事实必须逐项核对官方原文后决定。批准会创建事实修订，不会绕过审核链。</p>
-  <p>待审核：${rows.length} 条</p>${cards || '<p>当前没有待审核候选。</p>'}
+  return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${qualificationTitle}审核队列</title><style>${uiStyles}${adminStyles}</style></head><body><main class="admin-shell"><header class="admin-header"><div><p class="eyebrow">人工审核</p><h1>${qualificationTitle}审核队列</h1><p>高风险事实必须逐项核对官方原文后决定。批准会创建事实修订，不会绕过审核链。</p></div><p class="badge badge--info">待审核：${rows.length} 条</p></header><section class="admin-list" aria-label="待审核事实">
+  ${cards || '<div class="feedback feedback--empty"><div><h2>当前没有待审核候选</h2><p>新的候选事实进入人工审核后会显示在这里。</p></div></div>'}</section></main>
   <script>
-  for (const card of document.querySelectorAll('.card')) for (const button of card.querySelectorAll('button')) button.onclick = async () => {
-    const reason = card.querySelector('textarea').value.trim();
-    if (!reason) return alert('请填写审核理由');
-    const response = await fetch('/internal/reviews/' + card.dataset.id, { method:'POST', headers:{'content-type':'application/json','x-reviewer-id':prompt('审核人 ID') || ''}, body:JSON.stringify({decision:button.dataset.decision, reason}) });
-    const result = await response.json(); card.querySelector('output').textContent = response.ok ? '已记录：' + result.decision : '失败：' + (result.error || 'unknown'); if(response.ok) card.remove();
+  const decisionLabels = { approve: '批准候选', reject: '拒绝候选', defer: '延期审核' };
+  for (const card of document.querySelectorAll('.review-card')) for (const button of card.querySelectorAll('button')) button.onclick = async () => {
+    const textarea = card.querySelector('textarea');
+    const error = card.querySelector('.field__error');
+    const output = card.querySelector('output');
+    const reason = textarea.value.trim();
+    error.textContent = '';
+    if (!reason) { error.textContent = '请填写审核理由。'; textarea.focus(); return; }
+    const decision = button.dataset.decision;
+    if (!confirm('将记录为“' + decisionLabels[decision] + '”，是否继续？')) return;
+    const reviewer = prompt('审核人 ID');
+    if (!reviewer) { output.textContent = '操作已取消。'; return; }
+    const buttons = card.querySelectorAll('button');
+    for (const item of buttons) item.disabled = true;
+    button.dataset.originalLabel = button.textContent;
+    button.textContent = '处理中…';
+    output.textContent = '正在保存审核结果。';
+    try {
+      const response = await fetch('/internal/reviews/' + encodeURIComponent(card.dataset.id), { method:'POST', headers:{'content-type':'application/json','x-reviewer-id':reviewer}, body:JSON.stringify({decision, reason}) });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'request failed');
+      output.textContent = '已记录：' + decisionLabels[result.decision];
+      card.dataset.completed = 'true';
+      setTimeout(() => card.remove(), 500);
+    } catch {
+      output.textContent = '保存失败。输入内容已保留，请重试。';
+      for (const item of buttons) item.disabled = false;
+      button.textContent = button.dataset.originalLabel;
+    }
   };
-  </script>`;
+  </script></body></html>`;
 }
 
 async function listCandidates(
@@ -287,7 +311,7 @@ const server = createServer(async (req, res) => {
       res,
       400,
       JSON.stringify({
-        error: error instanceof Error ? error.message : 'request failed',
+        error: 'request failed',
       }),
       'application/json',
     );

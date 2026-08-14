@@ -146,7 +146,7 @@ describe('IT Passport public page rendering', () => {
     expect(annual).toContain('2026年度の申込情報');
     expect(annual).not.toContain('2025年度の試験日');
     expect(annual).not.toContain('公式合格基準');
-    expect(annual).toContain('2026年 年度試験日程');
+    expect(annual).toContain('2026年試験日程');
 
     const application = renderQualificationSectionPage(view, 'application');
     expect(application).toContain('2026年度の申込情報');
