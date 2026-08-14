@@ -23,7 +23,7 @@ const publicNav = [
   { key: 'schedule' as const, label: '試験日程', href: '/schedule/' },
   { key: 'compare' as const, label: '比較する', href: '/compare/' },
   { key: 'data' as const, label: 'データを見る' },
-  { key: 'updates' as const, label: '更新情報' },
+  { key: 'updates' as const, label: '更新情報', href: '/updates/' },
 ];
 
 function escapeHtml(value: string): string {
@@ -66,7 +66,7 @@ function renderBreadcrumbs(items: BreadcrumbItem[]): string {
 }
 
 function renderFooter(): string {
-  return `<footer class="site-footer"><div class="container"><div class="footer-grid"><section class="footer-group"><h2>資格情報</h2><ul><li><a href="/shikaku/">資格を探す</a></li><li><a href="/schedule/">試験日程</a></li></ul></section><section class="footer-group"><h2>データツール</h2><ul><li><a href="/compare/">資格比較</a></li><li><span class="is-disabled">合格率データ</span></li></ul></section><section class="footer-group"><h2>運営・方針</h2><ul><li><span class="is-disabled">情報源について</span></li><li><span class="is-disabled">編集方針・AI方針</span></li></ul></section><section class="footer-group"><h2>連絡・訂正</h2><ul><li><span class="is-disabled">お問い合わせ</span></li><li><span class="is-disabled">訂正のご連絡</span></li></ul></section></div><p class="footer-note">動的事実は、承認済みで公式スナップショットに紐づく内容のみ表示します。日付、費用、制度情報は試験実施機関の最新発表をご確認ください。</p></div></footer>`;
+  return `<footer class="site-footer"><div class="container"><div class="footer-grid"><section class="footer-group"><h2>資格情報</h2><ul><li><a href="/shikaku/">資格を探す</a></li><li><a href="/schedule/">試験日程</a></li></ul></section><section class="footer-group"><h2>データツール</h2><ul><li><a href="/compare/">資格比較</a></li><li><span class="is-disabled">合格率データ</span></li></ul></section><section class="footer-group"><h2>運営・方針</h2><ul><li><span class="is-disabled">情報源について</span></li><li><span class="is-disabled">編集方針・AI方針</span></li></ul></section><section class="footer-group"><h2>連絡・訂正</h2><ul><li><a href="/updates/">更新情報</a></li><li><span class="is-disabled">訂正のご連絡</span></li></ul></section></div><p class="footer-note">動的事実は、承認済みで公式スナップショットに紐づく内容のみ表示します。日付、費用、制度情報は試験実施機関の最新発表をご確認ください。</p></div></footer>`;
 }
 
 function renderMobileBottomNav(currentNav: PublicNavKey): string {
@@ -89,7 +89,12 @@ function renderMobileBottomNav(currentNav: PublicNavKey): string {
       href: '/compare/',
       icon: 'compare' as const,
     },
-    { key: 'updates' as const, label: '更新', icon: 'update' as const },
+    {
+      key: 'updates' as const,
+      label: '更新',
+      href: '/updates/',
+      icon: 'update' as const,
+    },
   ];
   const links = items
     .map((item) => {

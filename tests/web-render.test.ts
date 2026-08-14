@@ -5,6 +5,7 @@ import {
   renderQualificationSectionPage,
   renderComparePage,
   renderSchedulePage,
+  renderUpdatesPage,
 } from '../apps/web/src/render.js';
 import { launchQualifications } from '../packages/schema/src/qualifications.js';
 
@@ -360,6 +361,40 @@ describe('shared qualification page rendering', () => {
       launchQualifications,
     );
     expect(html).toContain('比較する資格を2件以上選択してください');
+    expect(html).not.toContain('undefined');
+  });
+
+  it('renders public update events with before and after values', () => {
+    const takken = launchQualifications.find((item) => item.slug === 'takken')!;
+    const html = renderUpdatesPage([
+      {
+        id: 'change:takken:exam_date',
+        eventType: 'exam_date',
+        eventLabel: '試験日の変更',
+        qualification: takken,
+        factKey: 'exam_date',
+        factLabel: '試験日',
+        examYear: 2026,
+        previousValue: '2026年10月11日',
+        newValue: '2026年10月18日',
+        affectedPages: ['qualification:takken', 'schedule'],
+        sourceUrl: 'https://www.retio.or.jp/exam/',
+        createdAt: '2026-08-14T00:00:00.000Z',
+        verifiedAt: '2026-08-13T00:00:00.000Z',
+      },
+    ]);
+    expect(html).toContain('更新情報');
+    expect(html).toContain('変更前');
+    expect(html).toContain('2026年10月11日');
+    expect(html).toContain('変更後');
+    expect(html).toContain('2026年10月18日');
+    expect(html).toContain('公式ソース');
+  });
+
+  it('renders the updates empty state without pretending a page changed', () => {
+    const html = renderUpdatesPage([]);
+    expect(html).toContain('公開できる更新情報はまだありません');
+    expect(html).toContain('ページ確認だけでは更新情報を作成しません');
     expect(html).not.toContain('undefined');
   });
 

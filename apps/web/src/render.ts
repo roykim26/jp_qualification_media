@@ -1,5 +1,6 @@
 import type { PublicCalendarEvent } from '../../../packages/schema/src/calendar.js';
 import type { PublicQualificationComparison } from '../../../packages/schema/src/compare.js';
+import type { PublicUpdateEvent } from '../../../packages/schema/src/updates.js';
 import type {
   PublicFact,
   Qualification,
@@ -774,6 +775,33 @@ export function renderComparePage(
   });
 }
 
+export function renderUpdatesPage(events: PublicUpdateEvent[]): string {
+  const cards = events
+    .map((event) => {
+      const diff = event.previousValue
+        ? `<div class="update-diff"><p><span>変更前</span>${escapeHtml(event.previousValue)}</p><p><span>変更後</span>${escapeHtml(event.newValue)}</p></div>`
+        : `<div class="update-diff"><p><span>公開値</span>${escapeHtml(event.newValue)}</p></div>`;
+      const affectedPages = event.affectedPages.length
+        ? event.affectedPages
+            .map((page) => `<span class="tag">${escapeHtml(page)}</span>`)
+            .join('')
+        : '<span class="tag">該当ページ未指定</span>';
+      const source = event.sourceUrl
+        ? `<a href="${escapeHtml(event.sourceUrl)}" target="_blank" rel="noreferrer">公式ソース</a>`
+        : '<span>公式ソース未指定</span>';
+      return `<article class="update-card"><div class="update-card__header"><div><p class="eyebrow">${escapeHtml(event.eventLabel)}</p><h2><a href="/shikaku/${escapeHtml(event.qualification.slug)}/${event.examYear}/">${escapeHtml(event.qualification.officialNameJa)} · ${escapeHtml(event.factLabel)}</a></h2></div><time datetime="${escapeHtml(event.createdAt)}">${escapeHtml(formatVerifiedAt(event.createdAt))}</time></div>${diff}<div class="tag-row">${affectedPages}</div><p class="meta">${event.examYear}年 / 公式確認: ${escapeHtml(formatVerifiedAt(event.verifiedAt))} / ${source}</p></article>`;
+    })
+    .join('');
+  const body = `<div class="container"><header class="page-heading"><p class="eyebrow">公式事実の変更・訂正</p><h1>更新情報</h1><p>承認済みの公式事実に変更や訂正があった場合に、変更前後の値、対象資格、影響ページ、公式ソースを記録します。単なるページ確認やデザイン変更は掲載しません。</p></header><section class="page-section" aria-labelledby="updates-heading"><div class="section-heading"><div><p class="eyebrow">変更ログ</p><h2 id="updates-heading">公式情報の変更・訂正</h2></div><p class="meta">${events.length}件</p></div>${events.length ? `<div class="updates-list">${cards}</div>` : renderFeedbackState({ kind: 'empty', title: '公開できる更新情報はまだありません', body: '公式事実の変更・訂正が承認されるとここに表示します。ページ確認だけでは更新情報を作成しません。', actions: renderButtonLink({ href: '/shikaku/', label: '資格一覧を見る', variant: 'secondary' }) })}</section></div>`;
+  return renderPublicDocument({
+    title: '更新情報 | 公式情報',
+    description: '公式確認済み資格情報の変更と訂正記録を確認できます。',
+    currentNav: 'updates',
+    breadcrumbs: [{ label: 'ホーム', href: '/' }, { label: '更新情報' }],
+    body,
+  });
+}
+
 export function renderErrorPage(): string {
   return renderPublicDocument({
     title: '一時的に表示できません',
@@ -819,7 +847,7 @@ export function renderHomePage(): string {
       icon: 'calendar',
     }),
   });
-  const body = `<div class="container"><section class="home-hero"><div class="home-hero__main"><p class="eyebrow">公式発表に基づく資格試験情報</p><h1>資格試験の公式情報を、わかりやすく整理。</h1><p class="home-hero__lead">試験日、申込み条件、試験内容を、確認済みの公式情報に基づいて掲載します。未確認の日時や費用は表示しません。</p><div class="home-intro__actions">${renderButtonLink({ href: '/shikaku/', label: '資格を探す', icon: 'search' })}${renderButtonLink({ href: '/schedule/', label: '試験日程を見る', variant: 'secondary', icon: 'calendar' })}</div><div class="popular-links" aria-label="主な資格"><span>主な資格</span><a href="/shikaku/takken/">宅建</a><a href="/shikaku/it-passport/">ITパスポート</a><a href="/shikaku/bookkeeping/">日商簿記</a><a href="/shikaku/fp/">FP技能検定</a></div></div><aside class="trust-panel" aria-label="情報の信頼性"><div class="trust-panel__icon">${renderIcon('check')}</div><p class="eyebrow">情報の見方</p><h2>確認状況と出典を、事実ごとに表示</h2><ul><li>公式確認済み情報だけを公開</li><li>適用年度と確認日時を明記</li><li>公式ソースと更新履歴を確認可能</li></ul></aside></section><section class="page-section home-section" aria-labelledby="schedule-heading"><div class="section-heading"><div><p class="eyebrow">試験日程</p><h2 id="schedule-heading">今後の重要日程</h2></div></div>${scheduleState}</section><section class="page-section home-section" aria-labelledby="qualifications-heading"><div class="section-heading"><div><p class="eyebrow">首発資格</p><h2 id="qualifications-heading">資格から情報を探す</h2></div><a href="/shikaku/">すべての資格を見る</a></div><div class="home-qualifications">${qualificationCards}</div></section><section class="page-section home-section" aria-labelledby="tools-heading"><div class="section-heading"><div><p class="eyebrow">データツール</p><h2 id="tools-heading">複数の資格を整理する</h2></div></div><div class="tool-grid"><article class="tool-card">${renderIcon('calendar')}<h3><a href="/schedule/">試験日程</a></h3><p>資格ごとの申込・試験・合格発表を確認できます。</p><span class="meta">公開中</span></article><article class="tool-card">${renderIcon('compare')}<h3><a href="/compare/">資格比較</a></h3><p>条件や試験方式を同じ項目で比較できます。</p><span class="meta">公開中</span></article><article class="tool-card" aria-disabled="true">${renderIcon('update')}<h3>更新情報</h3><p>公式発表による変更と訂正を一覧で確認する機能を準備中です。</p><span class="meta">準備中</span></article></div></section><section class="page-section trust-summary"><div><p class="eyebrow">データの信頼性</p><h2>推測値で空欄を埋めません</h2><p>公式発表前の日付、料金、制度情報は掲載せず、確認できた情報だけを出典とともに表示します。</p></div><div class="trust-summary__points"><p>${renderIcon('document')}<span>登録済みの公式情報源</span></p><p>${renderIcon('clock')}<span>公式情報確認日を明記</span></p><p>${renderIcon('update')}<span>変更・訂正を履歴化</span></p></div></section></div>`;
+  const body = `<div class="container"><section class="home-hero"><div class="home-hero__main"><p class="eyebrow">公式発表に基づく資格試験情報</p><h1>資格試験の公式情報を、わかりやすく整理。</h1><p class="home-hero__lead">試験日、申込み条件、試験内容を、確認済みの公式情報に基づいて掲載します。未確認の日時や費用は表示しません。</p><div class="home-intro__actions">${renderButtonLink({ href: '/shikaku/', label: '資格を探す', icon: 'search' })}${renderButtonLink({ href: '/schedule/', label: '試験日程を見る', variant: 'secondary', icon: 'calendar' })}</div><div class="popular-links" aria-label="主な資格"><span>主な資格</span><a href="/shikaku/takken/">宅建</a><a href="/shikaku/it-passport/">ITパスポート</a><a href="/shikaku/bookkeeping/">日商簿記</a><a href="/shikaku/fp/">FP技能検定</a></div></div><aside class="trust-panel" aria-label="情報の信頼性"><div class="trust-panel__icon">${renderIcon('check')}</div><p class="eyebrow">情報の見方</p><h2>確認状況と出典を、事実ごとに表示</h2><ul><li>公式確認済み情報だけを公開</li><li>適用年度と確認日時を明記</li><li>公式ソースと更新履歴を確認可能</li></ul></aside></section><section class="page-section home-section" aria-labelledby="schedule-heading"><div class="section-heading"><div><p class="eyebrow">試験日程</p><h2 id="schedule-heading">今後の重要日程</h2></div></div>${scheduleState}</section><section class="page-section home-section" aria-labelledby="qualifications-heading"><div class="section-heading"><div><p class="eyebrow">首発資格</p><h2 id="qualifications-heading">資格から情報を探す</h2></div><a href="/shikaku/">すべての資格を見る</a></div><div class="home-qualifications">${qualificationCards}</div></section><section class="page-section home-section" aria-labelledby="tools-heading"><div class="section-heading"><div><p class="eyebrow">データツール</p><h2 id="tools-heading">複数の資格を整理する</h2></div></div><div class="tool-grid"><article class="tool-card">${renderIcon('calendar')}<h3><a href="/schedule/">試験日程</a></h3><p>資格ごとの申込・試験・合格発表を確認できます。</p><span class="meta">公開中</span></article><article class="tool-card">${renderIcon('compare')}<h3><a href="/compare/">資格比較</a></h3><p>条件や試験方式を同じ項目で比較できます。</p><span class="meta">公開中</span></article><article class="tool-card">${renderIcon('update')}<h3><a href="/updates/">更新情報</a></h3><p>公式発表による変更と訂正を一覧で確認できます。</p><span class="meta">公開中</span></article></div></section><section class="page-section trust-summary"><div><p class="eyebrow">データの信頼性</p><h2>推測値で空欄を埋めません</h2><p>公式発表前の日付、料金、制度情報は掲載せず、確認できた情報だけを出典とともに表示します。</p></div><div class="trust-summary__points"><p>${renderIcon('document')}<span>登録済みの公式情報源</span></p><p>${renderIcon('clock')}<span>公式情報確認日を明記</span></p><p>${renderIcon('update')}<span>変更・訂正を履歴化</span></p></div></section></div>`;
   return renderPublicDocument({
     title: '資格試験の公式情報',
     description:

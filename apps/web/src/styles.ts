@@ -122,6 +122,14 @@ export const webStyles = String.raw`
 .compare-table tbody th { width: 180px; color: var(--color-ink); background: var(--color-bg-subtle); }
 .compare-table td p { margin-bottom: var(--space-2); font-weight: 600; overflow-wrap: anywhere; }
 .compare-empty { color: var(--color-muted); font-size: 14px; }
+.updates-list { display: grid; gap: var(--space-5); }
+.update-card { padding: var(--space-5); border: 1px solid var(--color-border); border-left: 4px solid var(--color-review); border-radius: var(--radius-card); background: var(--color-surface); }
+.update-card__header { display: flex; flex-wrap: wrap; gap: var(--space-4); align-items: start; justify-content: space-between; margin-bottom: var(--space-4); }
+.update-card__header h2 { margin: 0; font-size: 20px; }
+.update-card__header time { color: var(--color-muted); font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.update-diff { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); margin-bottom: var(--space-4); }
+.update-diff p { min-width: 0; margin: 0; padding: var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-control); background: var(--color-bg-subtle); font-weight: 700; overflow-wrap: anywhere; }
+.update-diff span { display: block; margin-bottom: var(--space-1); color: var(--color-muted); font-size: 12px; font-weight: 600; }
 
 @media (max-width: 1023px) {
   .home-hero { grid-template-columns: minmax(0, 1fr); min-height: auto; padding: var(--space-8); }
@@ -157,6 +165,7 @@ export const webStyles = String.raw`
   .schedule-filter__actions .button:only-child { grid-column: 1 / -1; }
   .compare-selector { padding: var(--space-4); }
   .compare-choices { grid-template-columns: minmax(0, 1fr); }
+  .update-diff { grid-template-columns: minmax(0, 1fr); }
   .directory-overview { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); padding: var(--space-5) 0; }
   .directory-overview__fields { grid-column: 1 / -1; }
   .detail-sidebar { position: static; grid-row: 1; }

@@ -15,6 +15,7 @@ import {
 import { config } from '../../../packages/config/src/index.js';
 import { TakkenPipeline } from './takken.js';
 import { readApprovedFacts } from './public-facts.js';
+import { readPublicUpdates } from './public-updates.js';
 import { buildPublicQualificationView } from './public-view.js';
 
 export const app = Fastify({ logger: false });
@@ -70,6 +71,16 @@ app.get<{ Querystring: { qualifications?: string; q?: string } }>(
       query: { qualifications: slugs },
     };
   },
+);
+app.get<{ Querystring: { qualification?: string } }>(
+  '/api/v1/updates',
+  async (request) => ({
+    data: await readPublicUpdates(
+      config.databaseUrl,
+      request.query.qualification,
+    ),
+    query: request.query,
+  }),
 );
 app.get('/api/v1/qualifications/takken', async () => {
   const qualification = launchQualifications.find(

@@ -6,7 +6,7 @@ import baseline from '../config/release-gate-baseline.json' with { type: 'json' 
 export const launchGate = baseline.qualifications;
 export const qualificationWebRoutes = [
   { suffix: '', marker: '概要' },
-  { suffix: '2026/', marker: '2026年 年度試験日程' },
+  { suffix: '2026/', marker: '2026年試験日程' },
   { suffix: 'application/', marker: '申込み・受験資格' },
   { suffix: 'exam-content/', marker: '試験内容' },
   { suffix: 'pass-rate/', marker: '合格率・合格基準' },

@@ -19,6 +19,7 @@ describe('stage 4 representative UI samples', () => {
     expect(html).toContain('aria-disabled="true"');
     expect(html).toContain('href="/schedule/"');
     expect(html).toContain('href="/compare/"');
+    expect(html).toContain('href="/updates/"');
   });
 
   it('renders the directory sample with all current page destinations', () => {

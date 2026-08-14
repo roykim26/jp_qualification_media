@@ -7,6 +7,7 @@ import {
   renderQualificationDirectory,
   renderQualificationSectionPage,
   renderSchedulePage,
+  renderUpdatesPage,
   type QualificationSection,
 } from './render.js';
 import {
@@ -42,6 +43,16 @@ async function readComparison(query: URLSearchParams) {
   if (qualifications) params.set('qualifications', qualifications);
   const suffix = params.size ? `?${params.toString()}` : '';
   const response = await fetch(`${apiBaseUrl}/api/v1/compare${suffix}`);
+  if (!response.ok) throw new Error(`API returned ${response.status}`);
+  return response.json();
+}
+
+async function readUpdates(query: URLSearchParams) {
+  const params = new URLSearchParams();
+  const qualification = query.get('qualification');
+  if (qualification) params.set('qualification', qualification);
+  const suffix = params.size ? `?${params.toString()}` : '';
+  const response = await fetch(`${apiBaseUrl}/api/v1/updates${suffix}`);
   if (!response.ok) throw new Error(`API returned ${response.status}`);
   return response.json();
 }
@@ -91,6 +102,11 @@ const server = createServer(async (req, res) => {
       const comparison = await readComparison(url.searchParams);
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
       return res.end(renderComparePage(comparison.data, launchQualifications));
+    }
+    if (pathname === '/updates' || pathname === '/updates/') {
+      const updates = await readUpdates(url.searchParams);
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+      return res.end(renderUpdatesPage(updates.data));
     }
     if (routeMatch) {
       const slug = routeMatch[1];

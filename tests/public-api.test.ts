@@ -160,6 +160,18 @@ describe('public qualification read path', () => {
     });
   });
 
+  it('serves an empty updates feed when no database is configured', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/v1/updates?qualification=takken',
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      data: [],
+      query: { qualification: 'takken' },
+    });
+  });
+
   it('serves the IT Passport route with an explicit empty official state', async () => {
     const response = await app.inject({
       method: 'GET',
