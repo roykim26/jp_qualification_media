@@ -1,5 +1,13 @@
 import Fastify from 'fastify';
-import { launchQualifications } from '../../../packages/schema/src/qualifications.js';
+import {
+  launchQualifications,
+  searchQualifications,
+} from '../../../packages/schema/src/qualifications.js';
+import { buildPublicCalendarEvents } from '../../../packages/schema/src/calendar.js';
+import {
+  buildQualificationComparison,
+  normalizeCompareSlugs,
+} from '../../../packages/schema/src/compare.js';
 import {
   isPubliclyReadable,
   type PublicFact,
@@ -12,10 +20,57 @@ import { buildPublicQualificationView } from './public-view.js';
 export const app = Fastify({ logger: false });
 export const takkenPipeline = new TakkenPipeline();
 app.get('/health', async () => ({ status: 'ok', stage: 0 }));
-app.get('/api/v1/qualifications', async () => ({ data: launchQualifications }));
+app.get<{ Querystring: { q?: string } }>(
+  '/api/v1/qualifications',
+  async (request) => ({
+    data: request.query.q
+      ? searchQualifications(launchQualifications, request.query.q)
+      : launchQualifications,
+    query: request.query.q ?? '',
+  }),
+);
+app.get<{ Querystring: { q?: string } }>(
+  '/api/v1/search/qualifications',
+  async (request) => ({
+    data: searchQualifications(launchQualifications, request.query.q ?? ''),
+    query: request.query.q ?? '',
+  }),
+);
 app.get('/api/v1/facts', async () => ({
   data: await readApprovedFacts(config.databaseUrl),
 }));
+app.get<{ Querystring: { year?: string; qualification?: string } }>(
+  '/api/v1/calendar',
+  async (request) => {
+    const facts = await readApprovedFacts(config.databaseUrl);
+    const year = request.query.year ? Number(request.query.year) : undefined;
+    const events = buildPublicCalendarEvents(
+      launchQualifications,
+      facts,
+    ).filter(
+      (event) =>
+        (!year || event.examYear === year) &&
+        (!request.query.qualification ||
+          event.qualification.slug === request.query.qualification),
+    );
+    return { data: events, query: request.query };
+  },
+);
+app.get<{ Querystring: { qualifications?: string; q?: string } }>(
+  '/api/v1/compare',
+  async (request) => {
+    const slugs = normalizeCompareSlugs(
+      (request.query.qualifications ?? request.query.q ?? '')
+        .split(',')
+        .map((slug) => slug.trim()),
+    );
+    const facts = await readApprovedFacts(config.databaseUrl);
+    return {
+      data: buildQualificationComparison(launchQualifications, facts, slugs),
+      query: { qualifications: slugs },
+    };
+  },
+);
 app.get('/api/v1/qualifications/takken', async () => {
   const qualification = launchQualifications.find(
     (item) => item.slug === 'takken',

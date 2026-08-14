@@ -45,3 +45,46 @@ export const launchQualifications: Qualification[] = [
     category: 'national',
   },
 ];
+
+export type QualificationSearchResult = Qualification & {
+  matchedFields: string[];
+};
+
+export function normalizeQualificationSearchText(value: string): string {
+  return value
+    .normalize('NFKC')
+    .toLocaleLowerCase('ja-JP')
+    .replaceAll(/\s+/g, '');
+}
+
+export function qualificationSearchTokens(
+  qualification: Qualification,
+): string[] {
+  return [
+    qualification.officialNameJa,
+    ...qualification.aliasesJa,
+    qualification.slug,
+  ];
+}
+
+export function searchQualifications(
+  qualifications: readonly Qualification[],
+  query: string,
+): QualificationSearchResult[] {
+  const normalizedQuery = normalizeQualificationSearchText(query);
+  if (!normalizedQuery)
+    return qualifications.map((qualification) => ({
+      ...qualification,
+      matchedFields: [],
+    }));
+
+  return qualifications
+    .map((qualification) => {
+      const matchedFields = qualificationSearchTokens(qualification).filter(
+        (token) =>
+          normalizeQualificationSearchText(token).includes(normalizedQuery),
+      );
+      return { ...qualification, matchedFields };
+    })
+    .filter((qualification) => qualification.matchedFields.length > 0);
+}

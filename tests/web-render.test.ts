@@ -3,6 +3,8 @@ import {
   renderQualificationDirectory,
   renderQualificationPage,
   renderQualificationSectionPage,
+  renderComparePage,
+  renderSchedulePage,
 } from '../apps/web/src/render.js';
 import { launchQualifications } from '../packages/schema/src/qualifications.js';
 
@@ -258,6 +260,107 @@ describe('shared qualification page rendering', () => {
     expect(html).toContain('ITパスポート');
     expect(html).not.toContain('行政書士');
     expect(html).toContain('/shikaku/takken/');
+  });
+
+  it('renders the qualification search form, query state, and empty state', () => {
+    const html = renderQualificationDirectory([], 'not-found');
+    expect(html).toContain('name="q"');
+    expect(html).toContain('value="not-found"');
+    expect(html).toContain('一致する資格が見つかりません');
+    expect(html).toContain('/shikaku/');
+  });
+
+  it('renders filtered directory search results', () => {
+    const bookkeeping = launchQualifications.find(
+      (item) => item.slug === 'bookkeeping',
+    )!;
+    const html = renderQualificationDirectory(
+      [{ ...bookkeeping, status: 'awaiting_official' }],
+      '簿記',
+    );
+    expect(html).toContain('「簿記」に一致する資格');
+    expect(html).toContain('日商簿記');
+    expect(html).not.toContain('ITパスポート');
+  });
+
+  it('renders the public schedule page with filters and official events', () => {
+    const takken = launchQualifications.find((item) => item.slug === 'takken')!;
+    const html = renderSchedulePage(
+      [
+        {
+          id: 'takken:2026:exam_date',
+          type: 'exam_date',
+          label: '試験日',
+          qualification: takken,
+          examYear: 2026,
+          displayValue: '2026年10月18日',
+          dateValue: '2026-10-18',
+          factKey: 'exam_date',
+          verifiedAt: '2026-08-12T00:00:00.000Z',
+          sourceUrl: 'https://www.retio.or.jp/exam/',
+        },
+      ],
+      { year: '2026', qualification: 'takken' },
+    );
+    expect(html).toContain('試験日程');
+    expect(html).toContain('selected>2026年');
+    expect(html).toContain('selected>宅地建物取引士');
+    expect(html).toContain('2026年10月18日');
+    expect(html).toContain('公式ソース');
+  });
+
+  it('renders the schedule empty state without invented dates', () => {
+    const html = renderSchedulePage([]);
+    expect(html).toContain('表示できる公式日程はまだありません');
+    expect(html).toContain('未確認の日付は掲載しません');
+    expect(html).not.toContain('undefined');
+  });
+
+  it('renders the compare selector and selected qualification table', () => {
+    const takken = launchQualifications.find((item) => item.slug === 'takken')!;
+    const itPassport = launchQualifications.find(
+      (item) => item.slug === 'it-passport',
+    )!;
+    const html = renderComparePage(
+      {
+        qualifications: [takken, itPassport],
+        rows: [
+          {
+            key: 'exam_method',
+            label: '試験方式',
+            cells: {
+              takken: {
+                value: '筆記試験',
+                factKey: 'exam_method',
+                examYear: 2026,
+                verifiedAt: '2026-08-12T00:00:00.000Z',
+              },
+              'it-passport': {
+                value: null,
+                factKey: null,
+                examYear: null,
+                verifiedAt: null,
+              },
+            },
+          },
+        ],
+      },
+      launchQualifications,
+    );
+    expect(html).toContain('資格比較');
+    expect(html).toContain('checked');
+    expect(html).toContain('筆記試験');
+    expect(html).toContain('公式未確認');
+    expect(html).toContain('/shikaku/takken/');
+  });
+
+  it('renders the compare empty state until two qualifications are selected', () => {
+    const html = renderComparePage(
+      { qualifications: [], rows: [] },
+      launchQualifications,
+    );
+    expect(html).toContain('比較する資格を2件以上選択してください');
+    expect(html).not.toContain('undefined');
   });
 
   it('keeps the third qualification identity available', () => {

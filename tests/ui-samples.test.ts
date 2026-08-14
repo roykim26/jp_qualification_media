@@ -17,7 +17,8 @@ describe('stage 4 representative UI samples', () => {
     expect(html).toContain('複数の資格を整理する');
     expect(html).toContain('推測値で空欄を埋めません');
     expect(html).toContain('aria-disabled="true"');
-    expect(html).not.toContain('href="/schedule/"');
+    expect(html).toContain('href="/schedule/"');
+    expect(html).toContain('href="/compare/"');
   });
 
   it('renders the directory sample with all current page destinations', () => {

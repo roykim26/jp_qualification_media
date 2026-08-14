@@ -4,7 +4,10 @@
 
 - `GET /health` → `{ status: "ok", stage: 0 }`
 - `GET /api/v1/qualifications` → `{ data: Qualification[] }`，只返回稳定主数据。
+- `GET /api/v1/search/qualifications?q={query}` → `{ data: QualificationSearchResult[], query }`，按正式名称、简称、别名和 slug 搜索稳定资格主数据。
 - `GET /api/v1/facts` → `{ data: PublicFact[] }`，实现必须只查询 `status=approved`、存在 `source_snapshot_id` 且当前修订的正式事实；候选事实、审核任务、冲突和未验证事实禁止返回。
+- `GET /api/v1/calendar?year={year}&qualification={slug}` → `{ data: PublicCalendarEvent[], query }`，从公开 approved facts 中聚合申込開始、申込締切、試験日/試験日程、合格発表；不得补全未确认日期。
+- `GET /api/v1/compare?qualifications={slug,slug,slug}` → `{ data: PublicQualificationComparison, query }`，最多比较 3 个资格，按统一事实维度横向展示；缺失事实必须显示为未确认而不是推断。
 - `GET /api/v1/qualifications/{slug}` → `{ qualification, status, facts, officialVerifiedAt }`；没有非 synthetic 的已批准事实时返回 `status=awaiting_official`、空 `facts` 和 `officialVerifiedAt=null`。
 
 ## Internal draft
