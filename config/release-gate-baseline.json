@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "qualifications": [
+    {
+      "slug": "takken",
+      "expectedFacts": 6,
+      "pageContains": "宅地建物取引士"
+    },
+    {
+      "slug": "gyoseishoshi",
+      "expectedFacts": 6,
+      "pageContains": "行政書士"
+    },
+    {
+      "slug": "it-passport",
+      "expectedFacts": 2,
+      "pageContains": "ITパスポート"
+    },
+    {
+      "slug": "fundamental-it-engineer",
+      "expectedFacts": 10,
+      "pageContains": "基本情報技術者"
+    },
+    {
+      "slug": "bookkeeping",
+      "expectedFacts": 38,
+      "pageContains": "日商簿記"
+    },
+    {
+      "slug": "fp",
+      "expectedFacts": 39,
+      "pageContains": "FP技能検定"
+    }
+  ]
+}

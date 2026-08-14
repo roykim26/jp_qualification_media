@@ -1,0 +1,12 @@
+node_modules/
+pnpm-lock.yaml
+dist/
+var/
+.pytest_cache/
+.pytest-basetemp/
+.pytest-tmp-*/
+pytest-cache-files-*/
+services/**/pytest-cache-files-*/
+__pycache__/
+**/__pycache__/
+coverage/

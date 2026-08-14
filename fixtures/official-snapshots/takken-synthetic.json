@@ -1,0 +1,11 @@
+{
+  "fixture": "synthetic",
+  "test_only": true,
+  "source_id": "source:takken:retio-exam",
+  "purpose": "stage-1 regression scenarios only",
+  "snapshots": [
+    { "id": "takken-layout-v1", "target_fields": { "exam_date": "2099-10-01", "application_deadline": "2099-08-31" }, "layout": "v1" },
+    { "id": "takken-layout-v2", "target_fields": { "exam_date": "2099-10-01", "application_deadline": "2099-08-31" }, "layout": "v2" },
+    { "id": "takken-date-change", "target_fields": { "exam_date": "2099-10-15", "application_deadline": "2099-08-31" }, "layout": "v3" }
+  ]
+}

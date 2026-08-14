@@ -1,0 +1,60 @@
+name: Release gate
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  release-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: qualification_media_ci
+          POSTGRES_USER: qualification_ci
+          POSTGRES_PASSWORD: qualification_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U qualification_ci -d qualification_media_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://qualification_ci:qualification_ci@127.0.0.1:5432/qualification_media_ci
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.16.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: |
+            services/collector/pyproject.toml
+            services/parser/pyproject.toml
+      - run: pnpm install --frozen-lockfile
+      - name: Install Python test dependencies
+        run: python -m pip install -e services/parser -e "services/collector[test]"
+      - name: Verify committed fixture is sanitized
+        run: pnpm ci:fixture:verify
+      - name: Migrate and seed CI database
+        run: |
+          pnpm db:migrate
+          pnpm db:seed
+      - name: Restore sanitized approved facts
+        run: pnpm ci:fixture:restore
+      - name: Run the same release gate used locally
+        run: pnpm release:check

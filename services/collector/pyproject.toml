@@ -1,0 +1,14 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jp-qualification-collector"
+version = "0.1.0"
+dependencies = ["httpx>=0.27", "beautifulsoup4>=4.12", "lxml>=5.0", "pydantic>=2.0", "psycopg[binary]>=3.2"]
+
+[project.optional-dependencies]
+test = ["pytest>=8.0"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src", "../parser/src"]
