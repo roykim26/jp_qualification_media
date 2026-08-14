@@ -19,7 +19,7 @@
     "verify:all": "node scripts/verify-all.mjs",
     "test:verify-gate": "node --test scripts/verify-lib.test.mjs",
     "baseline:update": "node scripts/update-release-baseline.mjs",
-    "release:check": "pnpm run lint && pnpm run typecheck && pnpm test && pnpm test:python && pnpm run build && pnpm test:verify-gate && pnpm verify:all",
+    "release:check": "pnpm run format:check && pnpm run lint && pnpm run typecheck && pnpm test && pnpm test:python && pnpm run build && pnpm test:verify-gate && pnpm verify:all",
     "ci:fixture:export": "node scripts/export-ci-db-fixture.mjs",
     "ci:fixture:restore": "node scripts/restore-ci-db-fixture.mjs",
     "ci:fixture:verify": "node scripts/verify-ci-fixture.mjs"
