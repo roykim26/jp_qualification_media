@@ -15,6 +15,7 @@ import {
   renderFeedbackState,
   renderIcon,
 } from '../../../packages/ui/src/index.js';
+import { editorialComparisonSlugs, type EditorialPage } from './editorial.js';
 import { renderPublicDocument, renderQualificationSubnav } from './layout.js';
 
 export type PublicQualificationView = {
@@ -609,6 +610,12 @@ export function renderQualificationSectionPage(
       ? `<div class="page-hero__actions">${renderButtonLink({ href: `/ics/${qualification.slug}/${year}.ics`, label: `${year}年のICSをダウンロード`, variant: 'secondary', icon: 'calendar' })}</div>`
       : '';
   const body = `<div class="container"><header class="page-hero detail-hero"><div class="tag-row"><span class="tag">${escapeHtml(fieldLabel(qualification.field))}</span><span class="tag">${escapeHtml(categoryLabel(qualification.category))}</span></div><h1>${escapeHtml(qualification.officialNameJa)}</h1>${pageTitle ? `<p class="detail-hero__section">${escapeHtml(pageTitle)}</p>` : ''}<p>${qualification.aliasesJa.map(escapeHtml).join(' / ') || '公式情報を整理して掲載します。'}</p>${sectionMeta ? `<p class="detail-hero__intro">${escapeHtml(sectionMeta.intro)}</p>` : ''}<div class="page-hero__meta">${status}<span class="meta">公式情報確認日: ${escapeHtml(formatVerifiedAt(view.officialVerifiedAt))}</span></div>${annualIcs}</header><div class="detail-layout"><div class="detail-main">${interpretationNote}${facts}${renderVerificationHistory(sortedFacts)}${renderSourceModule(qualification.slug)}</div>${sidebar}</div></div>`;
+  const canonicalPath =
+    section === 'overview'
+      ? `/shikaku/${qualification.slug}/`
+      : section === 'annual'
+        ? `/shikaku/${qualification.slug}/${year}/`
+        : `/shikaku/${qualification.slug}/${section}/`;
   return renderPublicDocument({
     title: `${qualification.officialNameJa} | 公式情報`,
     description: `${qualification.officialNameJa}の公式確認済み試験情報を整理して掲載します。`,
@@ -634,6 +641,7 @@ export function renderQualificationSectionPage(
       section,
       navigationYear,
     ),
+    canonicalPath,
     body,
   });
 }
@@ -677,6 +685,8 @@ export function renderQualificationDirectory(
     title: '資格を探す | 公式情報',
     description: '日本の資格試験情報を資格別に確認できます。',
     currentNav: 'qualifications',
+    canonicalPath: '/shikaku/',
+    noindex: Boolean(trimmedQuery),
     breadcrumbs: [{ label: 'ホーム', href: '/' }, { label: '資格を探す' }],
     body,
   });
@@ -740,6 +750,8 @@ export function renderSchedulePage(
     title: '試験日程 | 公式情報',
     description: '公式確認済みの資格試験日程を一覧できます。',
     currentNav: 'schedule',
+    canonicalPath: '/schedule/',
+    noindex: Boolean(options.year || options.qualification),
     breadcrumbs: [{ label: 'ホーム', href: '/' }, { label: '試験日程' }],
     body,
   });
@@ -790,17 +802,92 @@ export function renderComparePage(
           title: '比較する資格を2件以上選択してください',
           body: '資格を2〜3件選ぶと、申込締切、試験日程、試験方式、費用、受験資格、合格基準などを横並びで確認できます。',
         });
-  const body = `<div class="container"><header class="page-heading"><p class="eyebrow">承認済み公式事実を横断比較</p><h1>資格比較</h1><p>複数の資格を同じ項目で比較できます。表示する値は公式確認済みの事実に限定し、未確認の項目は空欄として扱います。</p></header>${form}<section class="page-section" aria-labelledby="compare-heading"><div class="section-heading"><div><p class="eyebrow">${selectedCount}件選択中</p><h2 id="compare-heading">比較表</h2></div></div>${table}</section></div>`;
+  const guideLabels: Record<string, string> = {
+    'takken-vs-gyoseishoshi': '宅建と行政書士の違い',
+    'it-passport-vs-fundamental-it-engineer':
+      'ITパスポートと基本情報技術者の違い',
+    'bookkeeping-vs-fp': '日商簿記とFP技能検定の違い',
+  };
+  const guides = editorialComparisonSlugs
+    .map(
+      (slug) =>
+        `<a href="/compare/${escapeHtml(slug)}/">${escapeHtml(guideLabels[slug])}</a>`,
+    )
+    .join('');
+  const body = `<div class="container"><header class="page-heading"><p class="eyebrow">承認済み公式事実を横断比較</p><h1>資格比較</h1><p>複数の資格を同じ項目で比較できます。表示する値は公式確認済みの事実に限定し、未確認の項目は空欄として扱います。</p></header>${form}<section class="page-section" aria-labelledby="compare-heading"><div class="section-heading"><div><p class="eyebrow">${selectedCount}件選択中</p><h2 id="compare-heading">比較表</h2></div></div>${table}</section><section class="page-section editorial-related" aria-labelledby="comparison-guides-heading"><h2 id="comparison-guides-heading">比較ガイド</h2><div>${guides}</div></section></div>`;
   return renderPublicDocument({
     title: '資格比較 | 公式情報',
     description: '公式確認済みの資格試験情報を横並びで比較できます。',
     currentNav: 'compare',
+    canonicalPath: '/compare/',
+    noindex: selectedCount > 0,
     breadcrumbs: [{ label: 'ホーム', href: '/' }, { label: '資格比較' }],
     body,
   });
 }
 
-export function renderUpdatesPage(events: PublicUpdateEvent[]): string {
+export function renderEditorialPage(
+  page: EditorialPage,
+  kind: 'guide' | 'comparison',
+  canonicalPath: string,
+): string {
+  const sections = page.sections
+    .map(
+      (section) =>
+        `<section class="editorial-section"><h2>${escapeHtml(section.heading)}</h2>${section.paragraphs.map((paragraph) => `<p>${escapeHtml(paragraph)}</p>`).join('')}${section.items?.length ? `<ul>${section.items.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul>` : ''}</section>`,
+    )
+    .join('');
+  const related = page.related
+    .map(
+      (item) =>
+        `<a href="${escapeHtml(item.href)}">${escapeHtml(item.label)}</a>`,
+    )
+    .join('');
+  const comparisonAction =
+    kind === 'comparison' && page.compareQuery
+      ? `<div class="editorial-actions">${renderButtonLink({ href: `/compare/?qualifications=${encodeURIComponent(page.compareQuery)}`, label: '公式情報で比較する', icon: 'compare' })}</div>`
+      : '';
+  const body = `<div class="container editorial-container"><header class="page-heading editorial-heading"><p class="eyebrow">${escapeHtml(page.eyebrow)}</p><h1>${escapeHtml(page.title)}</h1><p>${escapeHtml(page.description)}</p>${comparisonAction}</header><article class="editorial-body">${sections}</article><nav class="editorial-related" aria-label="関連ページ"><h2>関連ページ</h2><div>${related}</div></nav></div>`;
+  const label = kind === 'comparison' ? '資格比較' : 'ガイド';
+  return renderPublicDocument({
+    title: `${page.title} | 公式情報`,
+    description: page.description,
+    currentNav: kind === 'comparison' ? 'compare' : 'qualifications',
+    breadcrumbs: [
+      { label: 'ホーム', href: '/' },
+      { label, href: kind === 'comparison' ? '/compare/' : '/guide/' },
+      { label: page.title },
+    ],
+    canonicalPath,
+    body,
+  });
+}
+
+export function renderGuideIndex(
+  entries: readonly { slug: string; page: EditorialPage }[],
+): string {
+  const cards = entries
+    .map(
+      ({ slug, page }) =>
+        `<article class="card editorial-card"><div class="card__body"><p class="eyebrow">${escapeHtml(page.eyebrow)}</p><h2><a href="/guide/${escapeHtml(slug)}/">${escapeHtml(page.title)}</a></h2><p>${escapeHtml(page.description)}</p><div class="card-actions">${renderButtonLink({ href: `/guide/${slug}/`, label: 'ガイドを読む', variant: 'secondary' })}</div></div></article>`,
+    )
+    .join('');
+  const body = `<div class="container editorial-container"><header class="page-heading editorial-heading"><p class="eyebrow">受験準備とデータの見方</p><h1>資格試験ガイド</h1><p>資格試験の情報を確認し、申込みや学習の計画を立てるための基本的な考え方を整理します。日付・費用・制度は、各資格の公式情報ページで確認してください。</p></header><section class="page-section" aria-labelledby="guide-list-heading"><div class="section-heading"><div><p class="eyebrow">ガイド一覧</p><h2 id="guide-list-heading">確認のための基礎知識</h2></div></div><div class="editorial-grid">${cards}</div></section></div>`;
+  return renderPublicDocument({
+    title: '資格試験ガイド | 公式情報',
+    description:
+      '資格試験の情報確認、年間計画、申込み、合格率データの見方を整理します。',
+    currentNav: 'qualifications',
+    canonicalPath: '/guide/',
+    breadcrumbs: [{ label: 'ホーム', href: '/' }, { label: 'ガイド' }],
+    body,
+  });
+}
+
+export function renderUpdatesPage(
+  events: PublicUpdateEvent[],
+  filtered = false,
+): string {
   const cards = events
     .map((event) => {
       const diff = event.previousValue
@@ -822,6 +909,8 @@ export function renderUpdatesPage(events: PublicUpdateEvent[]): string {
     title: '更新情報 | 公式情報',
     description: '公式確認済み資格情報の変更と訂正記録を確認できます。',
     currentNav: 'updates',
+    canonicalPath: '/updates/',
+    noindex: filtered,
     breadcrumbs: [{ label: 'ホーム', href: '/' }, { label: '更新情報' }],
     body,
   });
@@ -830,6 +919,7 @@ export function renderUpdatesPage(events: PublicUpdateEvent[]): string {
 export function renderErrorPage(): string {
   return renderPublicDocument({
     title: '一時的に表示できません',
+    noindex: true,
     body: `<div class="container reading-width"><header class="page-heading"><p class="eyebrow">一時的なエラー</p><h1>ページを表示できません</h1></header>${renderFeedbackState(
       {
         kind: 'error',
@@ -878,6 +968,7 @@ export function renderHomePage(): string {
     description:
       '日本の資格試験に関する公式確認済み情報を、わかりやすく整理して掲載します。',
     currentNav: 'home',
+    canonicalPath: '/',
     body,
   });
 }
@@ -885,6 +976,7 @@ export function renderHomePage(): string {
 export function renderNotFoundPage(): string {
   return renderPublicDocument({
     title: 'ページが見つかりません',
+    noindex: true,
     body: `<div class="container reading-width"><header class="page-heading"><p class="eyebrow">404</p><h1>ページが見つかりません</h1></header>${renderFeedbackState(
       {
         kind: 'empty',

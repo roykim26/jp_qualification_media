@@ -9,14 +9,28 @@ export type BreadcrumbItem = {
   href?: string;
 };
 
-type DocumentInput = {
+export type DocumentInput = {
   title: string;
   body: string;
   currentNav?: PublicNavKey;
   breadcrumbs?: BreadcrumbItem[];
   subnav?: string;
   description?: string;
+  canonicalPath?: string;
+  noindex?: boolean;
 };
+
+function canonicalHref(path: string): string {
+  const configured = process.env.SITE_ORIGIN?.trim();
+  if (!configured) return path;
+  try {
+    const origin = new URL(configured);
+    if (!['http:', 'https:'].includes(origin.protocol)) return path;
+    return `${origin.origin}${path}`;
+  } catch {
+    return path;
+  }
+}
 
 const publicNav = [
   { key: 'qualifications' as const, label: '資格を探す', href: '/shikaku/' },
@@ -112,11 +126,17 @@ export function renderPublicDocument(input: DocumentInput): string {
   const description = input.description
     ? `<meta name="description" content="${escapeHtml(input.description)}">`
     : '';
+  const canonical = input.canonicalPath
+    ? `<link rel="canonical" href="${escapeHtml(canonicalHref(input.canonicalPath))}">`
+    : '';
+  const robots = input.noindex
+    ? '<meta name="robots" content="noindex,follow">'
+    : '';
   const breadcrumbs = input.breadcrumbs?.length
     ? `<div class="container">${renderBreadcrumbs(input.breadcrumbs)}</div>`
     : '';
   return `<!doctype html>
-<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" href="data:,">${description}<title>${escapeHtml(input.title)}</title><style>${uiStyles}${webStyles}</style></head><body><a class="skip-link" href="#main-content">本文へ移動</a>${renderHeader(currentNav)}${input.subnav ?? ''}<main id="main-content" class="page-main">${breadcrumbs}${input.body}</main>${renderFooter()}${renderMobileBottomNav(currentNav)}</body></html>`;
+<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" href="data:,">${description}${canonical}${robots}<title>${escapeHtml(input.title)}</title><style>${uiStyles}${webStyles}</style></head><body><a class="skip-link" href="#main-content">本文へ移動</a>${renderHeader(currentNav)}${input.subnav ?? ''}<main id="main-content" class="page-main">${breadcrumbs}${input.body}</main>${renderFooter()}${renderMobileBottomNav(currentNav)}</body></html>`;
 }
 
 export function renderQualificationSubnav(

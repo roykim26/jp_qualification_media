@@ -1,7 +1,9 @@
 import { createServer } from 'node:http';
 import {
   renderComparePage,
+  renderEditorialPage,
   renderErrorPage,
+  renderGuideIndex,
   renderHomePage,
   renderNotFoundPage,
   renderQualificationDirectory,
@@ -11,12 +13,43 @@ import {
   type QualificationSection,
 } from './render.js';
 import {
+  editorialComparisonPage,
+  editorialComparisonSlugs,
+  editorialGuideEntries,
+  editorialGuidePage,
+  editorialGuideSlugs,
+} from './editorial.js';
+import {
   launchQualifications,
   searchQualifications,
 } from '../../../packages/schema/src/qualifications.js';
 
 const port = Number(process.env.WEB_PORT ?? 3000);
 const apiBaseUrl = process.env.API_BASE_URL ?? 'http://127.0.0.1:4100';
+
+function siteOrigin(): string {
+  const fallback = `http://127.0.0.1:${port}`;
+  const configured = process.env.SITE_ORIGIN?.trim() || fallback;
+  const origin = new URL(configured);
+  if (!['http:', 'https:'].includes(origin.protocol))
+    throw new Error('SITE_ORIGIN must use http or https');
+  if (process.env.NODE_ENV === 'production' && !process.env.SITE_ORIGIN)
+    throw new Error('SITE_ORIGIN is required in production');
+  return origin.origin;
+}
+
+function escapeXml(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&apos;');
+}
+
+function renderSitemap(urls: readonly string[]): string {
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls.map((url) => `<url><loc>${escapeXml(url)}</loc></url>`).join('')}</urlset>`;
+}
 
 async function readQualification(slug: string) {
   const response = await fetch(`${apiBaseUrl}/api/v1/qualifications/${slug}`);
@@ -67,6 +100,51 @@ const server = createServer(async (req, res) => {
     const routeMatch = pathname.match(
       /^\/shikaku\/([^/]+)(?:\/(application|exam-content|pass-rate|\d{4}))?\/?$/,
     );
+    if (pathname === '/robots.txt') {
+      const origin = siteOrigin();
+      res.writeHead(200, { 'content-type': 'text/plain; charset=utf-8' });
+      return res.end(
+        `User-agent: *\nAllow: /\nSitemap: ${origin}/sitemap.xml\n`,
+      );
+    }
+    if (pathname === '/sitemap.xml') {
+      const origin = siteOrigin();
+      const stablePaths = [
+        '/',
+        '/shikaku/',
+        '/schedule/',
+        '/compare/',
+        '/updates/',
+        '/guide/',
+        ...editorialComparisonSlugs.map((slug) => `/compare/${slug}/`),
+        ...editorialGuideSlugs.map((slug) => `/guide/${slug}/`),
+      ];
+      const views = await Promise.all(
+        launchQualifications.map(async (qualification) => ({
+          qualification,
+          view: await readQualification(qualification.slug),
+        })),
+      );
+      const qualificationPaths = views.flatMap(({ qualification, view }) =>
+        view.status === 'verified'
+          ? [
+              `/shikaku/${qualification.slug}/`,
+              `/shikaku/${qualification.slug}/2026/`,
+              `/shikaku/${qualification.slug}/application/`,
+              `/shikaku/${qualification.slug}/exam-content/`,
+              `/shikaku/${qualification.slug}/pass-rate/`,
+            ]
+          : [],
+      );
+      res.writeHead(200, { 'content-type': 'application/xml; charset=utf-8' });
+      return res.end(
+        renderSitemap(
+          [...stablePaths, ...qualificationPaths].map(
+            (path) => `${origin}${path}`,
+          ),
+        ),
+      );
+    }
     if (icsMatch) {
       const [, qualification, year, eventId] = icsMatch;
       const apiPath = `/api/v1/ics/${qualification}/${year}${eventId ? `/${eventId}` : ''}`;
@@ -125,10 +203,47 @@ const server = createServer(async (req, res) => {
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
       return res.end(renderComparePage(comparison.data, launchQualifications));
     }
+    if (pathname === '/guide' || pathname === '/guide/') {
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+      return res.end(renderGuideIndex(editorialGuideEntries()));
+    }
+    const comparisonGuideMatch = pathname.match(/^\/compare\/([^/]+)\/?$/);
+    if (comparisonGuideMatch) {
+      const page = editorialComparisonPage(comparisonGuideMatch[1]);
+      if (!page) {
+        res.writeHead(404, { 'content-type': 'text/html; charset=utf-8' });
+        return res.end(renderNotFoundPage());
+      }
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+      return res.end(
+        renderEditorialPage(
+          page,
+          'comparison',
+          `/compare/${comparisonGuideMatch[1]}/`,
+        ),
+      );
+    }
+    const guideMatch = pathname.match(/^\/guide\/([^/]+)\/?$/);
+    if (guideMatch) {
+      const page = editorialGuidePage(guideMatch[1]);
+      if (!page) {
+        res.writeHead(404, { 'content-type': 'text/html; charset=utf-8' });
+        return res.end(renderNotFoundPage());
+      }
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+      return res.end(
+        renderEditorialPage(page, 'guide', `/guide/${guideMatch[1]}/`),
+      );
+    }
     if (pathname === '/updates' || pathname === '/updates/') {
       const updates = await readUpdates(url.searchParams);
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
-      return res.end(renderUpdatesPage(updates.data));
+      return res.end(
+        renderUpdatesPage(
+          updates.data,
+          Boolean(url.searchParams.get('qualification')),
+        ),
+      );
     }
     if (routeMatch) {
       const slug = routeMatch[1];

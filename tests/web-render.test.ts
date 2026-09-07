@@ -4,9 +4,15 @@ import {
   renderQualificationPage,
   renderQualificationSectionPage,
   renderComparePage,
+  renderEditorialPage,
+  renderGuideIndex,
   renderSchedulePage,
   renderUpdatesPage,
 } from '../apps/web/src/render.js';
+import {
+  editorialComparisonPage,
+  editorialGuidePage,
+} from '../apps/web/src/editorial.js';
 import { launchQualifications } from '../packages/schema/src/qualifications.js';
 
 const itPassport = launchQualifications.find(
@@ -400,6 +406,83 @@ describe('shared qualification page rendering', () => {
     expect(html).toContain('公開できる更新情報はまだありません');
     expect(html).toContain('ページ確認だけでは更新情報を作成しません');
     expect(html).not.toContain('undefined');
+  });
+
+  it('renders a static comparison guide without inventing dynamic facts', () => {
+    const page = editorialComparisonPage('takken-vs-gyoseishoshi')!;
+    const html = renderEditorialPage(
+      page,
+      'comparison',
+      '/compare/takken-vs-gyoseishoshi/',
+    );
+    expect(html).toContain('宅建と行政書士の違い');
+    expect(html).toContain('公式情報で比較する');
+    expect(html).toContain('/compare/?qualifications=takken%2Cgyoseishoshi');
+    expect(html).toContain('関連ページ');
+    expect(html).not.toContain('undefined');
+  });
+
+  it('renders a guide with a readable checklist and related links', () => {
+    const page = editorialGuidePage('application-checklist')!;
+    const html = renderEditorialPage(
+      page,
+      'guide',
+      '/guide/application-checklist/',
+    );
+    expect(html).toContain('受験申込み前の確認チェックリスト');
+    expect(html).toContain('対象の試験を特定する');
+    expect(html).toContain('関連ページ');
+    expect(html).not.toContain('公式確認済み');
+    expect(html).toContain(
+      '<link rel="canonical" href="/guide/application-checklist/">',
+    );
+  });
+
+  it('renders the guide index with all required guide entries', () => {
+    const html = renderGuideIndex([
+      {
+        slug: 'official-information-check',
+        page: editorialGuidePage('official-information-check')!,
+      },
+      {
+        slug: 'how-to-read-pass-rates',
+        page: editorialGuidePage('how-to-read-pass-rates')!,
+      },
+    ]);
+    expect(html).toContain('資格試験ガイド');
+    expect(html).toContain('/guide/official-information-check/');
+    expect(html).toContain('/guide/how-to-read-pass-rates/');
+    expect(html).not.toContain('undefined');
+  });
+
+  it('marks parameterized discovery pages as noindex while retaining their canonical URL', () => {
+    const directory = renderQualificationDirectory([], 'IT');
+    const schedule = renderSchedulePage([], { year: '2026' });
+    const comparison = renderComparePage(
+      { qualifications: [itPassport], rows: [] },
+      launchQualifications,
+    );
+
+    for (const html of [directory, schedule, comparison]) {
+      expect(html).toContain('<meta name="robots" content="noindex,follow">');
+    }
+    expect(directory).toContain('<link rel="canonical" href="/shikaku/">');
+    expect(schedule).toContain('<link rel="canonical" href="/schedule/">');
+    expect(comparison).toContain('<link rel="canonical" href="/compare/">');
+  });
+
+  it('uses the configured public origin for canonical URLs', () => {
+    const previousOrigin = process.env.SITE_ORIGIN;
+    process.env.SITE_ORIGIN = 'https://shikakucheck.com/';
+    try {
+      const html = renderGuideIndex([]);
+      expect(html).toContain(
+        '<link rel="canonical" href="https://shikakucheck.com/guide/">',
+      );
+    } finally {
+      if (previousOrigin === undefined) delete process.env.SITE_ORIGIN;
+      else process.env.SITE_ORIGIN = previousOrigin;
+    }
   });
 
   it('keeps the third qualification identity available', () => {

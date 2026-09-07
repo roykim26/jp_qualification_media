@@ -131,6 +131,20 @@ export const webStyles = String.raw`
 .update-diff { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); margin-bottom: var(--space-4); }
 .update-diff p { min-width: 0; margin: 0; padding: var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-control); background: var(--color-bg-subtle); font-weight: 700; overflow-wrap: anywhere; }
 .update-diff span { display: block; margin-bottom: var(--space-1); color: var(--color-muted); font-size: 12px; font-weight: 600; }
+.editorial-container { max-width: 960px; }
+.editorial-heading { max-width: var(--reading-width); }
+.editorial-actions { margin-top: var(--space-6); }
+.editorial-body { max-width: var(--reading-width); }
+.editorial-section + .editorial-section { margin-top: var(--space-10); padding-top: var(--space-10); border-top: 1px solid var(--color-border); }
+.editorial-section h2, .editorial-related h2 { font-size: 28px; }
+.editorial-section p, .editorial-section li { color: var(--color-text-secondary); }
+.editorial-section ul { padding-left: var(--space-6); }
+.editorial-section li + li { margin-top: var(--space-3); }
+.editorial-related { max-width: var(--reading-width); margin-top: var(--space-12); padding-top: var(--space-8); border-top: 1px solid var(--color-border); }
+.editorial-related > div { display: grid; gap: var(--space-2); }
+.editorial-related a { display: inline-flex; min-height: 44px; align-items: center; font-weight: 600; }
+.editorial-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-6); }
+.editorial-card h2 { font-size: 21px; }
 
 @media (max-width: 1023px) {
   .home-hero { grid-template-columns: minmax(0, 1fr); min-height: auto; padding: var(--space-8); }
@@ -167,6 +181,9 @@ export const webStyles = String.raw`
   .compare-selector { padding: var(--space-4); }
   .compare-choices { grid-template-columns: minmax(0, 1fr); }
   .update-diff { grid-template-columns: minmax(0, 1fr); }
+  .editorial-section + .editorial-section { margin-top: var(--space-8); padding-top: var(--space-8); }
+  .editorial-section h2, .editorial-related h2 { font-size: 24px; }
+  .editorial-grid { grid-template-columns: minmax(0, 1fr); }
   .directory-overview { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); padding: var(--space-5) 0; }
   .directory-overview__fields { grid-column: 1 / -1; }
   .detail-sidebar { position: static; grid-row: 1; }

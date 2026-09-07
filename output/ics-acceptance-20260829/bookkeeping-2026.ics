@@ -1,0 +1,118 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Qualification Media//Exam Calendar//JA
+CALSCALE:GREGORIAN
+METHOD:PUBLISH
+X-WR-TIMEZONE:Asia/Tokyo
+X-WR-CALNAME:日商簿記 2026年試験日程
+BEGIN:VEVENT
+UID:bookkeeping:2026:exam_dates::bookkeeping:1::unified:occurrence:1@qualif
+ ication-media
+DTSTAMP:20260101T000000Z
+LAST-MODIFIED:20260101T000000Z
+SEQUENCE:0
+DTSTART;VALUE=DATE:20260614
+DTEND;VALUE=DATE:20260615
+SUMMARY:日商簿記 試験日 (bookkeeping:1 / unified)
+DESCRIPTION:2026-06-14、2026-11-15\nhttps://www.kentei.ne.jp/calendar_2026
+URL:https://www.kentei.ne.jp/calendar_2026
+STATUS:CONFIRMED
+END:VEVENT
+BEGIN:VEVENT
+UID:bookkeeping:2026:exam_dates::bookkeeping:2::unified:occurrence:1@qualif
+ ication-media
+DTSTAMP:20260101T000000Z
+LAST-MODIFIED:20260101T000000Z
+SEQUENCE:0
+DTSTART;VALUE=DATE:20260614
+DTEND;VALUE=DATE:20260615
+SUMMARY:日商簿記 試験日 (bookkeeping:2 / unified)
+DESCRIPTION:2026-06-14、2026-11-15、2027-02-28\nhttps://www.kentei.ne.jp/
+ calendar_2026
+URL:https://www.kentei.ne.jp/calendar_2026
+STATUS:CONFIRMED
+END:VEVENT
+BEGIN:VEVENT
+UID:bookkeeping:2026:exam_dates::bookkeeping:3::unified:occurrence:1@qualif
+ ication-media
+DTSTAMP:20260101T000000Z
+LAST-MODIFIED:20260101T000000Z
+SEQUENCE:0
+DTSTART;VALUE=DATE:20260614
+DTEND;VALUE=DATE:20260615
+SUMMARY:日商簿記 試験日 (bookkeeping:3 / unified)
+DESCRIPTION:2026-06-14、2026-11-15、2027-02-28\nhttps://www.kentei.ne.jp/
+ calendar_2026
+URL:https://www.kentei.ne.jp/calendar_2026
+STATUS:CONFIRMED
+END:VEVENT
+BEGIN:VEVENT
+UID:bookkeeping:2026:exam_dates::bookkeeping:1::unified:occurrence:2@qualif
+ ication-media
+DTSTAMP:20260101T000000Z
+LAST-MODIFIED:20260101T000000Z
+SEQUENCE:0
+DTSTART;VALUE=DATE:20261115
+DTEND;VALUE=DATE:20261116
+SUMMARY:日商簿記 試験日 (bookkeeping:1 / unified)
+DESCRIPTION:2026-06-14、2026-11-15\nhttps://www.kentei.ne.jp/calendar_2026
+URL:https://www.kentei.ne.jp/calendar_2026
+STATUS:CONFIRMED
+END:VEVENT
+BEGIN:VEVENT
+UID:bookkeeping:2026:exam_dates::bookkeeping:2::unified:occurrence:2@qualif
+ ication-media
+DTSTAMP:20260101T000000Z
+LAST-MODIFIED:20260101T000000Z
+SEQUENCE:0
+DTSTART;VALUE=DATE:20261115
+DTEND;VALUE=DATE:20261116
+SUMMARY:日商簿記 試験日 (bookkeeping:2 / unified)
+DESCRIPTION:2026-06-14、2026-11-15、2027-02-28\nhttps://www.kentei.ne.jp/
+ calendar_2026
+URL:https://www.kentei.ne.jp/calendar_2026
+STATUS:CONFIRMED
+END:VEVENT
+BEGIN:VEVENT
+UID:bookkeeping:2026:exam_dates::bookkeeping:3::unified:occurrence:2@qualif
+ ication-media
+DTSTAMP:20260101T000000Z
+LAST-MODIFIED:20260101T000000Z
+SEQUENCE:0
+DTSTART;VALUE=DATE:20261115
+DTEND;VALUE=DATE:20261116
+SUMMARY:日商簿記 試験日 (bookkeeping:3 / unified)
+DESCRIPTION:2026-06-14、2026-11-15、2027-02-28\nhttps://www.kentei.ne.jp/
+ calendar_2026
+URL:https://www.kentei.ne.jp/calendar_2026
+STATUS:CONFIRMED
+END:VEVENT
+BEGIN:VEVENT
+UID:bookkeeping:2026:exam_dates::bookkeeping:2::unified:occurrence:3@qualif
+ ication-media
+DTSTAMP:20260101T000000Z
+LAST-MODIFIED:20260101T000000Z
+SEQUENCE:0
+DTSTART;VALUE=DATE:20270228
+DTEND;VALUE=DATE:20270301
+SUMMARY:日商簿記 試験日 (bookkeeping:2 / unified)
+DESCRIPTION:2026-06-14、2026-11-15、2027-02-28\nhttps://www.kentei.ne.jp/
+ calendar_2026
+URL:https://www.kentei.ne.jp/calendar_2026
+STATUS:CONFIRMED
+END:VEVENT
+BEGIN:VEVENT
+UID:bookkeeping:2026:exam_dates::bookkeeping:3::unified:occurrence:3@qualif
+ ication-media
+DTSTAMP:20260101T000000Z
+LAST-MODIFIED:20260101T000000Z
+SEQUENCE:0
+DTSTART;VALUE=DATE:20270228
+DTEND;VALUE=DATE:20270301
+SUMMARY:日商簿記 試験日 (bookkeeping:3 / unified)
+DESCRIPTION:2026-06-14、2026-11-15、2027-02-28\nhttps://www.kentei.ne.jp/
+ calendar_2026
+URL:https://www.kentei.ne.jp/calendar_2026
+STATUS:CONFIRMED
+END:VEVENT
+END:VCALENDAR
