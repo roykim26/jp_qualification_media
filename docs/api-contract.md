@@ -9,6 +9,7 @@
 - `GET /api/v1/calendar?year={year}&qualification={slug}` → `{ data: PublicCalendarEvent[], query }`，从公开 approved facts 中聚合申込開始、申込締切、試験日/試験日程、合格発表；不得补全未确认日期。
 - `GET /api/v1/compare?qualifications={slug,slug,slug}` → `{ data: PublicQualificationComparison, query }`，最多比较 3 个资格，按统一事实维度横向展示；缺失事实必须显示为未确认而不是推断。
 - `GET /api/v1/updates?qualification={slug}` → `{ data: PublicUpdateEvent[], query }`，从 `change_events` 读取公开事实变更和订正记录，展示变更前后值、影响页面、来源和反映时间；页面巡检但事实未变时不得生成记录。
+- `GET /api/v1/ics/{qualification}/{year}[/{event_id}]` → `text/calendar`，下载资格全年或单事件 ICS；仅包含有明确日期的已批准事实，UID 在事实变更后保持稳定，`SEQUENCE` 随批准变更或回滚递增；定时事件以 UTC 传输并保留日本时间语义，以兼容 Outlook 等不识别 IANA `TZID` 的客户端。
 - `GET /api/v1/qualifications/{slug}` → `{ qualification, status, facts, officialVerifiedAt }`；没有非 synthetic 的已批准事实时返回 `status=awaiting_official`、空 `facts` 和 `officialVerifiedAt=null`。
 
 ## Internal draft

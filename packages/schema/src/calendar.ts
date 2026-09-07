@@ -11,6 +11,7 @@ export type PublicCalendarEvent = {
   examYear: number;
   displayValue: string;
   dateValue: string | null;
+  startValue: string | null;
   providerId?: string | null;
   examLevelId?: string | null;
   examComponent?: string | null;
@@ -18,6 +19,7 @@ export type PublicCalendarEvent = {
   factKey: string;
   verifiedAt: string;
   sourceUrl?: string;
+  sequence: number;
 };
 
 const calendarEventLabels: Record<CalendarEventType, string> = {
@@ -44,10 +46,13 @@ function eventTypeForFactKey(factKey: string): CalendarEventType | null {
   );
 }
 
-function dateValueFromFact(fact: PublicFact): string | null {
+function temporalValuesFromFact(fact: PublicFact): string[] {
   if (typeof fact.normalizedValue === 'string') {
-    const match = fact.normalizedValue.match(/\d{4}-\d{2}-\d{2}/);
-    return match?.[0] ?? null;
+    return [
+      ...fact.normalizedValue.matchAll(
+        /\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}(?::\d{2})?(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?)?/g,
+      ),
+    ].map((match) => match[0]);
   }
   if (
     fact.normalizedValue &&
@@ -55,9 +60,13 @@ function dateValueFromFact(fact: PublicFact): string | null {
     'date' in fact.normalizedValue
   ) {
     const value = (fact.normalizedValue as { date?: unknown }).date;
-    return typeof value === 'string' ? value : null;
+    return typeof value === 'string' ? [value] : [];
   }
-  return null;
+  return [];
+}
+
+function dateValueFromTemporal(value: string | null): string | null {
+  return value?.match(/\d{4}-\d{2}-\d{2}/)?.[0] ?? null;
 }
 
 function stableEventId(fact: PublicFact): string {
@@ -83,21 +92,27 @@ export function buildPublicCalendarEvents(
       (item) => item.slug === fact.qualificationSlug,
     );
     if (!type || !qualification) continue;
-    events.push({
-      id: stableEventId(fact),
-      type,
-      label: calendarEventLabels[type],
-      qualification,
-      examYear: fact.examYear,
-      displayValue: fact.displayValue,
-      dateValue: dateValueFromFact(fact),
-      providerId: fact.providerId,
-      examLevelId: fact.examLevelId,
-      examComponent: fact.examComponent,
-      deliveryMode: fact.deliveryMode,
-      factKey: fact.factKey,
-      verifiedAt: fact.verifiedAt,
-      sourceUrl: fact.sourceUrl,
+    const startValues = temporalValuesFromFact(fact);
+    const occurrences = startValues.length ? startValues : [null];
+    occurrences.forEach((startValue, index) => {
+      events.push({
+        id: `${stableEventId(fact)}${occurrences.length > 1 ? `:occurrence:${index + 1}` : ''}`,
+        type,
+        label: calendarEventLabels[type],
+        qualification,
+        examYear: fact.examYear,
+        displayValue: fact.displayValue,
+        dateValue: dateValueFromTemporal(startValue),
+        startValue,
+        providerId: fact.providerId,
+        examLevelId: fact.examLevelId,
+        examComponent: fact.examComponent,
+        deliveryMode: fact.deliveryMode,
+        factKey: fact.factKey,
+        verifiedAt: fact.verifiedAt,
+        sourceUrl: fact.sourceUrl,
+        sequence: fact.sequence ?? 0,
+      });
     });
   }
   return events.sort(

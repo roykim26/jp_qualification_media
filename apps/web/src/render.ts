@@ -1,4 +1,7 @@
-import type { PublicCalendarEvent } from '../../../packages/schema/src/calendar.js';
+import {
+  buildPublicCalendarEvents,
+  type PublicCalendarEvent,
+} from '../../../packages/schema/src/calendar.js';
 import type { PublicQualificationComparison } from '../../../packages/schema/src/compare.js';
 import type { PublicUpdateEvent } from '../../../packages/schema/src/updates.js';
 import type {
@@ -597,7 +600,15 @@ export function renderQualificationSectionPage(
     section === 'pass-rate'
       ? `<aside class="alert alert--info interpretation-note"><div><h2 class="alert__title">数値の見方</h2><p>過去の合格率は集団の実績であり、個人の合格可能性を示すものではありません。年度、級、実施区分と統計の母数をあわせて確認してください。</p></div></aside>`
       : '';
-  const body = `<div class="container"><header class="page-hero detail-hero"><div class="tag-row"><span class="tag">${escapeHtml(fieldLabel(qualification.field))}</span><span class="tag">${escapeHtml(categoryLabel(qualification.category))}</span></div><h1>${escapeHtml(qualification.officialNameJa)}</h1>${pageTitle ? `<p class="detail-hero__section">${escapeHtml(pageTitle)}</p>` : ''}<p>${qualification.aliasesJa.map(escapeHtml).join(' / ') || '公式情報を整理して掲載します。'}</p>${sectionMeta ? `<p class="detail-hero__intro">${escapeHtml(sectionMeta.intro)}</p>` : ''}<div class="page-hero__meta">${status}<span class="meta">公式情報確認日: ${escapeHtml(formatVerifiedAt(view.officialVerifiedAt))}</span></div></header><div class="detail-layout"><div class="detail-main">${interpretationNote}${facts}${renderVerificationHistory(sortedFacts)}${renderSourceModule(qualification.slug)}</div>${sidebar}</div></div>`;
+  const annualIcs =
+    section === 'annual' &&
+    year &&
+    buildPublicCalendarEvents([qualification], sortedFacts).some(
+      (event) => event.dateValue,
+    )
+      ? `<div class="page-hero__actions">${renderButtonLink({ href: `/ics/${qualification.slug}/${year}.ics`, label: `${year}年のICSをダウンロード`, variant: 'secondary', icon: 'calendar' })}</div>`
+      : '';
+  const body = `<div class="container"><header class="page-hero detail-hero"><div class="tag-row"><span class="tag">${escapeHtml(fieldLabel(qualification.field))}</span><span class="tag">${escapeHtml(categoryLabel(qualification.category))}</span></div><h1>${escapeHtml(qualification.officialNameJa)}</h1>${pageTitle ? `<p class="detail-hero__section">${escapeHtml(pageTitle)}</p>` : ''}<p>${qualification.aliasesJa.map(escapeHtml).join(' / ') || '公式情報を整理して掲載します。'}</p>${sectionMeta ? `<p class="detail-hero__intro">${escapeHtml(sectionMeta.intro)}</p>` : ''}<div class="page-hero__meta">${status}<span class="meta">公式情報確認日: ${escapeHtml(formatVerifiedAt(view.officialVerifiedAt))}</span></div>${annualIcs}</header><div class="detail-layout"><div class="detail-main">${interpretationNote}${facts}${renderVerificationHistory(sortedFacts)}${renderSourceModule(qualification.slug)}</div>${sidebar}</div></div>`;
   return renderPublicDocument({
     title: `${qualification.officialNameJa} | 公式情報`,
     description: `${qualification.officialNameJa}の公式確認済み試験情報を整理して掲載します。`,
@@ -707,10 +718,24 @@ export function renderSchedulePage(
       const source = event.sourceUrl
         ? `<a href="${escapeHtml(event.sourceUrl)}" target="_blank" rel="noreferrer">公式ソース</a>`
         : `<span>出典: ${escapeHtml(event.factKey)}</span>`;
-      return `<article class="schedule-event"><time datetime="${escapeHtml(event.dateValue ?? '')}">${escapeHtml(formatCalendarDate(event.dateValue))}</time><div><div class="schedule-event__heading"><span class="schedule-event__type">${escapeHtml(eventTone[event.type])}</span><h2><a href="/shikaku/${escapeHtml(event.qualification.slug)}/${event.examYear}/">${escapeHtml(event.qualification.officialNameJa)}</a></h2></div><p class="schedule-event__value">${escapeHtml(event.displayValue)}</p>${dimensions ? `<div class="dimensions">${dimensions}</div>` : ''}<p class="meta">${event.examYear}年 / ${escapeHtml(event.label)} / 公式確認: ${escapeHtml(formatVerifiedAt(event.verifiedAt))} / ${source}</p></div></article>`;
+      const eventIcs = event.dateValue
+        ? renderButtonLink({
+            href: `/ics/${event.qualification.slug}/${event.examYear}/${encodeURIComponent(event.id)}.ics`,
+            label: 'この予定をICSで追加',
+            variant: 'tertiary',
+            icon: 'calendar',
+          })
+        : '';
+      return `<article class="schedule-event"><time datetime="${escapeHtml(event.dateValue ?? '')}">${escapeHtml(formatCalendarDate(event.dateValue))}</time><div><div class="schedule-event__heading"><span class="schedule-event__type">${escapeHtml(eventTone[event.type])}</span><h2><a href="/shikaku/${escapeHtml(event.qualification.slug)}/${event.examYear}/">${escapeHtml(event.qualification.officialNameJa)}</a></h2></div><p class="schedule-event__value">${escapeHtml(event.displayValue)}</p>${dimensions ? `<div class="dimensions">${dimensions}</div>` : ''}<p class="meta">${event.examYear}年 / ${escapeHtml(event.label)} / 公式確認: ${escapeHtml(formatVerifiedAt(event.verifiedAt))} / ${source}</p>${eventIcs ? `<div class="schedule-event__actions">${eventIcs}</div>` : ''}</div></article>`;
     })
     .join('');
-  const body = `<div class="container"><header class="page-heading"><p class="eyebrow">承認済み公式事実から集約</p><h1>試験日程</h1><p>申込開始、申込締切、試験日、合格発表を資格横断で確認できます。公式確認済みの事実だけを表示し、未確認日程は補完しません。</p></header>${filters}<section class="page-section" aria-labelledby="schedule-heading"><div class="section-heading"><div><p class="eyebrow">重要日程</p><h2 id="schedule-heading">日程一覧</h2></div><p class="meta">${events.length}件</p></div>${events.length ? `<div class="schedule-list">${eventCards}</div>` : renderFeedbackState({ kind: 'empty', title: '表示できる公式日程はまだありません', body: '承認済みの申込日、試験日、合格発表日が登録されるとここに表示します。未確認の日付は掲載しません。', actions: renderButtonLink({ href: '/shikaku/', label: '資格一覧を見る', variant: 'secondary' }) })}</section></div>`;
+  const annualIcs =
+    options.year &&
+    options.qualification &&
+    events.some((event) => event.dateValue)
+      ? `<div class="schedule-download">${renderButtonLink({ href: `/ics/${options.qualification}/${options.year}.ics`, label: `${options.year}年のICSをまとめてダウンロード`, variant: 'secondary', icon: 'calendar' })}</div>`
+      : '';
+  const body = `<div class="container"><header class="page-heading"><p class="eyebrow">承認済み公式事実から集約</p><h1>試験日程</h1><p>申込開始、申込締切、試験日、合格発表を資格横断で確認できます。公式確認済みの事実だけを表示し、未確認日程は補完しません。</p></header>${filters}${annualIcs}<section class="page-section" aria-labelledby="schedule-heading"><div class="section-heading"><div><p class="eyebrow">重要日程</p><h2 id="schedule-heading">日程一覧</h2></div><p class="meta">${events.length}件</p></div>${events.length ? `<div class="schedule-list">${eventCards}</div>` : renderFeedbackState({ kind: 'empty', title: '表示できる公式日程はまだありません', body: '承認済みの申込日、試験日、合格発表日が登録されるとここに表示します。未確認の日付は掲載しません。', actions: renderButtonLink({ href: '/shikaku/', label: '資格一覧を見る', variant: 'secondary' }) })}</section></div>`;
   return renderPublicDocument({
     title: '試験日程 | 公式情報',
     description: '公式確認済みの資格試験日程を一覧できます。',

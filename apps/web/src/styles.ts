@@ -105,6 +105,7 @@ export const webStyles = String.raw`
 .schedule-event__heading h2 { margin: 0; font-size: 20px; }
 .schedule-event__type { display: inline-flex; min-height: 26px; align-items: center; padding: 2px var(--space-3); border-radius: var(--radius-pill); color: var(--color-info); background: var(--color-info-bg); font-size: 13px; font-weight: 700; }
 .schedule-event__value { margin-bottom: var(--space-3); color: var(--color-text-secondary); font-weight: 600; overflow-wrap: anywhere; }
+.schedule-event__actions, .schedule-download, .page-hero__actions { display: flex; flex-wrap: wrap; gap: var(--space-3); margin-top: var(--space-4); }
 .compare-selector { display: grid; gap: var(--space-4); margin-bottom: var(--space-8); padding: var(--space-5); border: 1px solid var(--color-border); border-radius: var(--radius-card); background: var(--color-surface); }
 .compare-selector fieldset { min-width: 0; padding: 0; border: 0; }
 .compare-selector legend { margin-bottom: var(--space-3); color: var(--color-text-secondary); font-weight: 700; }

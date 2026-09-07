@@ -4,6 +4,7 @@ import {
   searchQualifications,
 } from '../../../packages/schema/src/qualifications.js';
 import { buildPublicCalendarEvents } from '../../../packages/schema/src/calendar.js';
+import { buildCalendarIcs } from '../../../packages/schema/src/ics.js';
 import {
   buildQualificationComparison,
   normalizeCompareSlugs,
@@ -57,6 +58,35 @@ app.get<{ Querystring: { year?: string; qualification?: string } }>(
     return { data: events, query: request.query };
   },
 );
+app.get<{
+  Params: { qualification: string; year: string; eventId?: string };
+}>('/api/v1/ics/:qualification/:year/:eventId?', async (request, reply) => {
+  const qualification = launchQualifications.find(
+    (item) => item.slug === request.params.qualification,
+  );
+  const year = Number(request.params.year);
+  if (!qualification || !Number.isInteger(year))
+    return reply.code(404).send({ error: 'not found' });
+  const facts = await readApprovedFacts(config.databaseUrl, qualification.slug);
+  const events = buildPublicCalendarEvents([qualification], facts).filter(
+    (event) =>
+      event.examYear === year &&
+      (!request.params.eventId || event.id === request.params.eventId),
+  );
+  const body = buildCalendarIcs(
+    events,
+    `${qualification.officialNameJa} ${year}年試験日程`,
+  );
+  if (!body) return reply.code(404).send({ error: 'calendar not available' });
+  const suffix = request.params.eventId ? '-event' : '';
+  return reply
+    .header('content-type', 'text/calendar; charset=utf-8')
+    .header(
+      'content-disposition',
+      `attachment; filename="${qualification.slug}-${year}${suffix}.ics"`,
+    )
+    .send(body);
+});
 app.get<{ Querystring: { qualifications?: string; q?: string } }>(
   '/api/v1/compare',
   async (request) => {

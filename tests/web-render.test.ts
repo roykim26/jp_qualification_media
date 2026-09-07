@@ -296,9 +296,11 @@ describe('shared qualification page rendering', () => {
           examYear: 2026,
           displayValue: '2026年10月18日',
           dateValue: '2026-10-18',
+          startValue: '2026-10-18',
           factKey: 'exam_date',
           verifiedAt: '2026-08-12T00:00:00.000Z',
           sourceUrl: 'https://www.retio.or.jp/exam/',
+          sequence: 0,
         },
       ],
       { year: '2026', qualification: 'takken' },
@@ -308,6 +310,8 @@ describe('shared qualification page rendering', () => {
     expect(html).toContain('selected>宅地建物取引士');
     expect(html).toContain('2026年10月18日');
     expect(html).toContain('公式ソース');
+    expect(html).toContain('/ics/takken/2026.ics');
+    expect(html).toContain('/ics/takken/2026/takken%3A2026%3Aexam_date.ics');
   });
 
   it('renders the schedule empty state without invented dates', () => {

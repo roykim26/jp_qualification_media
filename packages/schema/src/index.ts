@@ -72,6 +72,7 @@ export const publicFactSchema = candidateFactSchema.extend({
   status: z.literal('approved'),
   verifiedAt: z.string().datetime(),
   sourceUrl: z.string().url().optional(),
+  sequence: z.number().int().nonnegative().optional(),
 });
 export type PublicFact = z.infer<typeof publicFactSchema>;
 

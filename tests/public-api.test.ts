@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildPublicCalendarEvents } from '../packages/schema/src/calendar.js';
 import { buildQualificationComparison } from '../packages/schema/src/compare.js';
+import { buildCalendarIcs } from '../packages/schema/src/ics.js';
 import { launchQualifications } from '../packages/schema/src/qualifications.js';
 import { buildPublicQualificationView } from '../services/api/src/public-view.js';
 import { app } from '../services/api/src/server.js';
@@ -81,8 +82,139 @@ describe('public qualification read path', () => {
         label: '申込締切',
         dateValue: '2026-07-15',
         qualification: { slug: 'takken' },
+        startValue: '2026-07-15',
+        sequence: 0,
       },
     ]);
+  });
+
+  it('expands a multi-date fact into stable calendar occurrences', () => {
+    const events = buildPublicCalendarEvents(launchQualifications, [
+      {
+        qualificationSlug: 'bookkeeping',
+        examLevelId: 'bookkeeping:2',
+        deliveryMode: 'unified',
+        examYear: 2026,
+        factKey: 'exam_dates',
+        valueType: 'json',
+        normalizedValue: '2026-06-14,2026-11-15,2027-02-28',
+        displayValue: '2026-06-14、2026-11-15、2027-02-28',
+        status: 'approved',
+        riskLevel: 'high',
+        sourceId: 'source:bookkeeping:calendar-2026',
+        sourceSnapshotId: 'snapshot:official',
+        synthetic: false,
+        verifiedAt: '2026-08-12T00:00:00.000Z',
+        sequence: 0,
+      },
+    ]);
+    expect(events.map((event) => event.dateValue)).toEqual([
+      '2026-06-14',
+      '2026-11-15',
+      '2027-02-28',
+    ]);
+    expect(events.map((event) => event.id)).toEqual([
+      'bookkeeping:2026:exam_dates::bookkeeping:2::unified:occurrence:1',
+      'bookkeeping:2026:exam_dates::bookkeeping:2::unified:occurrence:2',
+      'bookkeeping:2026:exam_dates::bookkeeping:2::unified:occurrence:3',
+    ]);
+  });
+
+  it('generates stable UTC ICS events and increments sequence on changes', () => {
+    const qualification = launchQualifications.find(
+      (item) => item.slug === 'takken',
+    )!;
+    const event = {
+      id: 'takken:2026:exam_date::::',
+      type: 'exam_date' as const,
+      label: '試験日',
+      qualification,
+      examYear: 2026,
+      displayValue: '2026年10月18日 13時',
+      dateValue: '2026-10-18',
+      startValue: '2026-10-18T13:00:00+09:00',
+      factKey: 'exam_date',
+      verifiedAt: '2026-08-12T00:00:00.000Z',
+      sourceUrl: 'https://www.retio.or.jp/exam/',
+      sequence: 2,
+    };
+    const first = buildCalendarIcs([event], '宅建 2026年試験日程');
+    const changed = buildCalendarIcs(
+      [
+        {
+          ...event,
+          startValue: '2026-10-25T13:00:00+09:00',
+          dateValue: '2026-10-25',
+          sequence: 3,
+        },
+      ],
+      '宅建 2026年試験日程',
+    );
+    expect(first).toContain('BEGIN:VCALENDAR\r\n');
+    expect(first).toContain(
+      'UID:takken:2026:exam_date::::@qualification-media',
+    );
+    expect(first).toContain('DTSTART:20261018T040000Z');
+    expect(first).toContain('DTEND:20261018T050000Z');
+    expect(first).toContain('SEQUENCE:2');
+    expect(changed).toContain(
+      'UID:takken:2026:exam_date::::@qualification-media',
+    );
+    expect(changed).toContain('DTSTART:20261025T040000Z');
+    expect(changed).toContain('DTEND:20261025T050000Z');
+    expect(changed).toContain('SEQUENCE:3');
+  });
+
+  it('gives all-day events an exclusive next-day end', () => {
+    const qualification = launchQualifications.find(
+      (item) => item.slug === 'bookkeeping',
+    )!;
+    const ics = buildCalendarIcs(
+      [
+        {
+          id: 'bookkeeping:2026:exam_date::::',
+          type: 'exam_date',
+          label: '試験日',
+          qualification,
+          examYear: 2026,
+          displayValue: '2026年6月14日',
+          dateValue: '2026-06-14',
+          startValue: '2026-06-14',
+          factKey: 'exam_date',
+          verifiedAt: '2026-08-12T00:00:00.000Z',
+          sequence: 0,
+        },
+      ],
+      '日商簿記 2026年試験日程',
+    );
+    expect(ics).toContain('DTSTART;VALUE=DATE:20260614');
+    expect(ics).toContain('DTEND;VALUE=DATE:20260615');
+  });
+
+  it('does not create an ICS file for events without an exact date', () => {
+    const qualification = launchQualifications.find(
+      (item) => item.slug === 'it-passport',
+    )!;
+    expect(
+      buildCalendarIcs(
+        [
+          {
+            id: 'it-passport:2026:exam_schedule::::',
+            type: 'exam_date',
+            label: '試験日',
+            qualification,
+            examYear: 2026,
+            displayValue: '随時実施',
+            dateValue: null,
+            startValue: null,
+            factKey: 'exam_schedule',
+            verifiedAt: '2026-08-12T00:00:00.000Z',
+            sequence: 0,
+          },
+        ],
+        'ITパスポート 2026年試験日程',
+      ),
+    ).toBe('');
   });
 
   it('serves an empty official calendar when no approved facts are configured', async () => {
@@ -95,6 +227,15 @@ describe('public qualification read path', () => {
       data: [],
       query: { year: '2026', qualification: 'takken' },
     });
+  });
+
+  it('returns 404 instead of an empty ICS download', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/v1/ics/takken/2026',
+    });
+    expect(response.statusCode).toBe(404);
+    expect(response.json()).toEqual({ error: 'calendar not available' });
   });
 
   it('builds a qualification comparison from the newest approved facts', () => {

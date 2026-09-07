@@ -21,7 +21,8 @@ export async function readApprovedFacts(
     SELECT q.slug AS qualification_slug, c.provider_id, c.exam_level_id, c.exam_component, c.delivery_mode, c.exam_year, c.fact_key,
       c.value_type, fr.normalized_value, fr.display_value, fr.status,
       c.risk_level, c.source_id, c.source_snapshot_id, c.synthetic,
-      fr.verified_at, src.canonical_url AS source_url
+      fr.verified_at, src.canonical_url AS source_url,
+      GREATEST((SELECT count(*) FROM change_events ce WHERE ce.fact_id=f.id) - 1, 0)::int AS sequence
     FROM facts f
     JOIN fact_revisions fr ON fr.id = f.current_revision_id
     JOIN candidate_facts c ON c.id = fr.candidate_fact_id
@@ -56,5 +57,6 @@ export async function readApprovedFacts(
     synthetic: row.synthetic,
     verifiedAt: new Date(row.verified_at).toISOString(),
     sourceUrl: row.source_url,
+    sequence: row.sequence,
   }));
 }

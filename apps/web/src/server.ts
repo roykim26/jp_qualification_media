@@ -61,9 +61,31 @@ const server = createServer(async (req, res) => {
   try {
     const url = new URL(req.url ?? '/', 'http://127.0.0.1');
     const pathname = url.pathname;
+    const icsMatch = pathname.match(
+      /^\/ics\/([^/]+)\/(\d{4})(?:\/([^/]+))?\.ics$/,
+    );
     const routeMatch = pathname.match(
       /^\/shikaku\/([^/]+)(?:\/(application|exam-content|pass-rate|\d{4}))?\/?$/,
     );
+    if (icsMatch) {
+      const [, qualification, year, eventId] = icsMatch;
+      const apiPath = `/api/v1/ics/${qualification}/${year}${eventId ? `/${eventId}` : ''}`;
+      const response = await fetch(`${apiBaseUrl}${apiPath}`);
+      const body = Buffer.from(await response.arrayBuffer());
+      res.writeHead(response.status, {
+        'content-type':
+          response.headers.get('content-type') ??
+          'text/calendar; charset=utf-8',
+        ...(response.headers.get('content-disposition')
+          ? {
+              'content-disposition': response.headers.get(
+                'content-disposition',
+              )!,
+            }
+          : {}),
+      });
+      return res.end(body);
+    }
     if (pathname === '/shikaku' || pathname === '/shikaku/') {
       const query = url.searchParams.get('q') ?? '';
       const searchableQualifications = searchQualifications(
