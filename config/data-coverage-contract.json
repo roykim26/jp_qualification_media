@@ -284,8 +284,6 @@
             "exam_time",
             "question_count",
             "question_format",
-            "scoring_method",
-            "passing_standard",
             "source_url",
             "official_verified_at"
           ],
@@ -308,7 +306,9 @@
             "examinees",
             "passed",
             "pass_rate",
-            "statistics_methodology"
+            "statistics_methodology",
+            "scoring_method",
+            "passing_standard"
           ],
           "requiredLevel": "post_event",
           "dimensions": {}
@@ -460,12 +460,19 @@
             "exam_time",
             "question_count",
             "question_format",
-            "scoring_method",
             "passing_standard",
             "source_url",
             "official_verified_at"
           ],
           "requiredLevel": "required",
+          "dimensions": {
+            "examLevelId": ["bookkeeping:1", "bookkeeping:2", "bookkeeping:3"],
+            "deliveryMode": "unified"
+          }
+        },
+        {
+          "fields": ["scoring_method"],
+          "requiredLevel": "not_applicable",
           "dimensions": {
             "examLevelId": ["bookkeeping:1", "bookkeeping:2", "bookkeeping:3"],
             "deliveryMode": "unified"
@@ -479,11 +486,23 @@
             "exam_time",
             "question_count",
             "question_format",
-            "passing_standard",
             "source_url",
             "official_verified_at"
           ],
           "requiredLevel": "conditional",
+          "dimensions": {
+            "examLevelId": [
+              "bookkeeping:2",
+              "bookkeeping:3",
+              "bookkeeping:basic",
+              "bookkeeping:cost-accounting-basic"
+            ],
+            "deliveryMode": "network"
+          }
+        },
+        {
+          "fields": ["passing_standard"],
+          "requiredLevel": "not_applicable",
           "dimensions": {
             "examLevelId": [
               "bookkeeping:2",
@@ -543,12 +562,21 @@
             "exam_time",
             "question_count",
             "question_format",
-            "scoring_method",
             "passing_standard",
             "source_url",
             "official_verified_at"
           ],
           "requiredLevel": "conditional",
+          "dimensions": {
+            "providerId": "jafp",
+            "examLevelId": ["fp:2", "fp:3"],
+            "examComponent": ["academic", "practical:asset-design"],
+            "deliveryMode": "cbt"
+          }
+        },
+        {
+          "fields": ["scoring_method"],
+          "requiredLevel": "not_applicable",
           "dimensions": {
             "providerId": "jafp",
             "examLevelId": ["fp:2", "fp:3"],
@@ -568,12 +596,21 @@
             "exam_time",
             "question_count",
             "question_format",
-            "scoring_method",
             "passing_standard",
             "source_url",
             "official_verified_at"
           ],
           "requiredLevel": "conditional",
+          "dimensions": {
+            "providerId": "jafp",
+            "examLevelId": "fp:1",
+            "examComponent": "practical:asset-design",
+            "deliveryMode": "pbt"
+          }
+        },
+        {
+          "fields": ["scoring_method"],
+          "requiredLevel": "not_applicable",
           "dimensions": {
             "providerId": "jafp",
             "examLevelId": "fp:1",
@@ -593,12 +630,21 @@
             "exam_time",
             "question_count",
             "question_format",
-            "scoring_method",
             "passing_standard",
             "source_url",
             "official_verified_at"
           ],
           "requiredLevel": "conditional",
+          "dimensions": {
+            "providerId": "kinzai",
+            "examLevelId": "fp:1",
+            "examComponent": ["academic", "academic:basic", "academic:applied"],
+            "deliveryMode": "pbt"
+          }
+        },
+        {
+          "fields": ["scoring_method"],
+          "requiredLevel": "not_applicable",
           "dimensions": {
             "providerId": "kinzai",
             "examLevelId": "fp:1",
@@ -643,12 +689,27 @@
             "exam_time",
             "question_count",
             "question_format",
-            "scoring_method",
             "passing_standard",
             "source_url",
             "official_verified_at"
           ],
           "requiredLevel": "conditional",
+          "dimensions": {
+            "providerId": "kinzai",
+            "examLevelId": ["fp:2", "fp:3"],
+            "examComponent": [
+              "academic",
+              "practical:individual-assets",
+              "practical:small-business",
+              "practical:insurance-customer",
+              "practical:general"
+            ],
+            "deliveryMode": "cbt"
+          }
+        },
+        {
+          "fields": ["scoring_method"],
+          "requiredLevel": "not_applicable",
           "dimensions": {
             "providerId": "kinzai",
             "examLevelId": ["fp:2", "fp:3"],
