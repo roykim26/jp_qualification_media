@@ -30,7 +30,7 @@
 - `question_count`：必须同时命中「法令等（出題数４６題）」与「基礎知識（出題数１４題）」两条，才产出 `60`；缺任意一条则 `exam_subjects` 与 `question_count` 整组不产出，不做单边求和。
 - `payment_deadline`：官方原文只说「受験手数料は、受験願書の受付期間内に払い込んでください」并给出邮送消印截止，**没有公布独立的払込期限日期**。因此适配器产出的是规则型事实 `payment_deadline_rule`（`申込受付期間内`），由覆盖门禁的前缀匹配闭合 `payment_deadline` 字段。禁止为了凑日期写「試験日の2ヶ月前」这类推断值。
 - `eligibility`：官方明载「年齢、学歴、国籍等に関係なく、どなたでも受験できます。」，规范化为规则 token `open_to_all`，原文留在 `display_value`/`evidence_text`。
-- 全部候选固定 `status=pending_review`、`risk_level=high`（`ingest_gyoseishoshi.py` 写库时硬编码 `high`），必须逐条人工批准。
+- 全部候选固定 `status=pending_review`，`risk_level` 取适配器给出的值（适配器默认即 `high`），必须逐条人工批准。
 
 ## 当前已批准事实（2026 年度，15 条）
 
@@ -58,17 +58,26 @@
 
 ## 采集、入库、批准是三次独立授权
 
-| 阶段 | 入口                                                       | 授权开关                                                                                                          | 写什么                                                                           |
-| ---- | ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| 采集 | `services/collector/src/collector/capture_gyoseishoshi.py` | `GYOSEISHOSHI_LIVE_AUTHORIZED=1`                                                                                  | 只写 `var/official-snapshots/gyoseishoshi/` 与 `capture-report.json`，不连数据库 |
-| 入库 | `services/collector/src/collector/ingest_gyoseishoshi.py`  | `GYOSEISHOSHI_LOCAL_WRITE=1`，且 `DATABASE_URL` 主机必须是 localhost/127.0.0.1，且 `NODE_ENV` 不得为 `production` | `snapshots` + `candidate_facts`（`pending_review`），返回 `approval: not_run`    |
-| 批准 | `apps/admin/src/server.ts` 审核队列                        | 请求头 `x-reviewer-id`                                                                                            | `reviews`、`fact_revisions`、`facts`、`change_events`                            |
+| 阶段 | 入口                                                       | 授权开关                                                                                                          | 写什么                                                                                                                        |
+| ---- | ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| 采集 | `services/collector/src/collector/capture_gyoseishoshi.py` | `GYOSEISHOSHI_LIVE_AUTHORIZED=1`                                                                                  | 只写 `var/official-snapshots/gyoseishoshi/` 与 `capture-report.json`，不连数据库                                              |
+| 入库 | `services/collector/src/collector/ingest_gyoseishoshi.py`  | `GYOSEISHOSHI_LOCAL_WRITE=1`，且 `DATABASE_URL` 主机必须是 localhost/127.0.0.1，且 `NODE_ENV` 不得为 `production` | `capture_runs` + `snapshots`（含全溯源列）+ `source_checks` + `candidate_facts`（`pending_review`），返回 `approval: not_run` |
+| 批准 | `apps/admin/src/server.ts` 审核队列                        | 请求头 `x-reviewer-id`                                                                                            | `reviews`、`fact_revisions`、`facts`、`change_events`                                                                         |
 
 入库前必须确认快照路径在 `var/official-snapshots/gyoseishoshi` 之下且后缀为 `.html`，否则 `ingest_snapshot()` 直接拒绝；解析出问题（`structure_changed`）时以 `snapshot parse failed` 报错退出，不写半条数据。
 
+`capture_record()` 在打开数据库连接之前做四重校验，任一不符即抛错、零写入：
+
+1. `capture-report.json` 里该 `source_id` 的记录必须 `status='ok'` 且 `status_code=200`；
+2. 报告里的 `snapshot_path` 解析后必须与入库路径完全一致；
+3. 报告必须带 `content_hash` 与 `captured_at`；
+4. 对磁盘原始字节重新算 sha256 必须等于报告的 `content_hash`，且适配器解析出的 `snapshot.content_hash` 也须相等。
+
+`snapshots` 行改用 `ON CONFLICT (source_id,content_hash) DO UPDATE` 幂等回写，`retrieved_at`/`retrieved_at_jst` 取报告里的真实抓取时刻，不再用 `now()`；`collector_version` 记为 `collector.capture_gyoseishoshi`。候选的 `risk_level` 取适配器给出的值（当前全部为 `high`），不再在 SQL 里硬编码。
+
 ## 已知剩余项
 
-1. **快照元数据缺失**：`ingest_gyoseishoshi.py` 不校验 `capture-report.json`，也不写 `capture_runs`/`source_checks`，因此行政書士的 `snapshots` 行里 `original_url`、`http_status`、`retrieved_at_jst`、`capture_run_id` 均为空。基本情報技術者那条链已经做了这三重校验，两者口径不一致，收口时应对齐（见 `docs/fundamental-it-engineer-source-contract.md`）。
+1. **新链已就地跑通，剩余是夹具行**：本机开发库的 `source:gyoseishoshi:guide` 快照共 3 行。真实抓取那行（`content_hash=e634d029…`，其 15 条候选全部 `approved`）已于 2026-10-10 用新链重跑一次入库，读回结果：`capture_run_id`/`original_url=https://www.gyosei-shiken.or.jp/doc/guide/guide.html`/`http_status=200`/`retrieved_at`＝报告里的真实抓取时刻 `2026-09-08 02:10:08.722939+00`（不再是写库时刻），并新增 `capture_runs` 1 行（`succeeded`）与 `source_checks` 1 行（`changed`）；候选新增 0 条（15 条全部 `ON CONFLICT DO NOTHING` 命中既有 approved 行），`pending_official` 仍为 0，门禁 `6/6` 不变。另外 2 行的 `object_key` 是 `ci://official-snapshot/…`、`retrieved_at` 固定 `2026-01-01`，属 CI 夹具复刻写入，按口径**不得**伪装成官方溯源，保持元数据为空即可。
 2. **快照按固定文件名覆盖**：采集写 `guide.html`（与基本情報/hash 命名不同），年度页改版后旧快照会被覆盖，历史证据只存在于数据库里已有的 `content_hash`。
 3. **`application_open` 的 `display_value` 含页面导航整段文本**：值是官方公告的受付開始時刻且正确，但正则回退分支抓的是整页纯文本，证据可读性差，待收紧匹配范围后重采。
 4. **统计类字段零覆盖**：`applicants`/`examinees`/`passed`/`pass_rate`/`statistics_methodology` 属 `post_event`，目前没有稳定官方来源，归工作包 F。

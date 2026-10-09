@@ -92,7 +92,7 @@ Why：审核人 ID 放进 URL 就可被任意 `<img src=…>`、浏览器历史�
 - 夹具禁止出现的本地痕迹（同文件断言）：`local-reviewer`、`AppData`、`var/official-snapshots`、`E:\`、`C:\`、`INSERT INTO reviews`。
 - 事实数量基线禁止手工随意修改；改动必须能对应到「已审核完成的事实增减」。
 
-## 10. 回归命令与最近读数（2026-10-09 本机实跑）
+## 10. 回归命令与最近读数（2026-10-10 本机实跑）
 
 改 TypeScript 必须先 build 再 verify —— `scripts/verify-all.mjs` 跑的是 `dist/` 编译产物。
 
@@ -100,7 +100,7 @@ Why：审核人 ID 放进 URL 就可被任意 `<img src=…>`、浏览器历史�
 | ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
 | `pnpm build`（本机直调 `node_modules\.bin\tsc.cmd -p tsconfig.json`）               | 通过                                                                                                        |
 | `pnpm test`（`vitest run tests --pool=threads --poolOptions.threads.singleThread`） | 81/81，10 个文件                                                                                            |
-| `pnpm test:python`（`pytest services/collector/tests services/parser/tests`）       | 89 passed                                                                                                   |
+| `pnpm test:python`（`pytest services/collector/tests services/parser/tests`）       | 92 passed（2026-10-09 为 89，行政書士 `capture_record` 新增 3 项用例）                                      |
 | `node --test scripts/verify-lib.test.mjs`                                           | 7/7                                                                                                         |
 | `pnpm verify:all`                                                                   | `status=passed`、`qualifications=6`、`passed=6`、`failed=0`，各资格 `coverageGaps=[]`、`pending_official=0` |
 | `pnpm lint`（`eslint .`）                                                           | 干净                                                                                                        |
@@ -113,6 +113,6 @@ Why：审核人 ID 放进 URL 就可被任意 `<img src=…>`、浏览器历史�
 
 1. FE 的科目级事实与契约维度/命名对不上（见 `docs/fundamental-it-engineer-source-contract.md` 门禁告警节），补维度前需先定命名与判级方案。
 2. `sources.qualification_id` 有 32/40 条为 `NULL`，来源→资格关系目前靠候选事实表达。
-3. 行政書士入库链不写 `capture_runs`/`source_checks`，与 FE 链路口径不一致。
+3. 行政書士入库链已于 2026-10-10 对齐 FE 口径（校验 `capture-report.json`、写 `capture_runs` 与 `snapshots` 全溯源列、写 `source_checks`），并在本机开发库对真实快照重跑一次入库验证通过：真实抓取行就地补全溯源、候选新增 0 条、门禁仍 `6/6`。仍在的只是夹具行（`ci://` object key）按设计不带元数据，见 §5。
 4. `services/api/src/release.ts` 的 `rollbackApprovedFact` 维度 join 漏 `payment_method`，与 0014 迁移建立的 `facts_current_key_idx` 及候选幂等索引不一致。
 5. 历史统计字段（`pass_rate` 等）六资格全为零官方来源，归工作包 F。
