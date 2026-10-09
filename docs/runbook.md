@@ -14,26 +14,30 @@
 
 当前阶段 2 用户页面范围为 6 个首发资格。统一页面入口为 `/shikaku/`，每个资格提供概要、`/{year}/` 年度日程、`/application/`、`/exam-content/` 和 `/pass-rate/` 五类页面；页面只通过公开 API 读取事实，年度页严格按 `examYear` 隔离。日程页和资格年度页提供 `/ics/{qualification}/{year}.ics` 全年下载，日程事件提供单事件下载；没有明确日期的事实不会生成 ICS。`/compare/` 提供动态比较器与 3 篇静态比较指南；`/guide/` 提供 4 篇不包含动态事实的通用指南。
 
-## 阶段边界
+## 当前范围
 
-阶段 1 当前只实现宅建闭环，不实现实时采集、其他资格、正式页面模板、生产发布、认证供应商、通知服务或外部生产连接。
+阶段 0/1/2/3 已归档：六资格页面、跨资格日程/比较/更新、ICS 下载与技术 SEO 基线均已完成。数据侧当前状态为 176 条已批准正式事实、覆盖缺口 0、`pnpm verify:all` 六资格全通过（读数见 `docs/data-gate-semantics.md` 第 10 节）。
 
-API 契约见 [docs/api-contract.md](api-contract.md)。
+仍不在范围内：生产发布与生产数据库/对象存储、实时定时采集、正式认证与外部通知。页面完成不等于数据完成；每个资格哪些字段有官方事实、哪些靠规则型说明闭合，以对应的 `docs/<qualification>-source-contract.md` 为准。
 
-阶段 1 宅建闭环说明见 [docs/stage1-takken.md](stage1-takken.md)。
+API 契约见 [docs/api-contract.md](api-contract.md)。阶段 1 宅建闭环说明见 [docs/stage1-takken.md](stage1-takken.md)。门禁语义、判级规则与三级授权边界见 [docs/data-gate-semantics.md](data-gate-semantics.md)。
 
-# 本地审核队列
+## 本地审核队列
 
 启动前设置本地 reviewer 身份（不要使用生产数据库）：
 
 ```powershell
 $env:DATABASE_URL='postgresql://qualification_dev:qualification_dev@127.0.0.1:5432/qualification_media'
-$env:ADMIN_REVIEWER_ID='local-reviewer'
+$env:ADMIN_REVIEWER_ID='local-data-reviewer'
 $env:ADMIN_PORT='3001'
 pnpm dev:admin
 ```
 
-打开 `http://127.0.0.1:3001/review/takken`。页面只接受配置的 reviewer 身份，逐条查看 RETIO 官方原文并填写理由后选择批准、拒绝或延期。高风险事实批准后会创建修订和正式事实，但仍需后续构建成功才允许公开发布；延期和拒绝不会进入公开 API。
+打开 `http://127.0.0.1:3001/review/takken?reviewer=local-data-reviewer`，逐条查看官方原文并填写理由后选择批准、拒绝或延期。
+
+写操作（批准、拒绝、延期、撤销）**只接受 `x-reviewer-id` 请求头**；`?reviewer=` 查询参数仅用于打开队列页（只读）。理由是 URL 里的审核人身份可被 `<img src=…>`、浏览器历史和代理访问日志重放。页面上的按钮会先弹出「审核人 ID」输入框，再由 `fetch` 以请求头发送。鉴权验收判据见 `docs/data-gate-semantics.md` 第 7 节。
+
+高风险事实不得自动批准。批准会在同一维度组合上创建新 revision 并复用（复活）既有 `facts` 行；拒绝与延期不撤销已发布的正式事实；撤销只对 `ci://` 快照驱动的事实生效。
 
 ## 正式发布前门禁
 
@@ -71,3 +75,9 @@ pnpm release:check
 ```
 
 导出命令仅允许 localhost 数据库，真实候选存在 pending 时拒绝生成，并采用固定时间和 `ci://` object key 保证输出可审查、可重复。提交前必须同时审查基线 JSON 与 fixture SQL 的差异。
+
+夹具现为 176 facts / 176 candidate_facts / 176 fact_revisions / 25 snapshots；重导后必须同步修改 `scripts/verify-ci-fixture.mjs` 第 9–12 行的四个计数断言，否则门禁会以 `ERR_ASSERTION` 失败。完整口径见 `docs/data-gate-semantics.md` 第 5、9 节。
+
+## 采集与入库授权
+
+采集、候选入库、审核批准是三次独立授权，逐段需要项目所有者明示批准，抓取授权不包含后两者。各资格的入口脚本与环境变量开关记录在对应的 `docs/<qualification>-source-contract.md`，总则见 `docs/data-gate-semantics.md` 第 8 节。
