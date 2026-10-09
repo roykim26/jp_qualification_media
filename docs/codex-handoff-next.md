@@ -104,6 +104,8 @@ pnpm dev:admin
 http://127.0.0.1:3001/review/takken?reviewer=local-reviewer
 ```
 
+`?reviewer=` 只用于**打开队列（只读）**。批准、拒绝、延期与撤销这类写操作必须带 `x-reviewer-id` 请求头（页面上的按钮会先弹出「审核人 ID」输入框，再由 `fetch` 以请求头发送），查询参数不再被接受——写操作若也能凭 URL 完成，任何 `<img src=…?reviewer=…>`、浏览器历史或代理日志都能重放审核。
+
 ## 6. 已验证命令
 
 ```powershell
