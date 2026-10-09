@@ -58,6 +58,10 @@ IT Passport 和基本信息技术者当前已通过覆盖门禁，不属于本�
 
 所有 URL 都取自已捕获快照正文里的真实链接，不猜测路径。本次仍是一次性受控读取，只写 `var/official-snapshots/bookkeeping/` 的 HTML 与采集报告；不建 `sources` 迁移、不入库候选、不审核、不批准。授权执行窗口：2026-10-09（JST），执行前需 `BOOKKEEPING_LIVE_AUTHORIZED=1` 且 `NODE_ENV` 非 `production`。
 
+## 第二次授权（2026-10-09，候选入库与审核批准）
+
+采集与离线审计完成后，项目所有者另行确认「同意授权」，把上面第 4 步的权限授予本轮：新增 `packages/db/migrations/0015_bookkeeping_gap_sources.sql` 登记 10 个来源（含 `flow/teller`、`flow/net`、`news-51504` 等 3 个仅作证据的来源）；以 `BOOKKEEPING_LOCAL_WRITE=1` 对本地 `qualification_media` 库跑 `collector.ingest_bookkeeping`，9 条新候选进入 `pending_review`；再由 `POST /internal/reviews/{candidate_id}`（审核人 `local-data-reviewer`，逐条写明官方原文依据）全部批准。未使用生产库、未推送远端、未安排定时采集。
+
 ## 授权后的执行顺序
 
 1. 逐源运行 capture-only 流程，并记录成功、未变化、404、重定向拒绝或结构异常。

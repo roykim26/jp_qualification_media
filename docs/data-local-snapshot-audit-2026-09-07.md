@@ -204,3 +204,15 @@
 `services/collector/tests/test_bookkeeping_contract.py` 为上述三项各加契约测试（含缺句时停止产出、1 级与 2／3 级措辞不得互换、来源等级维度保真），并冻结 15 个已登记 `source_id`。`uv run --project services/collector --extra test python -m pytest services/collector/tests services/parser/tests -q` 实测 **89 passed**；对已捕获快照的离线抽取复核结果与上面三条证据逐字一致、`issues` 为空。
 
 本小节只到「适配器＋测试」为止：候选入库、审核与批准仍需项目所有者单独授权。
+
+### 候选入库与审核批准（同日，项目所有者另行授权后执行）
+
+- 迁移 `packages/db/migrations/0015_bookkeeping_gap_sources.sql` 登记 10 个新来源；`db:migrate` 在开发库与 CI 复刻库各应用一次。
+- 入库前先复核 `capture-report.json`：15 个来源全部 HTTP 200，且报告 `content_hash` 与快照文件实际 SHA-256 逐条一致（15/15 OK）。
+- `BOOKKEEPING_LOCAL_WRITE=1` 下对开发库 `qualification_media` 跑 `python -m collector.ingest_bookkeeping`（映射已扩到 8 个有抽取器的来源）：`home`/`network`/`calendar-2026` 因重取产生新快照行，但 40 条候选值与已批准值逐字相同 ⇒ `candidates: 0`、`skipped_approved` 9/25/6；新增候选共 **9 条**（`question_format` 1/2/3 级各 1、`eligibility` 1/2/3 级各 1、`payment_deadline_rule` 1/2/3 级各 1），全部 `risk_level=high`、`synthetic=false`。
+- 9 条候选逐条走审核链批准（`POST /internal/reviews/{id}`、审核人 `local-data-reviewer`），理由均写明官方原文与「不编造日期/不跨等级复用」的判定依据。批准后 `pending_review=0`，`facts` 由 167 → **176**，簿记由 49 → **58**。
+- `node scripts/verify-all.mjs` 两条路径读数一致：**passed 6/6、coverageGaps 0、pending 0、errors 0**。开发库簿记 `api.status=verified`；CI 复刻库（新建临时库 → `db:migrate` → `db:seed` → `ci:fixture:restore`）簿记为 `partially_announced`，与预期 `expectedStatus` 相同，原因是 ci:// 溯源永不计为官方验证。
+- 基线与夹具重导：`config/release-gate-baseline.json` 簿记 49→58；`fixtures/ci/approved-facts.sql` 现为 176 facts / 25 snapshots，`scripts/verify-ci-fixture.mjs` 的计数断言同步改为 176/176/176/25。
+- 回归读数：`vitest` 10 个文件全绿、`eslint` 与 `tsc --noEmit` 无输出、`prettier --check` 全部通过、`pytest` 89 passed、`node --test scripts/verify-lib.test.mjs` 7 passed、`tsc -p tsconfig.json` 构建成功。
+
+至此三项 C 类缺口全部以官方原文闭合，簿记统一试验的覆盖缺口为 0。遗留告警见上一小节：2027 年度起 3 级 `scoring_method` 会由官方公布配点，覆盖年度翻页前必须先改判级再入库。

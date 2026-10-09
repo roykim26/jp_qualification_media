@@ -146,5 +146,8 @@ if __name__ == "__main__":
         "calendar-2026.html": "source:bookkeeping:calendar-2026",
         "class1-exam.html": "source:bookkeeping:class1-exam",
         "class2-exam.html": "source:bookkeeping:class2-exam",
+        "class3-exam.html": "source:bookkeeping:class3-exam",
+        "qa.html": "source:bookkeeping:qa",
+        "flow-teller.html": "source:bookkeeping:flow-teller",
     }
     print(json.dumps([ingest_snapshot(database_url, source, SNAPSHOT_ROOT / name) for name, source in mapping.items()], ensure_ascii=False, indent=2))

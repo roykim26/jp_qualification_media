@@ -23,7 +23,7 @@
     },
     {
       "slug": "bookkeeping",
-      "expectedFacts": 49,
+      "expectedFacts": 58,
       "pageContains": "日商簿記"
     },
     {
