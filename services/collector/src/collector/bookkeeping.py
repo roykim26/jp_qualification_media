@@ -19,6 +19,16 @@ BOOKKEEPING_SOURCES = {
     "source:bookkeeping:calendar-2026": ("https://www.kentei.ne.jp/calendar_2026", "official_exam_calendar"),
     "source:bookkeeping:class1-exam": ("https://www.kentei.ne.jp/bookkeeping/class1/exam", "official_level_exam_information"),
     "source:bookkeeping:class2-exam": ("https://www.kentei.ne.jp/bookkeeping/class2/exam", "official_level_exam_information"),
+    "source:bookkeeping:class1": ("https://www.kentei.ne.jp/bookkeeping/class1", "official_level_information"),
+    "source:bookkeeping:class2": ("https://www.kentei.ne.jp/bookkeeping/class2", "official_level_information"),
+    "source:bookkeeping:class3": ("https://www.kentei.ne.jp/bookkeeping/class3", "official_level_information"),
+    "source:bookkeeping:class3-exam": ("https://www.kentei.ne.jp/bookkeeping/class3/exam", "official_level_exam_information"),
+    "source:bookkeeping:flow": ("https://www.kentei.ne.jp/flow", "official_application_flow"),
+    "source:bookkeeping:report": ("https://www.kentei.ne.jp/report", "official_exam_notice"),
+    "source:bookkeeping:qa": ("https://www.kentei.ne.jp/qa", "official_faq"),
+    "source:bookkeeping:flow-teller": ("https://www.kentei.ne.jp/flow/teller", "official_application_flow"),
+    "source:bookkeeping:flow-net": ("https://www.kentei.ne.jp/flow/net", "official_application_flow"),
+    "source:bookkeeping:news-51504": ("https://www.kentei.ne.jp/51504", "official_announcement"),
 }
 
 LEVELS = {"1", "2", "3", "basic", "cost-accounting-basic"}
@@ -26,9 +36,9 @@ DELIVERY_MODES = {"unified", "network", "group"}
 FIELD_KEYS = {
     "exam_method", "exam_schedule", "exam_date", "fee", "exam_subjects",
     "exam_time", "question_format", "question_count", "passing_standard",
-    "suspension_period", "exam_dates",
+    "suspension_period", "exam_dates", "eligibility",
     "application_open_rule", "application_deadline_rule", "application_method_rule",
-    "result_date_rule",
+    "payment_deadline_rule", "result_date_rule",
 }
 
 
@@ -120,6 +130,12 @@ def extract_candidates(snapshot: BookkeepingSnapshot) -> tuple[list[BookkeepingF
         candidates.extend(_extract_calendar(snapshot, soup))
     elif snapshot.source_id in {"source:bookkeeping:class1-exam", "source:bookkeeping:class2-exam"}:
         candidates.extend(_extract_level_exam(snapshot, soup))
+    elif snapshot.source_id == "source:bookkeeping:class3-exam":
+        candidates.extend(_extract_class3_format(snapshot, soup))
+    elif snapshot.source_id == "source:bookkeeping:qa":
+        candidates.extend(_extract_qa_eligibility(snapshot, soup))
+    elif snapshot.source_id == "source:bookkeeping:flow-teller":
+        candidates.extend(_extract_flow_payment_rule(snapshot, soup))
     elif snapshot.source_id == "source:bookkeeping:home":
         candidates.extend(_extract_home(snapshot, soup))
     if not candidates and not issues:
@@ -138,6 +154,31 @@ def _sentence(soup: BeautifulSoup, anchor: str) -> str:
         if anchor in text
     ]
     return min(matches, key=len) if matches else ""
+
+
+def _clause(soup: BeautifulSoup, anchor: str) -> str:
+    """Return only the official sentence carrying the anchor.
+
+    `_sentence` yields the whole list item, which would mix unrelated notes
+    (privacy notices, other chambers' rules) into a display value. Sentences
+    split on 。 only outside parentheses because Kentei nests full clauses in
+    「（…）」 notes.
+    """
+    text = _sentence(soup, anchor)
+    if not text:
+        return ""
+    buffer, depth = "", 0
+    for character in text:
+        if character in "（「":
+            depth += 1
+        elif character in "）」":
+            depth = max(0, depth - 1)
+        buffer += character
+        if character == "。" and depth == 0:
+            if anchor in buffer:
+                return buffer.strip().lstrip("※").strip()
+            buffer = ""
+    return text
 
 
 def _extract_home(snapshot: BookkeepingSnapshot, soup: BeautifulSoup) -> list[BookkeepingFactCandidate]:
@@ -226,4 +267,65 @@ def _extract_level_exam(snapshot: BookkeepingSnapshot, soup: BeautifulSoup) -> l
     announcement = _sentence(soup, "合格発表の期日や方法、証書の受け渡し方法等は、商工会議所によって異なります")
     if announcement:
         result.append(_candidate(snapshot, "result_date_rule", "venue_defined", announcement, level, "unified"))
+    result.extend(_extract_answer_format(snapshot, soup, level))
     return result
+
+
+BOOKLET_PHRASE = "問題用紙・答案用紙・計算用紙が一体となった冊子"
+
+
+def _extract_answer_format(snapshot: BookkeepingSnapshot, soup: BeautifulSoup, level: str) -> list[BookkeepingFactCandidate]:
+    """1 級 retrieves only the answer sheet while 2 級 and 3 級 use one booklet.
+
+    The two wordings are level-specific, so copying one across levels would
+    state an answer-sheet form the chamber never published for that level.
+    """
+    if level == "1":
+        collection = _clause(soup, "答案用紙を回収します")
+        takeaway = _clause(soup, "持ち帰りを認めます")
+        if not collection or not takeaway:
+            return []
+        display = f"{collection}{takeaway}"
+        return [_candidate(snapshot, "question_format", "答案用紙を回収します", display, level, "unified", evidence=display)]
+    booklet = _clause(soup, "一体となった冊子")
+    if not booklet:
+        return []
+    return [_candidate(snapshot, "question_format", BOOKLET_PHRASE, booklet, level, "unified", evidence=booklet)]
+
+
+def _extract_class3_format(snapshot: BookkeepingSnapshot, soup: BeautifulSoup) -> list[BookkeepingFactCandidate]:
+    return _extract_answer_format(snapshot, soup, "3")
+
+
+def _extract_qa_eligibility(snapshot: BookkeepingSnapshot, soup: BeautifulSoup) -> list[BookkeepingFactCandidate]:
+    """The Q&A answers 簿記 level order explicitly and names no eligibility test.
+
+    The 「2級に合格していること」 condition in the same answer is reserved for
+    DCプランナー1級, so it does not restrict 日商簿記 levels.
+    """
+    free = _clause(soup, "どの級(クラス)から受験していただいても構いません")
+    if not free:
+        return []
+    order = _clause(soup, "2級あるいは1級を受験できます")
+    display = f"{free}{order}" if order else free
+    return [
+        _candidate(snapshot, "eligibility", "どの級(クラス)から受験していただいても構いません", display, level, "unified", evidence=display)
+        for level in ("1", "2", "3")
+    ]
+
+
+def _extract_flow_payment_rule(snapshot: BookkeepingSnapshot, soup: BeautifulSoup) -> list[BookkeepingFactCandidate]:
+    """Kentei collects the unified-exam fee through each chamber's own window.
+
+    No national payment deadline exists on this page, so the published
+    dependency is stored as a rule instead of an invented date.
+    """
+    fee = _clause(soup, "受験料の支払方法等をご確認ください")
+    if not fee:
+        return []
+    window = _clause(soup, "受験申込受付期間は、商工会議所によって異なります")
+    display = f"{fee}{window}" if window else fee
+    return [
+        _candidate(snapshot, "payment_deadline_rule", "venue_defined", display, level, "unified", evidence=display)
+        for level in ("1", "2", "3")
+    ]

@@ -44,6 +44,20 @@ IT Passport 和基本信息技术者当前已通过覆盖门禁，不属于本�
 
 > 我确认并授权按照本文件所列的 URL、域名、一次性窗口和仅保存本地快照的限制执行工作包 E 受控采集；不得写入数据库、生成候选或批准事实。
 
+## 追加授权（2026-10-09，簿记统一试验剩余 3 项缺口）
+
+项目所有者在会话中确认「授权抓取簿记官网补 3 项缺口」，范围限定为在原有 5 个簿记来源之外新增以下 7 个来源，域名仍只有 `www.kentei.ne.jp`，目的分别是 `eligibility`（受験資格）、`question_format`（試験問題の形式）与 `payment_deadline`（受験手数料の納付）：
+
+| 新增 source_id                                                                        | URL                              | 目的                         |
+| ------------------------------------------------------------------------------------- | -------------------------------- | ---------------------------- |
+| `source:bookkeeping:class1`、`source:bookkeeping:class2`、`source:bookkeeping:class3` | `/bookkeeping/class1` 等各等级页 | 受験資格、出題形式           |
+| `source:bookkeeping:class3-exam`                                                      | `/bookkeeping/class3/exam`       | 3 级科目・出題形式           |
+| `source:bookkeeping:flow`                                                             | `/flow`                          | 申込から手数料納付までの流れ |
+| `source:bookkeeping:report`                                                           | `/report`                        | 受験者への連絡・注意事項     |
+| `source:bookkeeping:qa`                                                               | `/qa`                            | 受験資格・試験形式の FAQ     |
+
+所有 URL 都取自已捕获快照正文里的真实链接，不猜测路径。本次仍是一次性受控读取，只写 `var/official-snapshots/bookkeeping/` 的 HTML 与采集报告；不建 `sources` 迁移、不入库候选、不审核、不批准。授权执行窗口：2026-10-09（JST），执行前需 `BOOKKEEPING_LIVE_AUTHORIZED=1` 且 `NODE_ENV` 非 `production`。
+
 ## 授权后的执行顺序
 
 1. 逐源运行 capture-only 流程，并记录成功、未变化、404、重定向拒绝或结构异常。

@@ -1,4 +1,5 @@
 from collector.bookkeeping import (
+    BOOKLET_PHRASE,
     extract_candidates,
     is_registered_source_url,
     snapshot_from_bytes,
@@ -15,8 +16,22 @@ def test_bookkeeping_source_plan_is_explicit_and_official():
         "source:bookkeeping:calendar-2026",
         "source:bookkeeping:class1-exam",
         "source:bookkeeping:class2-exam",
+        "source:bookkeeping:class1",
+        "source:bookkeeping:class2",
+        "source:bookkeeping:class3",
+        "source:bookkeeping:class3-exam",
+        "source:bookkeeping:flow",
+        "source:bookkeeping:flow-teller",
+        "source:bookkeeping:flow-net",
+        "source:bookkeeping:report",
+        "source:bookkeeping:qa",
+        "source:bookkeeping:news-51504",
     }
     assert all(item["allowed_domain"] == "www.kentei.ne.jp" for item in source_plan())
+    assert all(
+        item["canonical_url"].startswith("https://www.kentei.ne.jp")
+        for item in source_plan()
+    )
 
 
 def test_bookkeeping_source_boundary_is_exact():
@@ -128,6 +143,80 @@ def test_calendar_snapshot_stops_asserting_an_unpublished_format():
     )
     assert not issues
     assert not any(item.fact_key == "exam_method" for item in candidates)
+
+
+def test_class1_exam_snapshot_keeps_answer_sheet_retrieval_wording():
+    html = """<div class="postContent"><table><tr><td>試験時間</td><td>90分</td><td>90分</td></tr>
+    <tr><td>合格基準</td><td>平均70%以上（各科目40%以上）</td></tr></table></div>
+    <p>試験終了後、答案用紙を回収します。</p>
+    <p>試験問題・計算用紙については、持ち帰りを認めます。</p>"""
+    candidates, issues = extract_candidates(
+        snapshot_from_html("source:bookkeeping:class1-exam", html, synthetic=False)
+    )
+    assert not issues
+    formats = [item for item in candidates if item.fact_key == "question_format"]
+    assert len(formats) == 1
+    assert (formats[0].exam_level_id, formats[0].delivery_mode) == ("bookkeeping:1", "unified")
+    assert formats[0].normalized_value == "答案用紙を回収します"
+    assert formats[0].display_value == (
+        "試験終了後、答案用紙を回収します。試験問題・計算用紙については、持ち帰りを認めます。"
+    )
+
+
+def test_level_exam_pages_keep_distinct_answer_sheet_wording():
+    html = """<div class="postContent"><table><tr><td>試験時間</td><td>90分</td></tr></table></div>
+    <p>試験会場では、問題用紙・答案用紙・計算用紙が一体となった冊子を配布し、試験終了後に全て回収いたします。</p>"""
+    for source, level in (("source:bookkeeping:class2-exam", "2"), ("source:bookkeeping:class3-exam", "3")):
+        candidates, issues = extract_candidates(snapshot_from_html(source, html, synthetic=False))
+        assert not issues
+        formats = [item for item in candidates if item.fact_key == "question_format"]
+        assert [item.exam_level_id for item in formats] == [f"bookkeeping:{level}"]
+        assert formats[0].normalized_value == BOOKLET_PHRASE
+        assert "答案用紙を回収します" not in formats[0].display_value
+
+
+def test_parse_stops_when_answer_format_sentence_is_absent():
+    html = '<div class="postContent"><table><tr><td>試験時間</td><td>60分</td></tr></table></div>'
+    candidates, issues = extract_candidates(
+        snapshot_from_html("source:bookkeeping:class3-exam", html, synthetic=False)
+    )
+    assert candidates == []
+    assert issues[0].code == "structure_changed"
+
+
+def test_qa_snapshot_keeps_level_order_eligibility_within_official_wording():
+    html = """<ul>
+    <li>商工会議所の検定試験は、どの級(クラス)から受験していただいても構いません。例えば、3級に合格していなくても、2級あるいは1級を受験できます。</li>
+    <li>DCプランナー1級を受験していただくには、2級に合格していることが必要です。</li></ul>"""
+    candidates, issues = extract_candidates(
+        snapshot_from_html("source:bookkeeping:qa", html, synthetic=False)
+    )
+    assert not issues
+    items = [item for item in candidates if item.fact_key == "eligibility"]
+    assert {item.exam_level_id for item in items} == {"bookkeeping:1", "bookkeeping:2", "bookkeeping:3"}
+    assert all(item.delivery_mode == "unified" for item in items)
+    assert all(item.normalized_value == "どの級(クラス)から受験していただいても構いません" for item in items)
+    assert all("2級あるいは1級を受験できます" in item.display_value for item in items)
+    assert not any("DC" in item.display_value for item in items)
+
+
+def test_flow_teller_snapshot_declares_chamber_defined_payment_rule():
+    html = """<ol>
+    <li>受験申込受付期間は、商工会議所によって異なります。申し込みの際にご確認ください。</li>
+    <li>試験日の2ヵ月前を目安に（受付開始日は商工会議所により異なります。）受験を希望する商工会議所へ
+    お問い合わせのうえ、受験料の支払方法等をご確認ください。</li></ol>"""
+    candidates, issues = extract_candidates(
+        snapshot_from_html("source:bookkeeping:flow-teller", html, synthetic=False)
+    )
+    assert not issues
+    items = [item for item in candidates if item.fact_key == "payment_deadline_rule"]
+    assert {item.exam_level_id for item in items} == {"bookkeeping:1", "bookkeeping:2", "bookkeeping:3"}
+    assert all(item.delivery_mode == "unified" for item in items)
+    assert all(item.normalized_value == "venue_defined" for item in items)
+    assert all(item.display_value.startswith("試験日の2ヵ月前を目安に（") for item in items)
+    assert all("（受付開始日は商工会議所により異なります。）" in item.display_value for item in items)
+    assert all("受験料の支払方法等をご確認ください。" in item.display_value for item in items)
+    assert all("受験申込受付期間は、商工会議所によって異なります。" in item.display_value for item in items)
 
 
 def test_ingest_dedup_key_ignores_jsonb_member_order():
