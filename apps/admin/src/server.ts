@@ -21,14 +21,19 @@ function send(
   res.end(body);
 }
 
-function authorized(req: IncomingMessage): boolean {
+function authorizedWrite(req: IncomingMessage): boolean {
+  // Decisions must arrive with an explicit header: a reviewer id placed in a
+  // URL is replayable by any <img> tag, browser history, or proxy access log.
+  return Boolean(reviewerId && req.headers['x-reviewer-id'] === reviewerId);
+}
+
+function authorizedRead(req: IncomingMessage): boolean {
+  if (!reviewerId) return false;
   const queryReviewer = req.url
     ? new URL(req.url, 'http://127.0.0.1').searchParams.get('reviewer')
     : null;
-  return Boolean(
-    reviewerId &&
-    (req.headers['x-reviewer-id'] === reviewerId ||
-      queryReviewer === reviewerId),
+  return (
+    req.headers['x-reviewer-id'] === reviewerId || queryReviewer === reviewerId
   );
 }
 
@@ -364,7 +369,7 @@ const server = createServer(async (req, res) => {
     };
     const route = req.url ? reviewRoutes[req.url.split('?')[0]] : undefined;
     if (req.method === 'GET' && route) {
-      if (!authorized(req))
+      if (!authorizedRead(req))
         return send(
           res,
           401,
@@ -378,7 +383,7 @@ const server = createServer(async (req, res) => {
       );
     }
     if (req.method === 'POST' && req.url?.startsWith('/internal/reviews/')) {
-      if (!authorized(req))
+      if (!authorizedWrite(req))
         return send(
           res,
           401,
@@ -401,7 +406,7 @@ const server = createServer(async (req, res) => {
       req.method === 'POST' &&
       req.url?.startsWith('/internal/retractions/')
     ) {
-      if (!authorized(req))
+      if (!authorizedWrite(req))
         return send(
           res,
           401,
