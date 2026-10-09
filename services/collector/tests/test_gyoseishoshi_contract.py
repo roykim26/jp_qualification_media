@@ -93,3 +93,18 @@ def test_gyoseishoshi_guide_extracts_explicit_scoring_method():
     assert not issues
     assert candidates[0].fact_key == "scoring_method"
     assert candidates[0].evidence_text == "択一式問題の採点を完了した段階で合格基準を満たしていないと認められる場合には、記述式問題の採点を行わないことがあります。"
+
+
+def test_guide_snapshot_declares_payment_within_the_reception_period():
+    html = """<h3>受験手数料の払込み</h3>
+    <p>受験手数料は、受験願書の受付期間内に払い込んでください。</p>
+    <ol><li>受験願書は、受付締切日までの消印があり、かつ、この日までの受付郵便局の日附印がある
+    ｢振替払込受付証明書（お客さま用）｣が貼られている不備のないものを受け付けます。</li></ol>"""
+    candidates, issues = extract_candidates(
+        snapshot_from_html("source:gyoseishoshi:guide", html, synthetic=False)
+    )
+    assert not issues
+    rule = next(item for item in candidates if item.fact_key == "payment_deadline_rule")
+    assert rule.normalized_value == "申込受付期間内"
+    assert "受験願書の受付期間内に払い込んでください" in rule.evidence_text
+    assert "受付締切日までの消印があり" in rule.evidence_text

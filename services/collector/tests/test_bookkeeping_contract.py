@@ -71,3 +71,72 @@ def test_captured_network_snapshot_extracts_all_four_level_fees():
         ("bookkeeping:2", "5500"), ("bookkeeping:3", "3300"),
         ("bookkeeping:basic", "2200"), ("bookkeeping:cost-accounting-basic", "2200"),
     }
+
+
+def test_home_snapshot_declares_chamber_defined_application_rules():
+    html = """<p>申込受付日時、申込受付方法は、商工会議所によって異なります。試験日の約２か月前になりましたら、
+    受験希望地の商工会議所までお問い合わせください。</p>"""
+    candidates, issues = extract_candidates(
+        snapshot_from_html("source:bookkeeping:home", html, synthetic=False)
+    )
+    assert not issues
+    assert {(item.fact_key, item.exam_level_id, item.delivery_mode) for item in candidates} == {
+        (key, f"bookkeeping:{level}", "unified")
+        for key in ("application_open_rule", "application_deadline_rule", "application_method_rule")
+        for level in ("1", "2", "3")
+    }
+    assert all(item.normalized_value == "venue_defined" for item in candidates)
+    assert all("商工会議所によって異なります" in item.evidence_text for item in candidates)
+
+
+def test_level_exam_snapshot_declares_chamber_defined_result_date():
+    html = """<div class="postContent"><table><tr><td>合格基準</td><td>70%以上</td></tr></table></div>
+    <p>合格発表の期日や方法、証書の受け渡し方法等は、商工会議所によって異なります。申し込みの際にご確認ください。</p>"""
+    candidates, issues = extract_candidates(
+        snapshot_from_html("source:bookkeeping:class1-exam", html, synthetic=False)
+    )
+    assert not issues
+    rule = next(item for item in candidates if item.fact_key == "result_date_rule")
+    assert (rule.exam_level_id, rule.delivery_mode, rule.normalized_value) == ("bookkeeping:1", "unified", "venue_defined")
+    assert "合格発表の期日や方法" in rule.evidence_text
+
+
+def test_network_snapshot_keeps_official_exam_method_wording():
+    html = """<h1>日商簿記検定試験ネット試験について</h1>
+    <p>※年3回の統一試験（ペーパー形式）の前後に、日商簿記検定試験（２級・３級）ネット試験の施行休止期間を設定しています。</p>"""
+    candidates, issues = extract_candidates(
+        snapshot_from_html("source:bookkeeping:network", html, synthetic=False)
+    )
+    assert not issues
+    by_scope = {
+        (item.exam_level_id, item.delivery_mode): item
+        for item in candidates
+        if item.fact_key == "exam_method"
+    }
+    assert by_scope[("bookkeeping:1", "unified")].normalized_value == "ペーパー形式"
+    assert "統一試験（ペーパー形式）" in by_scope[("bookkeeping:1", "unified")].evidence_text
+    assert by_scope[("bookkeeping:2", "network")].normalized_value == "ネット試験"
+    assert not any(item.fact_key == "exam_method" and item.normalized_value in {"paper", "CBT"} for item in candidates)
+
+
+def test_calendar_snapshot_stops_asserting_an_unpublished_format():
+    html = """<h2>簿記 1級~3級（統一試験）</h2>
+    <table><tr><td>試験日</td><td>2026年6月14日</td><td>2026年11月15日</td></tr>
+    <tr><td>受験料（税込）</td><td>8,800円</td><td>5,500円</td><td>3,300円</td></tr></table>"""
+    candidates, issues = extract_candidates(
+        snapshot_from_html("source:bookkeeping:calendar-2026", html, synthetic=False)
+    )
+    assert not issues
+    assert not any(item.fact_key == "exam_method" for item in candidates)
+
+
+def test_ingest_dedup_key_ignores_jsonb_member_order():
+    from collector.ingest_bookkeeping import value_key
+
+    def key(value, display):
+        return value_key("fee", "bookkeeping:1", "unified", 2026, value, display)
+
+    assert key({"amount": 8800, "currency": "JPY"}, "1級 8,800円") == key(
+        {"currency": "JPY", "amount": 8800}, "1級 8,800円"
+    )
+    assert key({"amount": 8800}, "1級 8,800円") != key({"amount": 8800}, "1級 8,800円（税込）")

@@ -145,31 +145,40 @@ test('exam_dates satisfies the frozen exam_date coverage requirement', () => {
   );
 });
 
-test('production provenance requires a real reviewed chain while fixture mode is isolated', () => {
-  const facts = [
-    {
-      examYear: 2026,
-      factKey: 'exam_method',
-      sourceUrl: 'https://www.retio.or.jp/exam/',
-      provenanceStatus: 'fixture',
-    },
-  ];
-  const production = evaluateCoverage('takken', facts, 2026);
-  assert.ok(
-    production.some(
+test('fixture provenance blocks the verified status without hiding business coverage', () => {
+  const qualification = coverageContract.qualifications.find(
+    (item) => item.slug === 'takken',
+  );
+  const facts = qualification.requirements
+    .filter((requirement) => requirement.requiredLevel === 'required')
+    .flatMap((requirement) =>
+      requirement.fields
+        .filter(
+          (field) => field !== 'source_url' && field !== 'official_verified_at',
+        )
+        .map((factKey) => ({
+          examYear: 2026,
+          factKey,
+          sourceUrl: 'https://www.retio.or.jp/exam/',
+          provenanceStatus: 'fixture',
+          ...requirement.dimensions,
+        })),
+    );
+  const gaps = evaluateCoverage('takken', facts, 2026);
+  assert.equal(
+    gaps.some(
       (gap) =>
         gap.field === 'official_verified_at' &&
         gap.reason === 'missing approved provenance',
     ),
+    true,
   );
-  const fixture = evaluateCoverage('takken', facts, 2026, {
-    provenanceMode: 'fixture',
-  });
   assert.equal(
-    fixture.some(
+    gaps.filter(
       (gap) =>
-        gap.field === 'source_url' || gap.field === 'official_verified_at',
-    ),
-    false,
+        gap.field !== 'source_url' && gap.field !== 'official_verified_at',
+    ).length,
+    0,
   );
+  assert.equal(expectedCoverageStatus(gaps), 'partially_announced');
 });

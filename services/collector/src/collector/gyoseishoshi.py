@@ -174,6 +174,14 @@ def _extract_guide_candidates(
         amount = int(_digits(fee.group(1)).replace(",", ""))
         add("fee", str(amount), fee.group(0), "money", fee.group(0))
 
+    # The guide states the fee is paid within the application reception period
+    # and gives the postal postmark cut-off, but publishes no separate 払込期限.
+    payment_deadline = re.search(r"受験手数料は、受験願書の受付期間内に払い込んでください。", text)
+    postal_deadline = re.search(r"受験願書は、受付締切日までの消印があり[^。]*を受け付けます。", text)
+    if payment_deadline and postal_deadline:
+        evidence = f"{payment_deadline.group(0)} {postal_deadline.group(0)}"
+        add("payment_deadline_rule", "申込受付期間内", evidence, "text", evidence)
+
     method = re.search(r"試験方法\s*試験は、([^。]+。)", text)
     if method and not any(x.fact_key == "exam_method" for x in result):
         add("exam_method", method.group(1), method.group(0), "text", method.group(0))

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -29,6 +30,44 @@ def capture_record(source_id: str, snapshot_path: Path) -> dict[str, object]:
     if not isinstance(record.get("content_hash"), str) or not isinstance(record.get("captured_at"), str):
         raise ValueError("capture report lacks hash or timestamp")
     return record
+
+
+def value_key(
+    fact_key: str,
+    exam_level_id: str | None,
+    delivery_mode: str | None,
+    exam_year: int,
+    normalized_value: object,
+    display_value: str,
+) -> tuple[str, ...]:
+    canonical = json.dumps(normalized_value, sort_keys=True, ensure_ascii=False)
+    return (
+        fact_key,
+        str(exam_level_id),
+        str(delivery_mode),
+        str(exam_year),
+        canonical,
+        display_value,
+    )
+
+
+def approved_value_keys(cursor) -> set[tuple[str, ...]]:
+    """Approved values must not re-enter the review queue when ingest re-runs.
+
+    Candidate ids carry a value digest so a rejected candidate can be superseded;
+    without this guard every unchanged fact would return as a duplicate pending row.
+    """
+    cursor.execute(
+        """SELECT fact_key, exam_level_id, delivery_mode, exam_year,
+                  normalized_value::text, display_value
+        FROM candidate_facts
+        WHERE qualification_id=%s AND status='approved' AND synthetic=false""",
+        (QUALIFICATION_ID,),
+    )
+    return {
+        value_key(row[0], row[1], row[2], row[3], json.loads(row[4]), row[5])
+        for row in cursor.fetchall()
+    }
 
 
 def ingest_snapshot(database_url: str, source_id: str, snapshot_path: str | Path, exam_year: int = 2026) -> dict[str, int | str]:
@@ -72,15 +111,29 @@ def ingest_snapshot(database_url: str, source_id: str, snapshot_path: str | Path
                 ON CONFLICT (id) DO NOTHING""",
                 (f"source-check:bookkeeping:{snapshot.content_hash}", source_id, capture_run_id,
                  snapshot_id, captured_at, record["status_code"]))
+            approved = approved_value_keys(cursor)
+            skipped = 0
             for c in candidates:
-                candidate_id = f"candidate:bookkeeping:{snapshot.content_hash}:{c.exam_level_id}:{c.delivery_mode}:{c.fact_key}"
+                key = value_key(
+                    c.fact_key, c.exam_level_id, c.delivery_mode, exam_year,
+                    c.normalized_value, c.display_value,
+                )
+                if key in approved:
+                    skipped += 1
+                    continue
+                payload = json.dumps(
+                    [c.fact_key, c.value_type, c.normalized_value, c.display_value, c.evidence_text],
+                    ensure_ascii=False,
+                )
+                value_digest = hashlib.sha256(payload.encode()).hexdigest()[:12]
+                candidate_id = f"candidate:bookkeeping:{snapshot.content_hash}:{c.exam_level_id}:{c.delivery_mode}:{c.fact_key}:{value_digest}"
                 cursor.execute("""INSERT INTO candidate_facts
                     (id,qualification_id,exam_level_id,delivery_mode,exam_year,fact_key,value_type,normalized_value,display_value,evidence_text,status,risk_level,source_id,source_snapshot_id,synthetic)
                     VALUES (%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s,%s,'pending_review',%s,%s,%s,false) ON CONFLICT DO NOTHING""",
                     (candidate_id, QUALIFICATION_ID, c.exam_level_id, c.delivery_mode, exam_year, c.fact_key, c.value_type,
                      json.dumps(c.normalized_value, ensure_ascii=False), c.display_value, c.evidence_text, c.risk_level, source_id, snapshot_id))
                 inserted += cursor.rowcount
-    return {"source_id": source_id, "candidates": inserted, "approval": "not_run"}
+    return {"source_id": source_id, "candidates": inserted, "skipped_approved": skipped, "approval": "not_run"}
 
 
 if __name__ == "__main__":
@@ -88,6 +141,7 @@ if __name__ == "__main__":
     if not database_url:
         raise SystemExit("DATABASE_URL is required")
     mapping = {
+        "home.html": "source:bookkeeping:home",
         "network.html": "source:bookkeeping:network",
         "calendar-2026.html": "source:bookkeeping:calendar-2026",
         "class1-exam.html": "source:bookkeeping:class1-exam",

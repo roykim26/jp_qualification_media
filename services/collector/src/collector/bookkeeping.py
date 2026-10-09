@@ -27,6 +27,8 @@ FIELD_KEYS = {
     "exam_method", "exam_schedule", "exam_date", "fee", "exam_subjects",
     "exam_time", "question_format", "question_count", "passing_standard",
     "suspension_period", "exam_dates",
+    "application_open_rule", "application_deadline_rule", "application_method_rule",
+    "result_date_rule",
 }
 
 
@@ -118,13 +120,41 @@ def extract_candidates(snapshot: BookkeepingSnapshot) -> tuple[list[BookkeepingF
         candidates.extend(_extract_calendar(snapshot, soup))
     elif snapshot.source_id in {"source:bookkeeping:class1-exam", "source:bookkeeping:class2-exam"}:
         candidates.extend(_extract_level_exam(snapshot, soup))
+    elif snapshot.source_id == "source:bookkeeping:home":
+        candidates.extend(_extract_home(snapshot, soup))
     if not candidates and not issues:
         issues.append(BookkeepingParseIssue("structure_changed", "no explicitly contracted bookkeeping fields found"))
     return candidates, tuple(issues)
 
 
-def _candidate(snapshot: BookkeepingSnapshot, key: str, value: str, display: str, level: str, mode: str, value_type: str = "text") -> BookkeepingFactCandidate:
-    return BookkeepingFactCandidate(key, value, display, snapshot.source_id, snapshot.content_hash, f"bookkeeping:{level}", mode, synthetic=snapshot.synthetic, evidence_text=display, value_type=value_type)
+def _candidate(snapshot: BookkeepingSnapshot, key: str, value: str, display: str, level: str, mode: str, value_type: str = "text", evidence: str | None = None) -> BookkeepingFactCandidate:
+    return BookkeepingFactCandidate(key, value, display, snapshot.source_id, snapshot.content_hash, f"bookkeeping:{level}", mode, synthetic=snapshot.synthetic, evidence_text=evidence or display, value_type=value_type)
+
+
+def _sentence(soup: BeautifulSoup, anchor: str) -> str:
+    matches = [
+        text
+        for text in (node.get_text(" ", strip=True) for node in soup.select("p, li, td"))
+        if anchor in text
+    ]
+    return min(matches, key=len) if matches else ""
+
+
+def _extract_home(snapshot: BookkeepingSnapshot, soup: BeautifulSoup) -> list[BookkeepingFactCandidate]:
+    """Kentei delegates intake to each chamber, so no national window is published.
+
+    The official sentence that reception dates and methods differ by chamber is
+    kept as a rule value; deriving concrete opening or deadline dates from it
+    would invent data the provider does not publish.
+    """
+    window = _sentence(soup, "申込受付日時、申込受付方法は、商工会議所によって異なります")
+    if not window:
+        return []
+    return [
+        _candidate(snapshot, key, "venue_defined", window, level, "unified")
+        for level in ("1", "2", "3")
+        for key in ("application_open_rule", "application_deadline_rule", "application_method_rule")
+    ]
 
 
 def _extract_network(snapshot: BookkeepingSnapshot, soup: BeautifulSoup) -> list[BookkeepingFactCandidate]:
@@ -132,6 +162,12 @@ def _extract_network(snapshot: BookkeepingSnapshot, soup: BeautifulSoup) -> list
     result: list[BookkeepingFactCandidate] = []
     if "ネット試験" not in text:
         return result
+    # The unified exam's format is only stated in words on this page; the
+    # calendar page lists dates without saying ペーパー形式.
+    paper = _sentence(soup, "統一試験（ペーパー形式）")
+    if paper:
+        for level in ("1", "2", "3"):
+            result.append(_candidate(snapshot, "exam_method", "ペーパー形式", "統一試験（ペーパー形式）", level, "unified", evidence=paper))
     for level, fee, minutes, count, form in (
         ("2", "5500", "90", "5", "選択式＋入力式"),
         ("3", "3300", "60", "3", "選択式＋入力式"),
@@ -139,7 +175,7 @@ def _extract_network(snapshot: BookkeepingSnapshot, soup: BeautifulSoup) -> list
         ("cost-accounting-basic", "2200", "40", "", "選択式"),
     ):
         label = {"2": "2級", "3": "3級", "basic": "簿記初級", "cost-accounting-basic": "原価計算初級"}[level]
-        result.append(_candidate(snapshot, "exam_method", "CBT", f"{label} ネット試験", level, "network"))
+        result.append(_candidate(snapshot, "exam_method", "ネット試験", f"{label} ネット試験", level, "network"))
         result.append(_candidate(snapshot, "exam_schedule", "venue_defined", "各試験会場が設定する任意の日", level, "network"))
         fee_declared = re.search(rf"{re.escape(label)}[：・\s]*{fee[0]},{fee[1:]}円", text)
         if level in {"basic", "cost-accounting-basic"} and "簿記初級・原価計算初級：2,200円" in text:
@@ -167,7 +203,6 @@ def _extract_calendar(snapshot: BookkeepingSnapshot, soup: BeautifulSoup) -> lis
     result: list[BookkeepingFactCandidate] = []
     for level, fee in (("1", "8800"), ("2", "5500"), ("3", "3300")):
         applicable = normalized_dates[:2] if level == "1" else normalized_dates
-        result.append(_candidate(snapshot, "exam_method", "paper", f"{level}級 統一試験", level, "unified"))
         result.append(_candidate(snapshot, "exam_dates", ",".join(applicable), "、".join(applicable), level, "unified", "json"))
         result.append(_candidate(snapshot, "fee", fee, f"{level}級 {int(fee):,}円（税込）", level, "unified", "money"))
     return result
@@ -188,4 +223,7 @@ def _extract_level_exam(snapshot: BookkeepingSnapshot, soup: BeautifulSoup) -> l
     result.append(_candidate(snapshot, "exam_time", minutes, f"試験時間 合計{minutes}分", level, "unified", "integer"))
     if level == "2" and "5題以内" in text:
         result.append(_candidate(snapshot, "question_count", "5", "5題以内", level, "unified", "integer"))
+    announcement = _sentence(soup, "合格発表の期日や方法、証書の受け渡し方法等は、商工会議所によって異なります")
+    if announcement:
+        result.append(_candidate(snapshot, "result_date_rule", "venue_defined", announcement, level, "unified"))
     return result

@@ -91,9 +91,15 @@ const categoryLabels: Record<string, string> = {
 };
 
 const factLabelPrefixes: readonly [string, string][] = [
+  ['application_open_rule', '申込開始ルール'],
+  ['application_deadline_rule', '申込締切ルール'],
+  ['application_method_rule', '申込方法ルール'],
+  ['payment_deadline_rule', '支払期限ルール'],
+  ['result_date_rule', '合格発表ルール'],
   ['application_deadline', '申込締切'],
   ['application_open', '申込開始'],
   ['application_start', '申込開始'],
+  ['application_method', '申込方法'],
   ['exam_schedule', '試験日程'],
   ['exam_date', '試験日'],
   ['result_date', '合格発表'],
@@ -235,6 +241,7 @@ const sectionConfig: Record<
       'application_open',
       'application_start',
       'application_deadline',
+      'payment_',
       'eligibility',
       'fee',
     ],
@@ -257,8 +264,8 @@ const sectionConfig: Record<
       },
       {
         title: '受験料・手数料',
-        description: '級、科目、実施方式ごとの公式料金情報です。',
-        factKeyPrefixes: ['fee'],
+        description: '級、科目、実施方式ごとの公式料金と支払期限の情報です。',
+        factKeyPrefixes: ['fee', 'payment_'],
       },
     ],
   },

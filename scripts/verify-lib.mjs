@@ -35,18 +35,12 @@ function validCanonicalHttpsUrl(url, allowedDomain) {
   }
 }
 
-function satisfiesCoverageField(fact, field, provenanceMode) {
+const provenanceCoverageFields = ['source_url', 'official_verified_at'];
+
+function satisfiesCoverageField(fact, field) {
   if (field === 'source_url')
-    return (
-      Boolean(fact.sourceUrl) &&
-      (fact.provenanceStatus === 'verified' ||
-        (provenanceMode === 'fixture' && fact.provenanceStatus === 'fixture'))
-    );
-  if (field === 'official_verified_at')
-    return (
-      Boolean(fact.officialVerifiedAt) ||
-      (provenanceMode === 'fixture' && fact.provenanceStatus === 'fixture')
-    );
+    return Boolean(fact.sourceUrl) && fact.provenanceStatus === 'verified';
+  if (field === 'official_verified_at') return Boolean(fact.officialVerifiedAt);
   const factKey = fact.factKey;
   return (
     factKey === field ||
@@ -55,13 +49,8 @@ function satisfiesCoverageField(fact, field, provenanceMode) {
   );
 }
 
-/** Returns business coverage gaps; fact counts are intentionally not an input. */
-export function evaluateCoverage(
-  slug,
-  facts,
-  examYear,
-  { provenanceMode = 'production' } = {},
-) {
+/** Returns coverage gaps under official-verification rules; fact counts are intentionally not an input. */
+export function evaluateCoverage(slug, facts, examYear) {
   const qualification = coverageGateContract.qualifications.find(
     (item) => item.slug === slug,
   );
@@ -83,11 +72,7 @@ export function evaluateCoverage(
     if (requirement.requiredLevel === 'conditional' && scoped.length === 0)
       continue;
     for (const field of requirement.fields) {
-      if (
-        !scoped.some((fact) =>
-          satisfiesCoverageField(fact, field, provenanceMode),
-        )
-      )
+      if (!scoped.some((fact) => satisfiesCoverageField(fact, field)))
         gaps.push({
           field,
           dimensions: requirement.dimensions,
@@ -237,23 +222,26 @@ export async function verifyQualification(
     (latest, fact) => Math.max(latest, fact.examYear),
     new Date().getFullYear(),
   );
-  const coverageGaps = evaluateCoverage(
+  const fixtureProvenance =
+    withProvenance.length > 0 &&
+    withProvenance.every((fact) => fact.provenanceStatus === 'fixture');
+  const strictCoverageGaps = evaluateCoverage(
     gate.slug,
     withProvenance,
     coverageYear,
-    {
-      provenanceMode:
-        withProvenance.length > 0 &&
-        withProvenance.every((fact) => fact.provenanceStatus === 'fixture')
-          ? 'fixture'
-          : 'production',
-    },
   );
+  const coverageGaps = fixtureProvenance
+    ? strictCoverageGaps.filter(
+        (gap) => !provenanceCoverageFields.includes(gap.field),
+      )
+    : strictCoverageGaps;
   for (const gap of coverageGaps)
     errors.push(
       `coverage gap field=${gap.field} year=${coverageYear} dimensions=${JSON.stringify(gap.dimensions)}`,
     );
-  const expectedStatus = expectedCoverageStatus(coverageGaps);
+  // The public API never promotes ci:// fixtures to official verification, so
+  // its status expectation stays on the strict evaluation.
+  const expectedStatus = expectedCoverageStatus(strictCoverageGaps);
 
   const apiResponse = await waitFor(
     `http://127.0.0.1:${runtime.apiPort}/api/v1/qualifications/${gate.slug}`,

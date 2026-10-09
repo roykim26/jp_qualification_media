@@ -86,6 +86,18 @@ function satisfiesRequirementField(factKey: string, field: string) {
   );
 }
 
+/**
+ * `source_url` and `official_verified_at` are provenance requirements rather
+ * than fact keys, so they are satisfied by any scoped fact whose provenance
+ * projection resolved them.
+ */
+function satisfiesApprovedFact(fact: PublicFact, field: string) {
+  if (field === 'source_url')
+    return Boolean(fact.sourceUrl) && fact.provenanceStatus === 'verified';
+  if (field === 'official_verified_at') return Boolean(fact.officialVerifiedAt);
+  return satisfiesRequirementField(fact.factKey, field);
+}
+
 export function buildPublicQualificationView(
   qualification: Qualification,
   facts: PublicFact[],
@@ -120,7 +132,7 @@ export function buildPublicQualificationView(
       continue;
     for (const field of requirement.fields) {
       const available = scoped.some((fact) =>
-        satisfiesRequirementField(fact.factKey, field),
+        satisfiesApprovedFact(fact, field),
       );
       if (!available) {
         const pending = pendingFacts.some(

@@ -39,7 +39,7 @@ def test_fp_contract_rejects_provider_source_mismatch():
     assert issues[0].code == "invalid_contract_dimensions"
 
 
-def test_priority_captured_snapshots_extract_43_dimensioned_candidates():
+def test_priority_captured_snapshots_extract_51_dimensioned_candidates():
     mapping = {
         "jafp-2-3-outline.html": "source:fp:jafp-2-3-outline",
         "kinzai-1-academic.html": "source:fp:kinzai-1-academic",
@@ -53,7 +53,7 @@ def test_priority_captured_snapshots_extract_43_dimensioned_candidates():
         parsed, issues = extract_candidates(snapshot_from_html(source, (root / name).read_text(encoding="utf-8"), synthetic=False))
         assert not issues
         candidates.extend(parsed)
-    assert len(candidates) == 43
+    assert len(candidates) == 51
     assert all(item.provider_id and item.exam_level_id and item.exam_component and item.delivery_mode for item in candidates)
     assert {item.provider_id for item in candidates} == {"jafp", "kinzai"}
 
@@ -138,3 +138,48 @@ def test_kinzai_level_1_practical_preserves_exact_evidence_for_review():
     assert "対面の口述試験" in by_key["exam_method"].evidence_text
     assert "2回" in by_key["interview_count"].evidence_text
     assert "約12分" in by_key["exam_time"].evidence_text
+
+
+def test_jafp_2_3_application_rules_use_published_cbt_availability():
+    html = """<p>学科試験及び実技試験とも、全国で随時受検ができるCBT試験へ完全移行しました。</p>
+    <table><tr><td>試験日時</td><td>休止期間を除き、テストセンターの空いている日時から選択可能です。</td></tr></table>"""
+    candidates, issues = extract_candidates(
+        snapshot_from_html("source:fp:jafp-2-3-outline", html, synthetic=False)
+    )
+    assert not issues
+    rules = {
+        (item.fact_key, item.exam_level_id, item.exam_component, item.delivery_mode): item
+        for item in candidates
+        if item.fact_key.endswith("_rule")
+    }
+    assert {key[0] for key in rules} == {"application_open_rule", "application_deadline_rule"}
+    assert len(rules) == 8
+    opening = rules[("application_open_rule", "fp:2", "academic", "cbt")]
+    assert opening.normalized_value == "随時"
+    assert "随時受検ができるCBT" in opening.evidence_text
+    deadline = rules[("application_deadline_rule", "fp:3", "practical:asset-design", "cbt")]
+    assert deadline.normalized_value == "締切日なし"
+    assert "休止期間を除き、テストセンターの空いている日時" in deadline.evidence_text
+
+
+def test_jafp_2_3_application_rules_stay_without_dates_when_availability_is_absent():
+    html = '<p data-fact-key="fee" data-provider="jafp" data-exam-level="2" data-exam-component="academic" data-delivery-mode="cbt">6,000円</p>'
+    candidates, issues = extract_candidates(
+        snapshot_from_html("source:fp:jafp-2-3-outline", html, synthetic=False)
+    )
+    assert not issues
+    assert not [item for item in candidates if item.fact_key.endswith("_rule")]
+
+
+def test_captured_jafp_outline_publishes_rule_candidates_for_review():
+    path = Path("var/official-snapshots/fp/jafp-2-3-outline.html")
+    if not path.exists():
+        return
+    candidates, issues = extract_candidates(
+        snapshot_from_html("source:fp:jafp-2-3-outline", path.read_text(encoding="utf-8"), synthetic=False)
+    )
+    assert not issues
+    assert {(item.fact_key, item.exam_level_id) for item in candidates if item.fact_key.endswith("_rule")} == {
+        ("application_open_rule", "fp:2"), ("application_open_rule", "fp:3"),
+        ("application_deadline_rule", "fp:2"), ("application_deadline_rule", "fp:3"),
+    }

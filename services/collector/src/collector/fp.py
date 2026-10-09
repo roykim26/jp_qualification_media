@@ -27,7 +27,7 @@ LEVELS = {"1", "2", "3"}
 PROVIDERS = {"jafp", "kinzai"}
 COMPONENTS = {"academic", "academic:basic", "academic:applied", "practical:asset-design", "practical:asset-consulting", "practical:individual-assets", "practical:small-business", "practical:insurance-customer", "practical:general"}
 DELIVERY_MODES = {"cbt", "pbt", "interview"}
-FACT_KEYS = {"exam_method", "exam_schedule", "exam_date", "exam_dates", "exam_time", "question_count", "question_format", "passing_standard", "fee", "eligibility", "practical_subject", "interview_count", "application_open", "application_deadline", "result_date"}
+FACT_KEYS = {"exam_method", "exam_schedule", "exam_date", "exam_dates", "exam_time", "question_count", "question_format", "passing_standard", "fee", "eligibility", "practical_subject", "interview_count", "application_open", "application_deadline", "application_open_rule", "application_deadline_rule", "result_date"}
 
 
 @dataclass(frozen=True)
@@ -99,6 +99,7 @@ def extract_candidates(snapshot: FPSnapshot) -> tuple[list[FPFactCandidate], tup
         candidates.append(FPFactCandidate(key, value, display, snapshot.source_id, snapshot.content_hash, provider, f"fp:{level}", component, mode, synthetic=snapshot.synthetic, evidence_text=display, value_type=node.get("data-value-type", "text")))
     if snapshot.source_id == "source:fp:jafp-2-3-outline":
         candidates.extend(_extract_jafp_2_3(snapshot, soup))
+        candidates.extend(_extract_jafp_2_3_application_rule(snapshot, soup))
     elif snapshot.source_id == "source:fp:jafp-schedule":
         candidates.extend(_extract_jafp_2_3_schedule(snapshot, soup))
     elif snapshot.source_id == "source:fp:kinzai-1-academic":
@@ -190,6 +191,27 @@ def _extract_jafp_2_3_eligibility(snapshot: FPSnapshot, soup: BeautifulSoup) -> 
     for level, evidence in (("2", two_evidence), ("3", three_evidence)):
         for component in ("academic", "practical:asset-design"):
             result.append(_candidate(snapshot, "eligibility", evidence, evidence, "jafp", level, component, "cbt", evidence=evidence))
+    return result
+
+
+def _extract_jafp_2_3_application_rule(snapshot: FPSnapshot, soup: BeautifulSoup) -> list[FPFactCandidate]:
+    """Model the published CBT availability as an application rule.
+
+    JAFP publishes no 受検申請期間 column for 2級・3級 because the CBT exam is
+    taken year-round; only the 休止期間 table bounds it.  Inferring concrete
+    opening and deadline dates from that layout would invent data.
+    """
+    paragraphs = [node.get_text(" ", strip=True) for node in soup.select("p, li, td")]
+    always_open = min((text for text in paragraphs if "随時受検ができるCBT" in text), key=len, default="")
+    center_slot = min((text for text in paragraphs if "休止期間を除き、テストセンターの空いている日時" in text), key=len, default="")
+    if not always_open:
+        return []
+    deadline_evidence = center_slot or always_open
+    result: list[FPFactCandidate] = []
+    for level in ("2", "3"):
+        for component in ("academic", "practical:asset-design"):
+            result.append(_candidate(snapshot, "application_open_rule", "随時", always_open, "jafp", level, component, "cbt", evidence=always_open))
+            result.append(_candidate(snapshot, "application_deadline_rule", "締切日なし", deadline_evidence, "jafp", level, component, "cbt", evidence=deadline_evidence))
     return result
 
 

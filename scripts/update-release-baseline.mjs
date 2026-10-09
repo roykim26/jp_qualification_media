@@ -38,12 +38,30 @@ const client = new Client({
 await client.connect();
 let rows;
 try {
+  // Must match verify-lib's approved_official definition: facts keeps one current
+  // revision per dimension while candidate_facts accumulates every approved generation.
   const result = await client.query(
     `SELECT q.slug,
-      count(1) FILTER (WHERE c.status='approved' AND c.synthetic=false)::int AS approved_official,
-      count(1) FILTER (WHERE c.status='pending_review' AND c.synthetic=false)::int AS pending_official
-     FROM qualifications q LEFT JOIN candidate_facts c ON c.qualification_id=q.id
-     WHERE q.slug = ANY($1::text[]) GROUP BY q.slug ORDER BY q.slug`,
+      (
+        SELECT count(1)::int
+        FROM facts f
+        JOIN fact_revisions fr ON fr.id = f.current_revision_id
+        JOIN candidate_facts c ON c.id = fr.candidate_fact_id
+        JOIN snapshots s ON s.id = c.source_snapshot_id
+        JOIN sources src ON src.id = c.source_id
+        WHERE f.qualification_id = q.id
+          AND f.status = 'approved' AND fr.status = 'approved'
+          AND c.status = 'approved' AND c.synthetic = false
+      ) AS approved_official,
+      (
+        SELECT count(1)::int
+        FROM candidate_facts c
+        WHERE c.qualification_id = q.id
+          AND c.status = 'pending_review' AND c.synthetic = false
+      ) AS pending_official
+     FROM qualifications q
+     WHERE q.slug = ANY($1::text[])
+     ORDER BY q.slug`,
     [slugs],
   );
   rows = result.rows;

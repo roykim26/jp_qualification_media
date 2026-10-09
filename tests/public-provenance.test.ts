@@ -64,4 +64,30 @@ describe('public provenance projection', () => {
     );
     expect(renderQualificationPage(view)).not.toContain('2026年1月1日');
   });
+
+  it('counts provenance fields from the verified projection instead of a fact key', () => {
+    const view = buildPublicQualificationView(launchQualifications[0], [
+      {
+        qualificationSlug: 'takken',
+        examLevelId: null,
+        examYear: 2026,
+        factKey: 'exam_date',
+        valueType: 'date',
+        normalizedValue: '2026-10-18',
+        displayValue: '2026年10月18日',
+        status: 'approved',
+        riskLevel: 'high',
+        sourceId: 'source:takken:retio-exam',
+        sourceSnapshotId: 'snapshot:takken:retio-exam',
+        synthetic: false,
+        verifiedAt: '2026-09-01T00:00:00.000Z',
+        sourceUrl: 'https://www.retio.or.jp/examination/examination.html',
+        provenanceStatus: 'verified',
+        officialVerifiedAt: '2026-09-01T00:00:00.000Z',
+      },
+    ]);
+    expect(view.missingReasons).not.toHaveProperty('source_url');
+    expect(view.missingReasons).not.toHaveProperty('official_verified_at');
+    expect(view.missingReasons).toHaveProperty('result_date', 'not_collected');
+  });
 });
