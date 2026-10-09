@@ -1,5 +1,24 @@
 # 阶段记录与剩余问题
 
+## 2026-10-09：数据完整性整改收口（工作包 A–H）
+
+- 覆盖契约冻结为机器可读文件 `config/data-coverage-contract.json`（6 资格 × 字段 × 维度 × 页面 × 判级），并由 `scripts/verify-lib.mjs` 的 `evaluateCoverage()` 逐资格判定缺口。
+- 发布门禁从「条数比对」升级为条数地板 + 覆盖缺口两层；覆盖缺口由 **18 → 0**，`pnpm verify:all` 读数 `status=passed, qualifications=6, passed=6, failed=0`，各资格 `coverageGaps=[]`、`pending_official=0`。
+- 正式事实 **176 条**：takken 16、gyoseishoshi 15、it-passport 2、fundamental-it-engineer 10、bookkeeping 58、fp 75。基线 `config/release-gate-baseline.json` 与脱敏夹具 `fixtures/ci/approved-facts.sql`（176/176/176/25）同步。
+- 簿记统一试验剩余三项缺口闭合：新增 10 个官方来源登记（`0015_bookkeeping_gap_sources.sql`）、三个离线适配器（`class3-exam`／`qa`／`flow-teller`），9 条候选经审核链逐条批准。`payment_deadline` 用规则型事实 `payment_deadline_rule` 闭合，未编造全国统一缴款日期。
+- admin 审核写操作鉴权收紧：写只认 `x-reviewer-id` 头，`?reviewer=` 降级为只读；6 条 curl 判据在新起实例上复跑通过。
+- 新增来源/字段契约文档 `docs/gyoseishoshi-source-contract.md`、`docs/fundamental-it-engineer-source-contract.md`，口径收口文档 `docs/data-gate-semantics.md`；`docs/runbook.md` 的过时阶段边界已替换为当前范围。
+- 本轮回归读数：Vitest 81/81、`pnpm test:python` 89 passed、`node --test scripts/verify-lib.test.mjs` 7/7、`eslint .` 干净、build 通过。
+
+### 真实剩余项
+
+- 基本情報技術者的 10 条事实 `delivery_mode` 为 `NULL`，契约三条 `conditional` requirement 因「空 scoped」被整条跳过 ⇒ 0 缺口不代表字段齐备；补维度会立即暴露 10 个缺口，且 `exam_subject_a_*` 命名不满足前缀匹配规则。**属判级/契约产品决策，待项目所有者确认。**
+- 2027 年度簿记配点已公告（3 级第1問45／第2問25／第3問30、合計100、合格70以上）⇒ 覆盖年度滚到 2027 前，簿记 3 级 `scoring_method` 需从 `not_applicable` 回改并按三次授权流程重新采集。
+- 历史统计字段（`pass_rate` 等）六资格零官方来源（工作包 F）。
+- `sources.qualification_id` 有 32/40 条为 `NULL`；行政書士入库链不写 `capture_runs`/`source_checks`，与基本情報链路口径不一致。
+- `services/api/src/release.ts` 的 `rollbackApprovedFact` 维度 join 漏 `payment_method`，与 0014 迁移的 `facts_current_key_idx` 不一致。
+- `escapeHtml` 在 4 处重复定义；迁移目录存在 `0010_` 重号；`services/parser` 仍是空壳。
+
 ## 2026-09-07：阶段 3 技术 SEO 基线
 
 - 公开页面加入正規 URL、说明文与页面级 `robots` 指示。

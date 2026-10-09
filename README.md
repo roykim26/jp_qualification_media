@@ -2,6 +2,8 @@
 
 阶段 1 的宅建与 IT Passport 本地闭环已归档；阶段 2 的六资格页面、跨资格日程/比较/更新与 ICS 下载，以及阶段 3 的技术 SEO 基线均已完成。当前不连接生产服务、不生成未审核动态事实。
 
+页面完成不等于数据完成。数据现状：176 条已批准正式事实，覆盖缺口 18 → 0，`pnpm verify:all` 六资格全通过；但基本情報技術者的字段完整性依赖 `conditional` 判级的跳过机制，历史统计类字段（合格率等）六资格均无官方来源。逐资格字段账目见 `docs/<qualification>-source-contract.md`，门禁与授权口径见 [docs/data-gate-semantics.md](docs/data-gate-semantics.md)。
+
 ## 本地启动
 
 要求：Node.js 20+、pnpm、Python 3.12+、Docker（仅在需要本地 PostgreSQL/MinIO 时）。
@@ -16,7 +18,7 @@ pnpm build
 
 需要数据库时：`docker compose up -d`，再执行 `pnpm db:migrate` 与 `pnpm db:seed`。种子仅包含 6 个资格的稳定主数据和别名，不包含动态事实。
 
-入口：`pnpm dev:api`（API）、`pnpm dev:web`（IT Passport 公开页）、`pnpm dev:admin`（后台骨架）。后台写接口需要 reviewer 身份校验，不提供匿名生产写入。
+入口：`pnpm dev:api`（API）、`pnpm dev:web`（IT Passport 公开页）、`pnpm dev:admin`（后台骨架）。后台写操作（批准、拒绝、延期、撤销）只接受 `x-reviewer-id` 请求头，`?reviewer=` 查询参数仅用于打开队列页（只读），不提供匿名生产写入。
 
 公开页默认从 `http://127.0.0.1:4100` 读取 API，可用 `API_BASE_URL` 覆盖。IT Passport 页面地址：`/shikaku/it-passport/`、`/shikaku/it-passport/application/`、`/shikaku/it-passport/exam-content/`。
 
@@ -47,7 +49,7 @@ $env:IT_PASSPORT_EXAM_YEAR='2026'
 python services/collector/src/collector/ingest_it_passport.py
 ```
 
-审核地址：`http://127.0.0.1:3001/review/it-passport?reviewer=local-reviewer`。
+审核地址：`http://127.0.0.1:3001/review/it-passport?reviewer=local-reviewer`（只读入口；批准等写操作需 `x-reviewer-id` 请求头，页面会弹窗索取）。
 
 ## UI / Design System
 
@@ -59,4 +61,6 @@ python services/collector/src/collector/ingest_it_passport.py
 
 详见 [docs/runbook.md](docs/runbook.md)、[docs/adr/0001-stage-0-foundation.md](docs/adr/0001-stage-0-foundation.md) 和 [docs/data-contract.md](docs/data-contract.md)。
 
-阶段记录：[docs/stage1-acceptance.md](docs/stage1-acceptance.md)、[docs/it-passport-source-contract.md](docs/it-passport-source-contract.md)。
+阶段记录：[docs/stage1-acceptance.md](docs/stage1-acceptance.md)、[docs/stage-log.md](docs/stage-log.md)。
+
+逐资格来源登记与字段契约：[docs/it-passport-source-contract.md](docs/it-passport-source-contract.md)、[docs/gyoseishoshi-source-contract.md](docs/gyoseishoshi-source-contract.md)、[docs/fundamental-it-engineer-source-contract.md](docs/fundamental-it-engineer-source-contract.md)、[docs/bookkeeping-source-contract.md](docs/bookkeeping-source-contract.md)、[docs/fp-source-contract.md](docs/fp-source-contract.md)。宅建的阶段闭环与 `source:takken:retio-exam` 登记说明见 [docs/stage1-takken.md](docs/stage1-takken.md)。
