@@ -12,11 +12,11 @@ describe('stage 4 representative UI samples', () => {
   it('renders the complete home sample without inventing active tools', () => {
     const html = renderHomePage();
     expect(html).toContain('home-hero');
-    expect(html).toContain('今後の重要日程');
+    expect(html).toContain('申込みから合格発表まで');
     expect(html).toContain('資格から情報を探す');
-    expect(html).toContain('複数の資格を整理する');
+    expect(html).toContain('目的から探す');
     expect(html).toContain('推測値で空欄を埋めません');
-    expect(html).toContain('aria-disabled="true"');
+    expect(html).toContain('name="q" type="search"');
     expect(html).toContain('href="/schedule/"');
     expect(html).toContain('href="/compare/"');
     expect(html).toContain('href="/updates/"');

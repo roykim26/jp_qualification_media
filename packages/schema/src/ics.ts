@@ -89,6 +89,7 @@ function dimensionSummary(event: PublicCalendarEvent): string {
     event.examLevelId,
     event.examComponent,
     event.deliveryMode,
+    event.paymentMethod,
   ]
     .filter(Boolean)
     .join(' / ');

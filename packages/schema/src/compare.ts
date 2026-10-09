@@ -1,6 +1,7 @@
 import type { PublicFact, Qualification } from './index.js';
 
 export type CompareDimensionKey =
+  | 'application_rule'
   | 'application_deadline'
   | 'exam_date'
   | 'exam_method'
@@ -16,6 +17,7 @@ export type PublicCompareCell = {
   examYear: number | null;
   verifiedAt: string | null;
   sourceUrl?: string;
+  missingReason?: string;
 };
 
 export type PublicCompareRow = {
@@ -34,6 +36,11 @@ export const compareDimensions: readonly {
   label: string;
   prefixes: readonly string[];
 }[] = [
+  {
+    key: 'application_rule',
+    label: '申込みルール',
+    prefixes: ['application_rule', 'application_change_'],
+  },
   {
     key: 'application_deadline',
     label: '申込締切',
@@ -57,6 +64,11 @@ export const compareDimensions: readonly {
 ];
 
 function matchesDimension(fact: PublicFact, prefixes: readonly string[]) {
+  if (
+    prefixes.includes('exam_time') &&
+    /^exam_subject_[ab]_time$/.test(fact.factKey)
+  )
+    return true;
   return prefixes.some((prefix) => fact.factKey.startsWith(prefix));
 }
 
@@ -68,13 +80,17 @@ function newestFirst(left: PublicFact, right: PublicFact): number {
   );
 }
 
-function cellFromFact(fact: PublicFact | undefined): PublicCompareCell {
+function cellFromFact(
+  fact: PublicFact | undefined,
+  missingReason?: string,
+): PublicCompareCell {
   if (!fact)
     return {
       value: null,
       factKey: null,
       examYear: null,
       verifiedAt: null,
+      missingReason,
     };
   return {
     value: fact.displayValue,
@@ -96,6 +112,7 @@ export function buildQualificationComparison(
   qualifications: readonly Qualification[],
   facts: readonly PublicFact[],
   slugs: readonly string[],
+  missingReasonsBySlug: Readonly<Record<string, Record<string, string>>> = {},
 ): PublicQualificationComparison {
   const selectedSlugs = normalizeCompareSlugs(slugs);
   const selectedQualifications = selectedSlugs
@@ -116,7 +133,13 @@ export function buildQualificationComparison(
               matchesDimension(candidate, dimension.prefixes),
           )
           .sort(newestFirst)[0];
-        return [qualification.slug, cellFromFact(fact)];
+        return [
+          qualification.slug,
+          cellFromFact(
+            fact,
+            missingReasonsBySlug[qualification.slug]?.[dimension.key],
+          ),
+        ];
       }),
     );
     return {

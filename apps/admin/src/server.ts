@@ -50,7 +50,7 @@ function page(
       (row) => `
     <article class="card review-card" data-id="${escapeHtml(row.id)}">
       <h2>${escapeHtml(row.fact_key)} · ${escapeHtml(row.exam_year)}</h2>
-      <p class="review-meta"><span><b>机构：</b>${escapeHtml(row.provider_id || '未指定')}</span><span><b>级别：</b>${escapeHtml(row.exam_level_id || '共通')}</span><span><b>科目：</b>${escapeHtml(row.exam_component || '共通')}</span><span><b>实施方式：</b>${escapeHtml(row.delivery_mode || '未指定')}</span></p>
+      <p class="review-meta"><span><b>机构：</b>${escapeHtml(row.provider_id || '未指定')}</span><span><b>级别：</b>${escapeHtml(row.exam_level_id || '共通')}</span><span><b>科目：</b>${escapeHtml(row.exam_component || '共通')}</span><span><b>实施方式：</b>${escapeHtml(row.delivery_mode || '未指定')}</span><span><b>支付方式：</b>${escapeHtml(row.payment_method || '未指定')}</span></p>
       <p><b>候选值：</b>${escapeHtml(row.display_value)}</p>
       ${row.evidence_text ? `<blockquote class="review-evidence"><b>官方原文：</b>${escapeHtml(row.evidence_text)}</blockquote>` : ''}
       <p><b>风险：</b>${escapeHtml(row.risk_level)}　<b>状态：</b>${escapeHtml(row.status)}</p>
@@ -113,7 +113,7 @@ async function listCandidates(
   });
   try {
     const result = await pool.query(
-      `SELECT c.id, c.provider_id, c.exam_level_id, c.exam_component, c.delivery_mode, c.fact_key, c.exam_year, c.display_value, c.evidence_text, c.status, c.risk_level,
+      `SELECT c.id, c.provider_id, c.exam_level_id, c.exam_component, c.delivery_mode, c.payment_method, c.fact_key, c.exam_year, c.display_value, c.evidence_text, c.status, c.risk_level,
       s.content_hash AS snapshot_hash, src.canonical_url
       FROM candidate_facts c JOIN snapshots s ON s.id=c.source_snapshot_id JOIN sources src ON src.id=c.source_id
       WHERE c.qualification_id=$1 AND c.status='pending_review' ORDER BY c.created_at, c.fact_key`,
@@ -132,7 +132,7 @@ async function reviewCandidate(
 ): Promise<void> {
   if (!databaseUrl)
     throw new Error('DATABASE_URL is required for the local review queue');
-  if (!['approve', 'reject', 'defer'].includes(decision))
+  if (!['approve', 'reject', 'defer', 'requeue'].includes(decision))
     throw new Error('invalid decision');
   if (!reason.trim()) throw new Error('review reason required');
   const pool = new Pool({
@@ -148,6 +148,8 @@ async function reviewCandidate(
     );
     if (!candidate.rowCount) throw new Error('candidate not found');
     const row = candidate.rows[0];
+    if (decision === 'requeue' && row.status !== 'rejected')
+      throw new Error('only rejected candidates can be requeued');
     const status =
       decision === 'approve'
         ? 'approved'
@@ -167,13 +169,15 @@ async function reviewCandidate(
         `SELECT id AS fact_id, current_revision_id FROM facts
          WHERE qualification_id=$1 AND provider_id IS NOT DISTINCT FROM $2
            AND exam_level_id IS NOT DISTINCT FROM $3 AND exam_component IS NOT DISTINCT FROM $4
-           AND delivery_mode IS NOT DISTINCT FROM $5 AND exam_year=$6 AND fact_key=$7 FOR UPDATE`,
+           AND delivery_mode IS NOT DISTINCT FROM $5 AND payment_method IS NOT DISTINCT FROM $6
+           AND exam_year=$7 AND fact_key=$8 FOR UPDATE`,
         [
           row.qualification_id,
           row.provider_id,
           row.exam_level_id,
           row.exam_component,
           row.delivery_mode,
+          row.payment_method,
           row.exam_year,
           row.fact_key,
         ],
@@ -181,7 +185,7 @@ async function reviewCandidate(
       const revisionId = `revision:${id}`;
       await client.query(
         `INSERT INTO fact_revisions (id,candidate_fact_id,status,normalized_value,display_value,valid_from,verified_at,idempotency_key)
-        VALUES ($1,$2,'approved',$3::jsonb,$4,now(),now(),$5) ON CONFLICT (idempotency_key) DO NOTHING`,
+        VALUES ($1,$2,'approved',$3::jsonb,$4,now(),now(),$5) ON CONFLICT DO NOTHING`,
         [
           revisionId,
           id,
@@ -190,22 +194,34 @@ async function reviewCandidate(
           `approve:${id}`,
         ],
       );
-      await client.query(
-        `INSERT INTO facts (id,qualification_id,provider_id,exam_level_id,exam_component,delivery_mode,exam_year,fact_key,current_revision_id,status)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'approved') ON CONFLICT (qualification_id,provider_id,exam_level_id,exam_component,delivery_mode,exam_year,fact_key)
-        DO UPDATE SET current_revision_id=EXCLUDED.current_revision_id,status='approved'`,
-        [
-          previous.rowCount ? previous.rows[0].fact_id : `fact:${id}`,
-          row.qualification_id,
-          row.provider_id,
-          row.exam_level_id,
-          row.exam_component,
-          row.delivery_mode,
-          row.exam_year,
-          row.fact_key,
-          revisionId,
-        ],
-      );
+      const factId = previous.rowCount
+        ? previous.rows[0].fact_id
+        : `fact:${id}`;
+      if (previous.rowCount) {
+        // Nullable dimensions are compared above with IS NOT DISTINCT FROM.
+        // A unique-index upsert cannot reliably use that same null semantics.
+        await client.query(
+          "UPDATE facts SET current_revision_id=$1,status='approved' WHERE id=$2",
+          [revisionId, factId],
+        );
+      } else {
+        await client.query(
+          `INSERT INTO facts (id,qualification_id,provider_id,exam_level_id,exam_component,delivery_mode,payment_method,exam_year,fact_key,current_revision_id,status)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'approved')`,
+          [
+            factId,
+            row.qualification_id,
+            row.provider_id,
+            row.exam_level_id,
+            row.exam_component,
+            row.delivery_mode,
+            row.payment_method,
+            row.exam_year,
+            row.fact_key,
+            revisionId,
+          ],
+        );
+      }
       await client.query(
         `INSERT INTO change_events
           (id,fact_id,event_type,previous_revision_id,new_revision_id,affected_pages)
@@ -213,7 +229,7 @@ async function reviewCandidate(
          ON CONFLICT (id) DO NOTHING`,
         [
           `change:${id}`,
-          previous.rowCount ? previous.rows[0].fact_id : `fact:${id}`,
+          factId,
           eventTypeForFact(row.fact_key),
           previous.rowCount ? previous.rows[0].current_revision_id : null,
           revisionId,
@@ -221,6 +237,82 @@ async function reviewCandidate(
         ],
       );
     }
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+    await pool.end();
+  }
+}
+
+async function retractCiCurrentFact(
+  rejectedCandidateId: string,
+  reason: string,
+): Promise<void> {
+  if (!databaseUrl)
+    throw new Error('DATABASE_URL is required for the local review queue');
+  if (!reason.trim()) throw new Error('retraction reason required');
+  const pool = new Pool({
+    connectionString: databaseUrl,
+    connectionTimeoutMillis: 5000,
+  });
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const rejected = await client.query(
+      'SELECT * FROM candidate_facts WHERE id=$1 FOR UPDATE',
+      [rejectedCandidateId],
+    );
+    if (!rejected.rowCount || rejected.rows[0].status !== 'rejected')
+      throw new Error(
+        'candidate must be rejected before a current fact can be retracted',
+      );
+    const row = rejected.rows[0];
+    const current = await client.query(
+      `SELECT f.id
+       FROM facts f
+       JOIN fact_revisions fr ON fr.id=f.current_revision_id
+       JOIN candidate_facts c ON c.id=fr.candidate_fact_id
+       JOIN snapshots s ON s.id=c.source_snapshot_id
+       WHERE f.status='approved' AND f.qualification_id=$1
+         AND f.provider_id IS NOT DISTINCT FROM $2
+         AND f.exam_level_id IS NOT DISTINCT FROM $3
+         AND f.exam_component IS NOT DISTINCT FROM $4
+         AND f.delivery_mode IS NOT DISTINCT FROM $5
+         AND f.payment_method IS NOT DISTINCT FROM $6
+         AND f.exam_year=$7 AND f.fact_key=$8
+         AND s.object_key LIKE 'ci://%'
+       FOR UPDATE`,
+      [
+        row.qualification_id,
+        row.provider_id,
+        row.exam_level_id,
+        row.exam_component,
+        row.delivery_mode,
+        row.payment_method,
+        row.exam_year,
+        row.fact_key,
+      ],
+    );
+    if (current.rowCount !== 1)
+      throw new Error('expected exactly one CI-backed current fact to retract');
+    const factId = current.rows[0].id as string;
+    await client.query("UPDATE facts SET status='superseded' WHERE id=$1", [
+      factId,
+    ]);
+    await client.query(
+      `INSERT INTO fact_retractions (id,fact_id,rejected_candidate_id,reviewer_id,reason)
+       VALUES ($1,$2,$3,$4,$5) ON CONFLICT (rejected_candidate_id) DO NOTHING`,
+      [
+        `retraction:${rejectedCandidateId}`,
+        factId,
+        rejectedCandidateId,
+        reviewerId,
+        reason,
+      ],
+    );
     await client.query('COMMIT');
   } catch (error) {
     await client.query('ROLLBACK');
@@ -302,6 +394,31 @@ const server = createServer(async (req, res) => {
         res,
         200,
         JSON.stringify({ id, decision: input.decision }),
+        'application/json',
+      );
+    }
+    if (
+      req.method === 'POST' &&
+      req.url?.startsWith('/internal/retractions/')
+    ) {
+      if (!authorized(req))
+        return send(
+          res,
+          401,
+          JSON.stringify({ error: 'reviewer authentication required' }),
+          'application/json',
+        );
+      const id = decodeURIComponent(
+        req.url.slice('/internal/retractions/'.length),
+      );
+      let body = '';
+      for await (const chunk of req) body += chunk;
+      const input = JSON.parse(body) as { reason?: string };
+      await retractCiCurrentFact(id, input.reason ?? '');
+      return send(
+        res,
+        200,
+        JSON.stringify({ id, status: 'superseded' }),
         'application/json',
       );
     }

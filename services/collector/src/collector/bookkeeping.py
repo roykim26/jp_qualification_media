@@ -77,6 +77,22 @@ def snapshot_from_html(source_id: str, html: str, *, synthetic: bool = True) -> 
     return BookkeepingSnapshot(source_id, sha256(html.encode("utf-8")).hexdigest(), html, synthetic)
 
 
+def snapshot_from_bytes(
+    source_id: str, body: bytes, *, synthetic: bool = True
+) -> BookkeepingSnapshot:
+    """Preserve the collector's raw-byte hash across parsing and ingestion."""
+    if source_id not in BOOKKEEPING_SOURCES:
+        raise ValueError(f"unregistered bookkeeping source: {source_id}")
+    if not body:
+        raise ValueError("snapshot body must not be empty")
+    return BookkeepingSnapshot(
+        source_id,
+        sha256(body).hexdigest(),
+        body.decode("utf-8"),
+        synthetic,
+    )
+
+
 def extract_candidates(snapshot: BookkeepingSnapshot) -> tuple[list[BookkeepingFactCandidate], tuple[BookkeepingParseIssue, ...]]:
     soup = BeautifulSoup(snapshot.html, "html.parser")
     candidates: list[BookkeepingFactCandidate] = []

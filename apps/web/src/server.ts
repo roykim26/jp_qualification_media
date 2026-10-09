@@ -1,4 +1,5 @@
 import { createServer } from 'node:http';
+import { readFile } from 'node:fs/promises';
 import {
   renderComparePage,
   renderEditorialPage,
@@ -94,6 +95,19 @@ const server = createServer(async (req, res) => {
   try {
     const url = new URL(req.url ?? '/', 'http://127.0.0.1');
     const pathname = url.pathname;
+    if (pathname === '/images/exam-information-workspace-hero.png') {
+      const image = await readFile(
+        new URL(
+          '../public/images/exam-information-workspace-hero.png',
+          import.meta.url,
+        ),
+      );
+      res.writeHead(200, {
+        'content-type': 'image/png',
+        'cache-control': 'public, max-age=604800',
+      });
+      return res.end(image);
+    }
     const icsMatch = pathname.match(
       /^\/ics\/([^/]+)\/(\d{4})(?:\/([^/]+))?\.ics$/,
     );

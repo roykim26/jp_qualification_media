@@ -36,7 +36,6 @@ const publicNav = [
   { key: 'qualifications' as const, label: '資格を探す', href: '/shikaku/' },
   { key: 'schedule' as const, label: '試験日程', href: '/schedule/' },
   { key: 'compare' as const, label: '比較する', href: '/compare/' },
-  { key: 'data' as const, label: 'データを見る' },
   { key: 'updates' as const, label: '更新情報', href: '/updates/' },
 ];
 
@@ -53,8 +52,6 @@ function renderNavItem(
   item: (typeof publicNav)[number],
   currentNav: PublicNavKey,
 ): string {
-  if (!('href' in item))
-    return `<span class="nav-link is-disabled" aria-disabled="true">${escapeHtml(item.label)}</span>`;
   const current = item.key === currentNav ? ' aria-current="page"' : '';
   return `<a class="nav-link" href="${item.href}"${current}>${escapeHtml(item.label)}</a>`;
 }
@@ -63,7 +60,7 @@ function renderHeader(currentNav: PublicNavKey): string {
   const links = publicNav
     .map((item) => renderNavItem(item, currentNav))
     .join('');
-  return `<header class="site-header"><div class="container site-header__inner"><a class="brand" href="/"${currentNav === 'home' ? ' aria-current="page"' : ''}>資格試験の公式情報</a><nav class="desktop-nav" aria-label="メインナビゲーション">${links}<span class="nav-link is-disabled" aria-disabled="true">${renderIcon('search')}<span class="visually-hidden">検索</span></span></nav><details class="mobile-menu"><summary aria-label="メニューを開く">${renderIcon('menu')}</summary><nav class="mobile-menu__panel" aria-label="モバイルメニュー">${links}</nav></details></div></header>`;
+  return `<header class="site-header"><div class="container site-header__inner"><a class="brand" href="/"${currentNav === 'home' ? ' aria-current="page"' : ''}><span class="brand__mark" aria-hidden="true">資</span><span class="brand__text">資格試験の公式情報<small>公式発表を、探しやすく。</small></span></a><nav class="desktop-nav" aria-label="メインナビゲーション">${links}<a class="nav-link nav-link--search" href="/shikaku/" aria-label="資格を検索">${renderIcon('search')}<span>検索</span></a></nav><a class="mobile-search" href="/shikaku/" aria-label="資格を検索">${renderIcon('search')}</a><details class="mobile-menu"><summary aria-label="メニューを開く">${renderIcon('menu')}</summary><nav class="mobile-menu__panel" aria-label="モバイルメニュー">${links}</nav></details></div></header>`;
 }
 
 function renderBreadcrumbs(items: BreadcrumbItem[]): string {
@@ -115,7 +112,12 @@ function renderMobileBottomNav(currentNav: PublicNavKey): string {
       const content = `${renderIcon(item.icon)}<span>${item.label}</span>`;
       if (!('href' in item))
         return `<span class="is-disabled" aria-disabled="true">${content}</span>`;
-      return `<a href="${item.href}"${item.key === currentNav ? ' aria-current="page"' : ''}>${content}</a>`;
+      // The home page's primary task is qualification discovery, so its
+      // mobile navigation state belongs to the discovery destination.
+      const isCurrent =
+        item.key === currentNav ||
+        (currentNav === 'home' && item.key === 'qualifications');
+      return `<a href="${item.href}"${isCurrent ? ' aria-current="page"' : ''}>${content}</a>`;
     })
     .join('');
   return `<nav class="mobile-bottom-nav" aria-label="モバイル主要ナビゲーション">${links}</nav>`;

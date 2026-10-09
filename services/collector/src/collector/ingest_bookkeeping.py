@@ -9,10 +9,26 @@ from urllib.parse import urlsplit
 
 import psycopg
 
-from collector.bookkeeping import extract_candidates, snapshot_from_html
+from collector.bookkeeping import extract_candidates, snapshot_from_bytes
 
 QUALIFICATION_ID = "qualification:bookkeeping"
 SNAPSHOT_ROOT = Path("var/official-snapshots/bookkeeping").resolve()
+
+
+def capture_record(source_id: str, snapshot_path: Path) -> dict[str, object]:
+    report_path = SNAPSHOT_ROOT / "capture-report.json"
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    record = next(
+        (item for item in report.get("results", []) if item.get("source_id") == source_id),
+        None,
+    )
+    if not record or record.get("status") != "ok" or record.get("status_code") != 200:
+        raise ValueError(f"capture report has no successful record for {source_id}")
+    if Path(str(record.get("snapshot_path", ""))).resolve() != snapshot_path:
+        raise ValueError("capture report snapshot path does not match ingest path")
+    if not isinstance(record.get("content_hash"), str) or not isinstance(record.get("captured_at"), str):
+        raise ValueError("capture report lacks hash or timestamp")
+    return record
 
 
 def ingest_snapshot(database_url: str, source_id: str, snapshot_path: str | Path, exam_year: int = 2026) -> dict[str, int | str]:
@@ -23,17 +39,39 @@ def ingest_snapshot(database_url: str, source_id: str, snapshot_path: str | Path
     path = Path(snapshot_path).resolve()
     if SNAPSHOT_ROOT not in path.parents or path.suffix.lower() != ".html":
         raise ValueError("snapshot must be HTML below var/official-snapshots/bookkeeping")
-    snapshot = snapshot_from_html(source_id, path.read_text(encoding="utf-8"), synthetic=False)
+    record = capture_record(source_id, path)
+    snapshot = snapshot_from_bytes(source_id, path.read_bytes(), synthetic=False)
+    if snapshot.content_hash != record["content_hash"]:
+        raise ValueError("raw snapshot hash does not match capture report")
     candidates, issues = extract_candidates(snapshot)
     if issues:
         raise ValueError("snapshot parse failed: " + "; ".join(issue.code for issue in issues))
     snapshot_id = f"snapshot:bookkeeping:{snapshot.content_hash}"
     inserted = 0
+    captured_at = str(record["captured_at"])
+    capture_run_id = f"capture-run:bookkeeping:{snapshot.content_hash}"
     with psycopg.connect(database_url, connect_timeout=5) as connection:
         with connection.cursor() as cursor:
-            cursor.execute("""INSERT INTO snapshots (id,source_id,content_hash,object_key,synthetic,retrieved_at)
-                VALUES (%s,%s,%s,%s,false,now()) ON CONFLICT (source_id,content_hash) DO NOTHING""",
-                (snapshot_id, source_id, snapshot.content_hash, str(path)))
+            cursor.execute("""INSERT INTO capture_runs
+                (id,started_at,finished_at,status,request_count,collector_version)
+                VALUES (%s,%s,%s,'succeeded',%s,'collector.capture_bookkeeping')
+                ON CONFLICT (id) DO NOTHING""",
+                (capture_run_id, captured_at, captured_at, int(record.get("attempts", 1))))
+            cursor.execute("""INSERT INTO snapshots
+                (id,source_id,content_hash,object_key,synthetic,retrieved_at,capture_run_id,original_url,final_url,http_status,retrieved_at_jst,collector_version)
+                VALUES (%s,%s,%s,%s,false,%s,%s,%s,%s,%s,%s,'collector.capture_bookkeeping')
+                ON CONFLICT (source_id,content_hash) DO UPDATE SET
+                  object_key=EXCLUDED.object_key,synthetic=EXCLUDED.synthetic,retrieved_at=EXCLUDED.retrieved_at,
+                  capture_run_id=EXCLUDED.capture_run_id,original_url=EXCLUDED.original_url,final_url=EXCLUDED.final_url,
+                  http_status=EXCLUDED.http_status,retrieved_at_jst=EXCLUDED.retrieved_at_jst,collector_version=EXCLUDED.collector_version""",
+                (snapshot_id, source_id, snapshot.content_hash, str(path), captured_at, capture_run_id,
+                 record["url"], record["url"], record["status_code"], captured_at))
+            cursor.execute("""INSERT INTO source_checks
+                (id,source_id,capture_run_id,snapshot_id,checked_at,status,http_status,message)
+                VALUES (%s,%s,%s,%s,%s,'changed',%s,'Captured official page; candidate staging is pending review.')
+                ON CONFLICT (id) DO NOTHING""",
+                (f"source-check:bookkeeping:{snapshot.content_hash}", source_id, capture_run_id,
+                 snapshot_id, captured_at, record["status_code"]))
             for c in candidates:
                 candidate_id = f"candidate:bookkeeping:{snapshot.content_hash}:{c.exam_level_id}:{c.delivery_mode}:{c.fact_key}"
                 cursor.execute("""INSERT INTO candidate_facts

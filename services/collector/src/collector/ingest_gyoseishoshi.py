@@ -37,7 +37,9 @@ def ingest_snapshot(
     path = Path(snapshot_path).resolve()
     if SNAPSHOT_ROOT not in path.parents or path.suffix.lower() != ".html":
         raise ValueError("snapshot_path must be an HTML file below var/official-snapshots/gyoseishoshi")
-    snapshot = snapshot_from_html(source_id, path.read_text(encoding="utf-8"), synthetic=False)
+    # Decode raw bytes so the parser hash stays identical to the captured
+    # snapshot report on Windows as well as POSIX hosts.
+    snapshot = snapshot_from_html(source_id, path.read_bytes().decode("utf-8"), synthetic=False)
     candidates, issues = extract_candidates(snapshot)
     if issues:
         raise ValueError("snapshot parse failed: " + "; ".join(issue.code for issue in issues))

@@ -83,6 +83,8 @@ def extract_candidates(snapshot: FundamentalITSnapshot) -> tuple[list[Fundamenta
     ]
     if snapshot.source_id == "source:fundamental-it:exam":
         candidates.extend(_extract_exam_page(snapshot))
+    if snapshot.source_id == "source:fundamental-it:cbt":
+        candidates.extend(_extract_cbt_page(snapshot))
     if not candidates:
         return [], (FundamentalITParseIssue("structure_changed", "no supported official fields found"),)
     return candidates, ()
@@ -137,6 +139,33 @@ def _extract_exam_page(snapshot: FundamentalITSnapshot) -> list[FundamentalITFac
                             add(f"{prefix}_{key}", match.group(1), f"{kind}：{match.group(1)}問", f"{subject} {label_text} {value_text}", "integer")
             container = container.find_next_sibling()
     return result
+
+
+def _extract_cbt_page(snapshot: FundamentalITSnapshot) -> list[FundamentalITFactCandidate]:
+    """Extract only the FE-specific, explicit CBT delivery statement.
+
+    The page is shared with the security-management exam and contains a
+    month-by-month results table.  Those rows cannot be safely attributed to
+    a single annual FE fact without another dimension, so this adapter emits
+    only the unambiguous shared delivery and schedule statements.
+    """
+    text = BeautifulSoup(snapshot.html, "html.parser").get_text(" ", strip=True)
+    if "基本情報技術者試験（FE）は、CBT（Computer Based Testing）方式により実施しています" not in text:
+        return []
+    evidence = "基本情報技術者試験（FE）は、CBT（Computer Based Testing）方式により実施しています。"
+    candidates = [
+        FundamentalITFactCandidate(
+            "exam_method", "CBT", "CBT方式", snapshot.source_id, snapshot.content_hash,
+            risk_level="medium", synthetic=snapshot.synthetic, evidence_text=evidence,
+        )
+    ]
+    if "令和5年度から年間を通じてCBT方式で随時試験を実施しています" in text:
+        candidates.append(FundamentalITFactCandidate(
+            "exam_schedule", "year_round", "年間を通じて随時実施", snapshot.source_id,
+            snapshot.content_hash, risk_level="medium", synthetic=snapshot.synthetic,
+            evidence_text="令和5年度から年間を通じてCBT方式で随時試験を実施しています。",
+        ))
+    return candidates
 
 
 def fetch_fundamental_it_snapshot(fetcher: SafeFetcher, source_id: str) -> FundamentalITSnapshot | None:

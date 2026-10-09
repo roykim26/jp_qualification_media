@@ -1,0 +1,692 @@
+{
+  "version": 1,
+  "examYearPolicy": "current_year_or_explicitly_scoped",
+  "dimensions": [
+    "qualification",
+    "examYear",
+    "providerId",
+    "examLevelId",
+    "examComponent",
+    "deliveryMode",
+    "paymentMethod"
+  ],
+  "fieldCatalog": {
+    "application_open": {
+      "valueType": "datetime",
+      "riskLevel": "high",
+      "allowedSourceTypes": [
+        "official_annual_schedule",
+        "official_application"
+      ],
+      "pages": ["overview", "annual", "application", "calendar"]
+    },
+    "application_deadline": {
+      "valueType": "datetime",
+      "riskLevel": "high",
+      "allowedSourceTypes": [
+        "official_annual_schedule",
+        "official_application"
+      ],
+      "pages": ["overview", "annual", "application", "calendar", "compare"]
+    },
+    "application_rule": {
+      "valueType": "text",
+      "riskLevel": "high",
+      "allowedSourceTypes": ["official_application", "official_faq"],
+      "pages": ["application"]
+    },
+    "payment_deadline": {
+      "valueType": "datetime",
+      "riskLevel": "high",
+      "allowedSourceTypes": [
+        "official_annual_schedule",
+        "official_application"
+      ],
+      "pages": ["annual", "application", "calendar"]
+    },
+    "exam_date": {
+      "valueType": "date",
+      "riskLevel": "high",
+      "allowedSourceTypes": [
+        "official_annual_schedule",
+        "official_exam_information"
+      ],
+      "pages": ["overview", "annual", "calendar", "compare"]
+    },
+    "exam_schedule": {
+      "valueType": "text",
+      "riskLevel": "high",
+      "allowedSourceTypes": [
+        "official_annual_schedule",
+        "official_exam_information"
+      ],
+      "pages": ["annual", "exam-content"]
+    },
+    "booking_window": {
+      "valueType": "text",
+      "riskLevel": "high",
+      "allowedSourceTypes": [
+        "official_application",
+        "official_cbt_exam_information"
+      ],
+      "pages": ["annual", "application"]
+    },
+    "venue_rule": {
+      "valueType": "text",
+      "riskLevel": "medium",
+      "allowedSourceTypes": [
+        "official_application",
+        "official_cbt_exam_information"
+      ],
+      "pages": ["annual", "application"]
+    },
+    "result_date": {
+      "valueType": "date",
+      "riskLevel": "high",
+      "allowedSourceTypes": [
+        "official_annual_schedule",
+        "official_result_information"
+      ],
+      "pages": ["overview", "annual", "calendar"]
+    },
+    "eligibility": {
+      "valueType": "text",
+      "riskLevel": "high",
+      "allowedSourceTypes": [
+        "official_eligibility",
+        "official_exam_information"
+      ],
+      "pages": ["overview", "application", "compare"]
+    },
+    "application_method": {
+      "valueType": "text",
+      "riskLevel": "medium",
+      "allowedSourceTypes": ["official_application"],
+      "pages": ["application"]
+    },
+    "fee": {
+      "valueType": "money",
+      "riskLevel": "high",
+      "allowedSourceTypes": [
+        "official_exam_information",
+        "official_application",
+        "official_level_exam_information"
+      ],
+      "pages": ["overview", "application", "compare", "statistics"]
+    },
+    "exam_method": {
+      "valueType": "text",
+      "riskLevel": "high",
+      "allowedSourceTypes": [
+        "official_exam_information",
+        "official_level_exam_information",
+        "official_cbt_exam_information"
+      ],
+      "pages": ["overview", "exam-content", "compare"]
+    },
+    "exam_subjects": {
+      "valueType": "text",
+      "riskLevel": "high",
+      "allowedSourceTypes": [
+        "official_exam_outline",
+        "official_level_exam_information"
+      ],
+      "pages": ["exam-content", "compare"]
+    },
+    "exam_time": {
+      "valueType": "integer",
+      "riskLevel": "medium",
+      "allowedSourceTypes": [
+        "official_exam_outline",
+        "official_level_exam_information"
+      ],
+      "pages": ["exam-content", "compare"]
+    },
+    "question_count": {
+      "valueType": "integer",
+      "riskLevel": "medium",
+      "allowedSourceTypes": [
+        "official_exam_outline",
+        "official_level_exam_information"
+      ],
+      "pages": ["exam-content", "compare"]
+    },
+    "question_format": {
+      "valueType": "text",
+      "riskLevel": "medium",
+      "allowedSourceTypes": [
+        "official_exam_outline",
+        "official_level_exam_information"
+      ],
+      "pages": ["exam-content"]
+    },
+    "scoring_method": {
+      "valueType": "text",
+      "riskLevel": "high",
+      "allowedSourceTypes": [
+        "official_exam_outline",
+        "official_result_information"
+      ],
+      "pages": ["exam-content"]
+    },
+    "passing_standard": {
+      "valueType": "text",
+      "riskLevel": "high",
+      "allowedSourceTypes": [
+        "official_exam_outline",
+        "official_level_exam_information"
+      ],
+      "pages": ["exam-content", "pass-rate", "compare"]
+    },
+    "practical_subject": {
+      "valueType": "text",
+      "riskLevel": "high",
+      "allowedSourceTypes": [
+        "official_exam_outline",
+        "official_level_exam_information"
+      ],
+      "pages": ["exam-content"]
+    },
+    "interview_count": {
+      "valueType": "integer",
+      "riskLevel": "medium",
+      "allowedSourceTypes": [
+        "official_exam_outline",
+        "official_level_exam_information"
+      ],
+      "pages": ["exam-content"]
+    },
+    "applicants": {
+      "valueType": "integer",
+      "riskLevel": "high",
+      "allowedSourceTypes": [
+        "official_statistics",
+        "official_result_information"
+      ],
+      "pages": ["pass-rate", "statistics"]
+    },
+    "examinees": {
+      "valueType": "integer",
+      "riskLevel": "high",
+      "allowedSourceTypes": [
+        "official_statistics",
+        "official_result_information"
+      ],
+      "pages": ["pass-rate", "statistics"]
+    },
+    "passed": {
+      "valueType": "integer",
+      "riskLevel": "high",
+      "allowedSourceTypes": [
+        "official_statistics",
+        "official_result_information"
+      ],
+      "pages": ["pass-rate", "statistics"]
+    },
+    "pass_rate": {
+      "valueType": "decimal",
+      "riskLevel": "high",
+      "allowedSourceTypes": [
+        "official_statistics",
+        "official_result_information"
+      ],
+      "pages": ["pass-rate", "statistics", "compare"]
+    },
+    "statistics_methodology": {
+      "valueType": "text",
+      "riskLevel": "high",
+      "allowedSourceTypes": [
+        "official_statistics",
+        "official_result_information"
+      ],
+      "pages": ["pass-rate", "statistics"]
+    },
+    "source_url": {
+      "valueType": "text",
+      "riskLevel": "medium",
+      "allowedSourceTypes": ["registered_source"],
+      "pages": [
+        "overview",
+        "annual",
+        "application",
+        "exam-content",
+        "pass-rate"
+      ]
+    },
+    "official_verified_at": {
+      "valueType": "datetime",
+      "riskLevel": "medium",
+      "allowedSourceTypes": ["source_check"],
+      "pages": [
+        "overview",
+        "annual",
+        "application",
+        "exam-content",
+        "pass-rate"
+      ]
+    }
+  },
+  "qualifications": [
+    {
+      "slug": "takken",
+      "requirements": [
+        {
+          "fields": [
+            "application_open",
+            "application_deadline",
+            "exam_date",
+            "result_date",
+            "eligibility",
+            "application_method",
+            "fee",
+            "exam_method",
+            "exam_subjects",
+            "exam_time",
+            "question_count",
+            "question_format",
+            "scoring_method",
+            "passing_standard",
+            "source_url",
+            "official_verified_at"
+          ],
+          "requiredLevel": "required",
+          "dimensions": {}
+        },
+        {
+          "fields": ["payment_deadline"],
+          "requiredLevel": "required",
+          "dimensions": { "paymentMethod": "convenience_store" }
+        },
+        {
+          "fields": ["payment_deadline"],
+          "requiredLevel": "required",
+          "dimensions": { "paymentMethod": "pay_easy" }
+        },
+        {
+          "fields": [
+            "applicants",
+            "examinees",
+            "passed",
+            "pass_rate",
+            "statistics_methodology"
+          ],
+          "requiredLevel": "post_event",
+          "dimensions": {}
+        }
+      ]
+    },
+    {
+      "slug": "gyoseishoshi",
+      "requirements": [
+        {
+          "fields": [
+            "application_open",
+            "application_deadline",
+            "payment_deadline",
+            "exam_date",
+            "result_date",
+            "eligibility",
+            "application_method",
+            "fee",
+            "exam_method",
+            "exam_subjects",
+            "exam_time",
+            "question_count",
+            "question_format",
+            "scoring_method",
+            "passing_standard",
+            "source_url",
+            "official_verified_at"
+          ],
+          "requiredLevel": "required",
+          "dimensions": {}
+        },
+        {
+          "fields": [
+            "applicants",
+            "examinees",
+            "passed",
+            "pass_rate",
+            "statistics_methodology"
+          ],
+          "requiredLevel": "post_event",
+          "dimensions": {}
+        }
+      ]
+    },
+    {
+      "slug": "it-passport",
+      "requirements": [
+        {
+          "fields": [
+            "exam_method",
+            "application_rule",
+            "booking_window",
+            "venue_rule",
+            "eligibility",
+            "fee",
+            "exam_subjects",
+            "exam_time",
+            "question_count",
+            "question_format",
+            "scoring_method",
+            "passing_standard",
+            "source_url",
+            "official_verified_at"
+          ],
+          "requiredLevel": "conditional",
+          "dimensions": { "deliveryMode": "cbt" }
+        },
+        {
+          "fields": [
+            "application_open",
+            "application_deadline",
+            "exam_date",
+            "result_date"
+          ],
+          "requiredLevel": "conditional",
+          "dimensions": { "deliveryMode": "cbt" },
+          "conditions": ["only_when_officially_published"]
+        },
+        {
+          "fields": [
+            "applicants",
+            "examinees",
+            "passed",
+            "pass_rate",
+            "statistics_methodology"
+          ],
+          "requiredLevel": "post_event",
+          "dimensions": { "deliveryMode": "cbt" }
+        }
+      ]
+    },
+    {
+      "slug": "fundamental-it-engineer",
+      "requirements": [
+        {
+          "fields": [
+            "exam_method",
+            "exam_schedule",
+            "application_rule",
+            "booking_window",
+            "venue_rule",
+            "eligibility",
+            "fee",
+            "scoring_method",
+            "passing_standard",
+            "source_url",
+            "official_verified_at"
+          ],
+          "requiredLevel": "conditional",
+          "dimensions": { "deliveryMode": "cbt" }
+        },
+        {
+          "fields": ["exam_time", "question_count", "question_format"],
+          "requiredLevel": "conditional",
+          "dimensions": {
+            "deliveryMode": "cbt",
+            "examComponent": ["subject-a", "subject-b"]
+          }
+        },
+        {
+          "fields": [
+            "applicants",
+            "examinees",
+            "passed",
+            "pass_rate",
+            "statistics_methodology"
+          ],
+          "requiredLevel": "post_event",
+          "dimensions": { "deliveryMode": "cbt" }
+        }
+      ]
+    },
+    {
+      "slug": "bookkeeping",
+      "requirements": [
+        {
+          "fields": [
+            "application_open",
+            "application_deadline",
+            "payment_deadline",
+            "exam_date",
+            "result_date",
+            "eligibility",
+            "application_method",
+            "fee",
+            "exam_method",
+            "exam_subjects",
+            "exam_time",
+            "question_count",
+            "question_format",
+            "scoring_method",
+            "passing_standard",
+            "source_url",
+            "official_verified_at"
+          ],
+          "requiredLevel": "required",
+          "dimensions": {
+            "examLevelId": ["bookkeeping:1", "bookkeeping:2", "bookkeeping:3"],
+            "deliveryMode": "unified"
+          }
+        },
+        {
+          "fields": [
+            "exam_method",
+            "exam_schedule",
+            "fee",
+            "exam_time",
+            "question_count",
+            "question_format",
+            "passing_standard",
+            "source_url",
+            "official_verified_at"
+          ],
+          "requiredLevel": "conditional",
+          "dimensions": {
+            "examLevelId": [
+              "bookkeeping:2",
+              "bookkeeping:3",
+              "bookkeeping:basic",
+              "bookkeeping:cost-accounting-basic"
+            ],
+            "deliveryMode": "network"
+          }
+        },
+        {
+          "fields": [
+            "application_open",
+            "application_deadline",
+            "exam_date",
+            "result_date",
+            "eligibility",
+            "fee",
+            "exam_method",
+            "source_url",
+            "official_verified_at"
+          ],
+          "requiredLevel": "conditional",
+          "dimensions": {
+            "examLevelId": ["bookkeeping:1", "bookkeeping:2", "bookkeeping:3"],
+            "deliveryMode": "group"
+          }
+        },
+        {
+          "fields": [
+            "applicants",
+            "examinees",
+            "passed",
+            "pass_rate",
+            "statistics_methodology"
+          ],
+          "requiredLevel": "post_event",
+          "dimensions": {
+            "examLevelId": ["bookkeeping:1", "bookkeeping:2", "bookkeeping:3"],
+            "deliveryMode": ["unified", "network", "group"]
+          }
+        }
+      ]
+    },
+    {
+      "slug": "fp",
+      "requirements": [
+        {
+          "fields": [
+            "application_open",
+            "application_deadline",
+            "exam_schedule",
+            "result_date",
+            "eligibility",
+            "fee",
+            "exam_method",
+            "exam_time",
+            "question_count",
+            "question_format",
+            "scoring_method",
+            "passing_standard",
+            "source_url",
+            "official_verified_at"
+          ],
+          "requiredLevel": "conditional",
+          "dimensions": {
+            "providerId": "jafp",
+            "examLevelId": ["fp:2", "fp:3"],
+            "examComponent": ["academic", "practical:asset-design"],
+            "deliveryMode": "cbt"
+          }
+        },
+        {
+          "fields": [
+            "application_open",
+            "application_deadline",
+            "exam_date",
+            "result_date",
+            "eligibility",
+            "fee",
+            "exam_method",
+            "exam_time",
+            "question_count",
+            "question_format",
+            "scoring_method",
+            "passing_standard",
+            "source_url",
+            "official_verified_at"
+          ],
+          "requiredLevel": "conditional",
+          "dimensions": {
+            "providerId": "jafp",
+            "examLevelId": "fp:1",
+            "examComponent": "practical:asset-design",
+            "deliveryMode": "pbt"
+          }
+        },
+        {
+          "fields": [
+            "application_open",
+            "application_deadline",
+            "exam_date",
+            "result_date",
+            "eligibility",
+            "fee",
+            "exam_method",
+            "exam_time",
+            "question_count",
+            "question_format",
+            "scoring_method",
+            "passing_standard",
+            "source_url",
+            "official_verified_at"
+          ],
+          "requiredLevel": "conditional",
+          "dimensions": {
+            "providerId": "kinzai",
+            "examLevelId": "fp:1",
+            "examComponent": ["academic", "academic:basic", "academic:applied"],
+            "deliveryMode": "pbt"
+          }
+        },
+        {
+          "fields": [
+            "application_open",
+            "application_deadline",
+            "exam_date",
+            "result_date",
+            "eligibility",
+            "fee",
+            "exam_method",
+            "practical_subject",
+            "interview_count",
+            "exam_time",
+            "question_format",
+            "passing_standard",
+            "source_url",
+            "official_verified_at"
+          ],
+          "requiredLevel": "conditional",
+          "dimensions": {
+            "providerId": "kinzai",
+            "examLevelId": "fp:1",
+            "examComponent": "practical:asset-consulting",
+            "deliveryMode": "interview"
+          }
+        },
+        {
+          "fields": [
+            "application_open",
+            "application_deadline",
+            "exam_schedule",
+            "result_date",
+            "eligibility",
+            "fee",
+            "exam_method",
+            "exam_time",
+            "question_count",
+            "question_format",
+            "scoring_method",
+            "passing_standard",
+            "source_url",
+            "official_verified_at"
+          ],
+          "requiredLevel": "conditional",
+          "dimensions": {
+            "providerId": "kinzai",
+            "examLevelId": ["fp:2", "fp:3"],
+            "examComponent": [
+              "academic",
+              "practical:individual-assets",
+              "practical:small-business",
+              "practical:insurance-customer",
+              "practical:general"
+            ],
+            "deliveryMode": "cbt"
+          }
+        },
+        {
+          "fields": [
+            "applicants",
+            "examinees",
+            "passed",
+            "pass_rate",
+            "statistics_methodology"
+          ],
+          "requiredLevel": "post_event",
+          "dimensions": {
+            "providerId": ["jafp", "kinzai"],
+            "examLevelId": ["fp:1", "fp:2", "fp:3"],
+            "examComponent": [
+              "academic",
+              "practical:asset-design",
+              "practical:asset-consulting",
+              "practical:individual-assets",
+              "practical:small-business",
+              "practical:insurance-customer",
+              "practical:general"
+            ],
+            "deliveryMode": ["cbt", "pbt", "interview"]
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -16,6 +16,7 @@ export type PublicCalendarEvent = {
   examLevelId?: string | null;
   examComponent?: string | null;
   deliveryMode?: string | null;
+  paymentMethod?: string | null;
   factKey: string;
   verifiedAt: string;
   sourceUrl?: string;
@@ -33,6 +34,7 @@ const calendarFactPrefixes: readonly [CalendarEventType, string][] = [
   ['application_open', 'application_open'],
   ['application_open', 'application_start'],
   ['application_deadline', 'application_deadline'],
+  ['exam_date', 'exam_dates'],
   ['exam_date', 'exam_date'],
   ['exam_date', 'exam_schedule'],
   ['result_date', 'result_date'],
@@ -70,7 +72,7 @@ function dateValueFromTemporal(value: string | null): string | null {
 }
 
 function stableEventId(fact: PublicFact): string {
-  return [
+  const dimensions = [
     fact.qualificationSlug,
     fact.examYear,
     fact.factKey,
@@ -78,7 +80,9 @@ function stableEventId(fact: PublicFact): string {
     fact.examLevelId ?? '',
     fact.examComponent ?? '',
     fact.deliveryMode ?? '',
-  ].join(':');
+  ];
+  if (fact.paymentMethod) dimensions.push(fact.paymentMethod);
+  return dimensions.join(':');
 }
 
 export function buildPublicCalendarEvents(
@@ -93,7 +97,10 @@ export function buildPublicCalendarEvents(
     );
     if (!type || !qualification) continue;
     const startValues = temporalValuesFromFact(fact);
-    const occurrences = startValues.length ? startValues : [null];
+    // A schedule description without a concrete date is useful on the page,
+    // but must not become a calendar/ICS event.
+    if (!startValues.length) continue;
+    const occurrences = startValues;
     occurrences.forEach((startValue, index) => {
       events.push({
         id: `${stableEventId(fact)}${occurrences.length > 1 ? `:occurrence:${index + 1}` : ''}`,
@@ -108,6 +115,7 @@ export function buildPublicCalendarEvents(
         examLevelId: fact.examLevelId,
         examComponent: fact.examComponent,
         deliveryMode: fact.deliveryMode,
+        paymentMethod: fact.paymentMethod,
         factKey: fact.factKey,
         verifiedAt: fact.verifiedAt,
         sourceUrl: fact.sourceUrl,

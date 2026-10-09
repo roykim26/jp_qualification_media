@@ -20,6 +20,53 @@ const itPassport = launchQualifications.find(
 )!;
 
 describe('IT Passport public page rendering', () => {
+  it('renders Fundamental IT subject A/B specifications as distinct facts', () => {
+    const qualification = launchQualifications.find(
+      (item) => item.slug === 'fundamental-it-engineer',
+    )!;
+    const html = renderQualificationSectionPage(
+      {
+        qualification,
+        status: 'partially_announced',
+        officialVerifiedAt: '2026-08-11T00:00:00.000Z',
+        facts: [
+          {
+            qualificationSlug: qualification.slug,
+            examLevelId: null,
+            examYear: 2026,
+            factKey: 'exam_subject_a_time',
+            valueType: 'integer',
+            normalizedValue: 90,
+            displayValue: '90分',
+            status: 'approved',
+            riskLevel: 'medium',
+            sourceId: 'source:fundamental-it:exam',
+            sourceSnapshotId: 'snapshot:official',
+            synthetic: false,
+            verifiedAt: '2026-08-11T00:00:00.000Z',
+          },
+          {
+            qualificationSlug: qualification.slug,
+            examLevelId: null,
+            examYear: 2026,
+            factKey: 'exam_subject_b_question_count',
+            valueType: 'integer',
+            normalizedValue: 20,
+            displayValue: '20問',
+            status: 'approved',
+            riskLevel: 'medium',
+            sourceId: 'source:fundamental-it:exam',
+            sourceSnapshotId: 'snapshot:official',
+            synthetic: false,
+            verifiedAt: '2026-08-11T00:00:00.000Z',
+          },
+        ],
+      },
+      'exam-content',
+    );
+    expect(html).toContain('科目A 試験時間');
+    expect(html).toContain('科目B 出題数');
+  });
   it('renders an explicit awaiting-official empty state', () => {
     const html = renderQualificationPage({
       qualification: itPassport,
@@ -33,6 +80,21 @@ describe('IT Passport public page rendering', () => {
     expect(html).toContain('https://www.ipa.go.jp/shiken/');
     expect(html).toContain('情報ステータスの見方');
     expect(html).not.toContain('undefined');
+  });
+
+  it('renders the safe field-level missing reason instead of a generic claim', () => {
+    const html = renderQualificationSectionPage(
+      {
+        qualification: itPassport,
+        status: 'under_review',
+        facts: [],
+        officialVerifiedAt: null,
+        missingReasons: { eligibility: 'pending_review' },
+      },
+      'application',
+    );
+    expect(html).toContain('公式情報確認中');
+    expect(html).not.toContain('公式情報は未確認です');
   });
 
   it('renders source details for approved facts and escapes user-facing values', () => {
@@ -89,7 +151,9 @@ describe('IT Passport public page rendering', () => {
       ],
     };
     const application = renderQualificationSectionPage(view, 'application');
-    expect(application).toContain('申込み・受験資格の公式情報は未確認です');
+    expect(application).toContain(
+      '申込み・受験資格：公開できる公式情報はありません',
+    );
     expect(application).not.toContain('CBT方式');
     const examContent = renderQualificationSectionPage(view, 'exam-content');
     expect(examContent).toContain('CBT方式');
@@ -361,7 +425,7 @@ describe('shared qualification page rendering', () => {
     expect(html).toContain('資格比較');
     expect(html).toContain('checked');
     expect(html).toContain('筆記試験');
-    expect(html).toContain('公式未確認');
+    expect(html).toContain('掲載情報なし');
     expect(html).toContain('/shikaku/takken/');
   });
 

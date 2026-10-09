@@ -23,7 +23,7 @@ def ingest_snapshot(database_url: str, source_id: str, snapshot_path: str | Path
     path = Path(snapshot_path).resolve()
     if SNAPSHOT_ROOT not in path.parents or path.suffix.lower() != ".html":
         raise ValueError("snapshot must be HTML below var/official-snapshots/fp")
-    snapshot = snapshot_from_html(source_id, path.read_text(encoding="utf-8"), synthetic=False)
+    snapshot = snapshot_from_html(source_id, path.read_bytes().decode("utf-8"), synthetic=False)
     candidates, issues = extract_candidates(snapshot)
     if issues:
         raise ValueError("snapshot parse failed: " + "; ".join(issue.code for issue in issues))
@@ -38,7 +38,11 @@ def ingest_snapshot(database_url: str, source_id: str, snapshot_path: str | Path
                 candidate_id = f"candidate:fp:{snapshot.content_hash}:{c.provider_id}:{c.exam_level_id}:{c.exam_component}:{c.delivery_mode}:{c.fact_key}"
                 cursor.execute("""INSERT INTO candidate_facts
                     (id,qualification_id,provider_id,exam_level_id,exam_component,delivery_mode,exam_year,fact_key,value_type,normalized_value,display_value,evidence_text,status,risk_level,source_id,source_snapshot_id,synthetic)
-                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s,%s,'pending_review',%s,%s,%s,false) ON CONFLICT DO NOTHING""",
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s,%s,'pending_review',%s,%s,%s,false)
+                    ON CONFLICT (id) DO UPDATE SET normalized_value=EXCLUDED.normalized_value,
+                      display_value=EXCLUDED.display_value, evidence_text=EXCLUDED.evidence_text,
+                      value_type=EXCLUDED.value_type
+                    WHERE candidate_facts.status='pending_review'""",
                     (candidate_id, QUALIFICATION_ID, c.provider_id, c.exam_level_id, c.exam_component, c.delivery_mode, exam_year,
                      c.fact_key, c.value_type, json.dumps(c.normalized_value, ensure_ascii=False), c.display_value,
                      c.evidence_text, c.risk_level, source_id, snapshot_id))
@@ -54,5 +58,6 @@ if __name__ == "__main__":
         "jafp-2-3-outline.html": "source:fp:jafp-2-3-outline",
         "kinzai-1-academic.html": "source:fp:kinzai-1-academic",
         "kinzai-1-practical.html": "source:fp:kinzai-1-practical",
+        "kinzai-eligibility.html": "source:fp:kinzai-eligibility",
     }
     print(json.dumps([ingest_snapshot(database_url, source, SNAPSHOT_ROOT / name) for name, source in mapping.items()], ensure_ascii=False, indent=2))

@@ -1,6 +1,7 @@
 from collector.bookkeeping import (
     extract_candidates,
     is_registered_source_url,
+    snapshot_from_bytes,
     snapshot_from_html,
     source_plan,
 )
@@ -46,6 +47,15 @@ def test_bookkeeping_contract_rejects_missing_dimensions():
     ))
     assert candidates == []
     assert issues[0].code == "structure_changed"
+
+
+def test_bookkeeping_bytes_snapshot_keeps_raw_hash_without_newline_rewrite():
+    body = b"<p data-fact-key=\"exam_time\" data-exam-level=\"2\" data-delivery-mode=\"network\">90\r\n</p>"
+    snapshot = snapshot_from_bytes("source:bookkeeping:network", body, synthetic=False)
+
+    assert snapshot.content_hash != snapshot_from_html(
+        "source:bookkeeping:network", snapshot.html.replace("\r\n", "\n"), synthetic=False
+    ).content_hash
 
 
 def test_captured_network_snapshot_extracts_all_four_level_fees():

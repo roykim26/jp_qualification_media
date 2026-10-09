@@ -15,7 +15,7 @@ import {
 } from '../../../packages/schema/src/index.js';
 import { config } from '../../../packages/config/src/index.js';
 import { TakkenPipeline } from './takken.js';
-import { readApprovedFacts } from './public-facts.js';
+import { readApprovedFacts, readPendingFactCoverage } from './public-facts.js';
 import { readPublicUpdates } from './public-updates.js';
 import { buildPublicQualificationView } from './public-view.js';
 
@@ -96,8 +96,30 @@ app.get<{ Querystring: { qualifications?: string; q?: string } }>(
         .map((slug) => slug.trim()),
     );
     const facts = await readApprovedFacts(config.databaseUrl);
+    const views = await Promise.all(
+      slugs.map(async (slug) => {
+        const qualification = launchQualifications.find(
+          (item) => item.slug === slug,
+        );
+        if (!qualification) return undefined;
+        return buildPublicQualificationView(
+          qualification,
+          facts.filter((fact) => fact.qualificationSlug === slug),
+          await readPendingFactCoverage(config.databaseUrl, slug),
+        );
+      }),
+    );
     return {
-      data: buildQualificationComparison(launchQualifications, facts, slugs),
+      data: buildQualificationComparison(
+        launchQualifications,
+        facts,
+        slugs,
+        Object.fromEntries(
+          views
+            .filter(Boolean)
+            .map((view) => [view!.qualification.slug, view!.missingReasons]),
+        ),
+      ),
       query: { qualifications: slugs },
     };
   },
@@ -119,7 +141,11 @@ app.get('/api/v1/qualifications/takken', async () => {
   if (!qualification) return { error: 'not found' };
   if (config.databaseUrl) {
     const facts = await readApprovedFacts(config.databaseUrl, 'takken');
-    return buildPublicQualificationView(qualification, facts);
+    return buildPublicQualificationView(
+      qualification,
+      facts,
+      await readPendingFactCoverage(config.databaseUrl, 'takken'),
+    );
   }
   return buildPublicQualificationView(qualification, []);
 });
@@ -134,7 +160,11 @@ app.get<{ Params: { slug: string } }>(
       config.databaseUrl,
       qualification.slug,
     );
-    return buildPublicQualificationView(qualification, facts);
+    return buildPublicQualificationView(
+      qualification,
+      facts,
+      await readPendingFactCoverage(config.databaseUrl, qualification.slug),
+    );
   },
 );
 export function publicFactsOnly(facts: PublicFact[]): PublicFact[] {

@@ -18,6 +18,67 @@ describe('public qualification read path', () => {
     expect(view.officialVerifiedAt).toBeNull();
   });
 
+  it('reports review status without exposing a pending candidate value', () => {
+    const qualification = launchQualifications[0];
+    const view = buildPublicQualificationView(
+      qualification,
+      [],
+      [
+        {
+          qualificationSlug: 'takken',
+          providerId: null,
+          examLevelId: null,
+          examComponent: null,
+          deliveryMode: null,
+          examYear: new Date().getFullYear(),
+          factKey: 'fee',
+        },
+      ],
+    );
+    expect(view.status).toBe('under_review');
+    expect(view.missingReasons.fee).toBe('pending_review');
+    expect(JSON.stringify(view)).not.toContain('displayValue');
+  });
+
+  it('distinguishes an unmapped component field from uncollected data', () => {
+    const qualification = launchQualifications.find(
+      (item) => item.slug === 'fundamental-it-engineer',
+    )!;
+    const view = buildPublicQualificationView(qualification, [
+      {
+        qualificationSlug: 'fundamental-it-engineer',
+        examLevelId: null,
+        examComponent: 'subject-a',
+        deliveryMode: 'cbt',
+        examYear: new Date().getFullYear(),
+        factKey: 'exam_subject_a_time',
+        valueType: 'integer',
+        normalizedValue: 90,
+        displayValue: '90分',
+        status: 'approved',
+        riskLevel: 'medium',
+        sourceId: 'source:fundamental-it:exam',
+        sourceSnapshotId: 'snapshot:official',
+        synthetic: false,
+        verifiedAt: '2026-08-11T00:00:00.000Z',
+      },
+    ]);
+    expect(view.missingReasons.exam_time).toBe('mapping_error');
+  });
+
+  it('passes field-specific missing reasons into comparison cells', () => {
+    const comparison = buildQualificationComparison(
+      launchQualifications,
+      [],
+      ['it-passport', 'takken'],
+      { 'it-passport': { fee: 'pending_review' } },
+    );
+    expect(
+      comparison.rows.find((row) => row.key === 'fee')?.cells['it-passport']
+        .missingReason,
+    ).toBe('pending_review');
+  });
+
   it('uses the latest official verification timestamp', () => {
     const qualification = launchQualifications[0];
     const facts = [
@@ -35,6 +96,7 @@ describe('public qualification read path', () => {
         sourceSnapshotId: 'snapshot:real',
         synthetic: false,
         verifiedAt: '2026-08-11T00:00:00.000Z',
+        officialVerifiedAt: '2026-08-11T00:00:00.000Z',
       },
       {
         qualificationSlug: 'takken' as const,
@@ -50,10 +112,15 @@ describe('public qualification read path', () => {
         sourceSnapshotId: 'snapshot:real',
         synthetic: false,
         verifiedAt: '2026-08-12T00:00:00.000Z',
+        officialVerifiedAt: '2026-08-12T00:00:00.000Z',
       },
     ];
     const view = buildPublicQualificationView(qualification, facts);
-    expect(view.status).toBe('verified');
+    expect(view.status).toBe('partially_announced');
+    expect(view.missingReasons).toMatchObject({
+      eligibility: 'not_collected',
+      fee: 'not_collected',
+    });
     expect(view.officialVerifiedAt).toBe('2026-08-12T00:00:00.000Z');
   });
 
@@ -118,6 +185,28 @@ describe('public qualification read path', () => {
       'bookkeeping:2026:exam_dates::bookkeeping:2::unified:occurrence:2',
       'bookkeeping:2026:exam_dates::bookkeeping:2::unified:occurrence:3',
     ]);
+  });
+
+  it('does not turn an undated schedule description into a calendar event', () => {
+    expect(
+      buildPublicCalendarEvents(launchQualifications, [
+        {
+          qualificationSlug: 'it-passport',
+          examLevelId: null,
+          examYear: 2026,
+          factKey: 'exam_schedule',
+          valueType: 'text',
+          normalizedValue: 'year_round',
+          displayValue: '通年実施',
+          status: 'approved',
+          riskLevel: 'high',
+          sourceId: 'source:it-passport:jitec-home',
+          sourceSnapshotId: 'snapshot:official',
+          synthetic: false,
+          verifiedAt: '2026-08-12T00:00:00.000Z',
+        },
+      ]),
+    ).toEqual([]);
   });
 
   it('generates stable UTC ICS events and increments sequence on changes', () => {

@@ -20,9 +20,20 @@ import { renderPublicDocument, renderQualificationSubnav } from './layout.js';
 
 export type PublicQualificationView = {
   qualification: Qualification;
-  status: 'verified' | 'awaiting_official';
+  status:
+    | 'verified'
+    | 'partially_announced'
+    | 'awaiting_official'
+    | 'previous_year_reference'
+    | 'changed_or_corrected'
+    | 'application_open'
+    | 'application_closed'
+    | 'completed'
+    | 'suspended'
+    | 'under_review';
   facts: PublicFact[];
   officialVerifiedAt: string | null;
+  missingReasons?: Record<string, string>;
 };
 
 export type QualificationSection =
@@ -34,8 +45,37 @@ export type QualificationDirectoryItem = Qualification & {
 
 const statusLabels = {
   verified: '公式確認済み',
+  partially_announced: '一部発表済み',
   awaiting_official: '公式発表待ち',
+  previous_year_reference: '前年度情報',
+  changed_or_corrected: '変更・訂正あり',
+  application_open: '申込受付中',
+  application_closed: '受付終了',
+  completed: '実施済み',
+  suspended: '実施休止',
+  under_review: '公式情報確認中',
 } as const;
+
+const missingReasonLabels: Record<string, string> = {
+  not_announced: '公式発表待ち',
+  not_collected: '公式情報を収集中',
+  pending_review: '公式情報確認中',
+  not_applicable: '対象外',
+  mapping_error: '表示処理を確認中',
+  stale_source: '情報の再確認中',
+};
+
+function missingMessage(
+  view: PublicQualificationView,
+  prefixes: readonly string[],
+) {
+  const reason = Object.entries(view.missingReasons ?? {}).find(([key]) =>
+    prefixes.some((prefix) => key.startsWith(prefix)),
+  )?.[1];
+  return reason
+    ? missingReasonLabels[reason]
+    : '公開できる公式情報はありません';
+}
 
 const fieldLabels: Record<string, string> = {
   accounting: '会計',
@@ -73,6 +113,7 @@ const factLabelPrefixes: readonly [string, string][] = [
   ['examinees', '受験者数・受検者数'],
   ['passed', '合格者数'],
   ['application_rule', '申込みルール'],
+  ['application_change_deadline_rule', '申込み内容変更ルール'],
 ];
 
 const dimensionLabels: Record<string, string> = {
@@ -104,6 +145,18 @@ function categoryLabel(value: string): string {
 }
 
 function factLabel(factKey: string): string {
+  const subject = factKey.match(
+    /^exam_subject_([ab])_(time|question_count|answer_count|format)$/,
+  );
+  if (subject) {
+    const labels: Record<string, string> = {
+      time: '試験時間',
+      question_count: '出題数',
+      answer_count: '解答数',
+      format: '出題形式',
+    };
+    return `科目${subject[1].toUpperCase()} ${labels[subject[2]]}`;
+  }
   return (
     factLabelPrefixes.find(([prefix]) => factKey.startsWith(prefix))?.[1] ??
     factKey
@@ -177,6 +230,7 @@ const sectionConfig: Record<
     intro:
       '公式の申込みルール、申請方法、受験資格を整理します。未確認の申込期限は推測・補完しません。',
     factKeyPrefixes: [
+      'application_',
       'application_rule',
       'application_open',
       'application_start',
@@ -194,6 +248,7 @@ const sectionConfig: Record<
         title: '申込み方法と期間',
         description: '公式に確認できた申込みルールと受付期間です。',
         factKeyPrefixes: [
+          'application_',
           'application_rule',
           'application_open',
           'application_start',
@@ -214,6 +269,7 @@ const sectionConfig: Record<
       '公式の試験方式、出題範囲、試験内容を整理します。公式確認のない情報は表示しません。',
     factKeyPrefixes: [
       'exam_method',
+      'exam_subject_',
       'exam_content',
       'exam_subjects',
       'passing_standard',
@@ -225,12 +281,22 @@ const sectionConfig: Record<
       {
         title: '試験方式と時間',
         description: '試験方式、実施形態、試験時間を表示します。',
-        factKeyPrefixes: ['exam_method', 'exam_time', 'question_format'],
+        factKeyPrefixes: [
+          'exam_method',
+          'exam_time',
+          'question_format',
+          'exam_subject_',
+        ],
       },
       {
         title: '科目・出題内容',
         description: '公式要綱で確認できた科目、範囲、問題数です。',
-        factKeyPrefixes: ['exam_content', 'exam_subjects', 'question_count'],
+        factKeyPrefixes: [
+          'exam_content',
+          'exam_subjects',
+          'question_count',
+          'exam_subject_',
+        ],
       },
       {
         title: '合格基準',
@@ -449,9 +515,14 @@ function renderFact(fact: PublicFact): string {
         `<span class="dimension" data-dimension-value="${escapeHtml(String(value))}">${escapeHtml(dimensionLabel(String(value)))}</span>`,
     )
     .join('');
+  const verification = fact.officialVerifiedAt
+    ? `公式情報確認: ${escapeHtml(formatVerifiedAt(fact.officialVerifiedAt))}`
+    : fact.provenanceStatus === 'fixture'
+      ? '公式情報確認: 回帰用 fixture（確認時刻なし）'
+      : '公式情報確認: 確認記録未移行';
   const source = fact.sourceUrl
-    ? `<details><summary>公式ソースを確認</summary><div><p><a href="${escapeHtml(fact.sourceUrl)}" target="_blank" rel="noreferrer">公式サイトで確認（新しいタブ）</a></p><p class="source-url">${escapeHtml(fact.sourceUrl)}</p><p>保存記録: ${escapeHtml(fact.sourceSnapshotId)}</p><p>公式情報確認: ${escapeHtml(formatVerifiedAt(fact.verifiedAt))}</p></div></details>`
-    : `<details><summary>出典情報</summary><div><p>ソース ID: ${escapeHtml(fact.sourceId)}</p><p>スナップショット: ${escapeHtml(fact.sourceSnapshotId)}</p><p>確認日: ${escapeHtml(formatVerifiedAt(fact.verifiedAt))}</p></div></details>`;
+    ? `<details><summary>公式ソースを確認</summary><div><p><a href="${escapeHtml(fact.sourceUrl)}" target="_blank" rel="noreferrer">公式サイトで確認（新しいタブ）</a></p><p class="source-url">${escapeHtml(fact.sourceUrl)}</p><p>保存記録: ${escapeHtml(fact.sourceSnapshotId)}</p><p>${verification}</p></div></details>`
+    : `<details><summary>出典情報</summary><div><p>ソース ID: ${escapeHtml(fact.sourceId)}</p><p>スナップショット: ${escapeHtml(fact.sourceSnapshotId)}</p><p>${verification}</p></div></details>`;
   return `<article class="card fact" data-fact-key="${escapeHtml(fact.factKey)}"><div class="card__body"><div class="fact__heading"><h3>${escapeHtml(factLabel(fact.factKey))}</h3>${renderBadge('公式確認済み', 'verified')}</div>${dimensions ? `<div class="dimensions">${dimensions}</div>` : ''}<p class="fact-value">${escapeHtml(fact.displayValue)}</p><p class="meta">適用年度: ${escapeHtml(String(fact.examYear))}年</p>${source}</div></article>`;
 }
 
@@ -483,7 +554,7 @@ function renderVerificationHistory(facts: PublicFact[]): string {
   const entries = [
     ...new Set(
       facts
-        .map((fact) => fact.verifiedAt)
+        .map((fact) => fact.officialVerifiedAt)
         .filter((value): value is string => Boolean(value)),
     ),
   ]
@@ -533,8 +604,8 @@ export function renderQualificationSectionPage(
     : renderFeedbackState({
         kind: 'empty',
         title: sectionMeta
-          ? `${sectionMeta.title}の公式情報は未確認です`
-          : '現在、公開できる公式情報はありません',
+          ? `${sectionMeta.title}：${missingMessage(view, sectionMeta.factKeyPrefixes)}`
+          : missingMessage(view, []),
         body:
           sectionMeta?.intro ??
           `${qualification.officialNameJa}の動的情報は、公式発表を確認し、必要な審査を完了した後に掲載します。未確認の日付や費用は表示しません。`,
@@ -609,7 +680,7 @@ export function renderQualificationSectionPage(
     )
       ? `<div class="page-hero__actions">${renderButtonLink({ href: `/ics/${qualification.slug}/${year}.ics`, label: `${year}年のICSをダウンロード`, variant: 'secondary', icon: 'calendar' })}</div>`
       : '';
-  const body = `<div class="container"><header class="page-hero detail-hero"><div class="tag-row"><span class="tag">${escapeHtml(fieldLabel(qualification.field))}</span><span class="tag">${escapeHtml(categoryLabel(qualification.category))}</span></div><h1>${escapeHtml(qualification.officialNameJa)}</h1>${pageTitle ? `<p class="detail-hero__section">${escapeHtml(pageTitle)}</p>` : ''}<p>${qualification.aliasesJa.map(escapeHtml).join(' / ') || '公式情報を整理して掲載します。'}</p>${sectionMeta ? `<p class="detail-hero__intro">${escapeHtml(sectionMeta.intro)}</p>` : ''}<div class="page-hero__meta">${status}<span class="meta">公式情報確認日: ${escapeHtml(formatVerifiedAt(view.officialVerifiedAt))}</span></div>${annualIcs}</header><div class="detail-layout"><div class="detail-main">${interpretationNote}${facts}${renderVerificationHistory(sortedFacts)}${renderSourceModule(qualification.slug)}</div>${sidebar}</div></div>`;
+  const body = `<div class="container"><header class="page-hero detail-hero"><div class="tag-row"><span class="tag">${escapeHtml(fieldLabel(qualification.field))}</span><span class="tag">${escapeHtml(categoryLabel(qualification.category))}</span></div><h1>${escapeHtml(qualification.officialNameJa)}</h1>${pageTitle ? `<p class="detail-hero__section">${escapeHtml(pageTitle)}</p>` : ''}<p>${qualification.aliasesJa.map(escapeHtml).join(' / ') || '公式情報を整理して掲載します。'}</p>${sectionMeta ? `<p class="detail-hero__intro">${escapeHtml(sectionMeta.intro)}</p>` : ''}<div class="page-hero__meta">${status}<span class="meta">公式情報確認日: ${escapeHtml(formatVerifiedAt(view.officialVerifiedAt))}</span></div><nav class="detail-hero__years" aria-label="年度を選ぶ">${yearLinks}</nav>${annualIcs}</header><div class="detail-layout"><div class="detail-main">${interpretationNote}${facts}${renderVerificationHistory(sortedFacts)}${renderSourceModule(qualification.slug)}</div>${sidebar}</div></div>`;
   const canonicalPath =
     section === 'overview'
       ? `/shikaku/${qualification.slug}/`
@@ -784,7 +855,7 @@ export function renderComparePage(
         .map((qualification) => {
           const cell = row.cells[qualification.slug];
           if (!cell?.value)
-            return `<td><span class="compare-empty">公式未確認</span></td>`;
+            return `<td><span class="compare-empty">${escapeHtml(cell?.missingReason ? (missingReasonLabels[cell.missingReason] ?? '掲載情報なし') : '掲載情報なし')}</span></td>`;
           const source = cell.sourceUrl
             ? `<a href="${escapeHtml(cell.sourceUrl)}" target="_blank" rel="noreferrer">出典</a>`
             : '';
@@ -948,21 +1019,11 @@ export function renderHomePage(): string {
     .filter((qualification) => launchSlugs.has(qualification.slug))
     .map(
       (qualification) =>
-        `<article class="home-qualification"><div class="tag-row"><span class="tag">${escapeHtml(fieldLabel(qualification.field))}</span></div><h3><a href="/shikaku/${escapeHtml(qualification.slug)}/">${escapeHtml(qualification.officialNameJa)}</a></h3><p>${qualification.aliasesJa.map(escapeHtml).join(' / ') || '公式情報を資格別に整理します。'}</p><a class="text-link" href="/shikaku/${escapeHtml(qualification.slug)}/">公式情報を見る<span aria-hidden="true"> →</span></a></article>`,
+        `<article class="home-qualification"><div class="home-qualification__top"><span class="tag home-qualification__field">${renderIcon('document')}${escapeHtml(fieldLabel(qualification.field))}</span><span class="home-qualification__arrow" aria-hidden="true">${renderIcon('external')}</span></div><h3><a href="/shikaku/${escapeHtml(qualification.slug)}/">${escapeHtml(qualification.officialNameJa)}</a></h3><p>${qualification.aliasesJa.map(escapeHtml).join(' / ') || '公式情報を資格別に整理します。'}</p><a class="text-link" href="/shikaku/${escapeHtml(qualification.slug)}/">資格の情報を見る<span aria-hidden="true"> →</span></a></article>`,
     )
     .join('');
-  const scheduleState = renderFeedbackState({
-    kind: 'empty',
-    title: '資格横断の日程ページを公開しました',
-    body: '承認済みの申込開始、締切、試験日、合格発表を試験日程ページで確認できます。',
-    actions: renderButtonLink({
-      href: '/schedule/',
-      label: '試験日程を見る',
-      variant: 'secondary',
-      icon: 'calendar',
-    }),
-  });
-  const body = `<div class="container"><section class="home-hero"><div class="home-hero__main"><p class="eyebrow">公式発表に基づく資格試験情報</p><h1>資格試験の公式情報を、わかりやすく整理。</h1><p class="home-hero__lead">試験日、申込み条件、試験内容を、確認済みの公式情報に基づいて掲載します。未確認の日時や費用は表示しません。</p><div class="home-intro__actions">${renderButtonLink({ href: '/shikaku/', label: '資格を探す', icon: 'search' })}${renderButtonLink({ href: '/schedule/', label: '試験日程を見る', variant: 'secondary', icon: 'calendar' })}</div><div class="popular-links" aria-label="主な資格"><span>主な資格</span><a href="/shikaku/takken/">宅建</a><a href="/shikaku/it-passport/">ITパスポート</a><a href="/shikaku/bookkeeping/">日商簿記</a><a href="/shikaku/fp/">FP技能検定</a></div></div><aside class="trust-panel" aria-label="情報の信頼性"><div class="trust-panel__icon">${renderIcon('check')}</div><p class="eyebrow">情報の見方</p><h2>確認状況と出典を、事実ごとに表示</h2><ul><li>公式確認済み情報だけを公開</li><li>適用年度と確認日時を明記</li><li>公式ソースと更新履歴を確認可能</li></ul></aside></section><section class="page-section home-section" aria-labelledby="schedule-heading"><div class="section-heading"><div><p class="eyebrow">試験日程</p><h2 id="schedule-heading">今後の重要日程</h2></div></div>${scheduleState}</section><section class="page-section home-section" aria-labelledby="qualifications-heading"><div class="section-heading"><div><p class="eyebrow">首発資格</p><h2 id="qualifications-heading">資格から情報を探す</h2></div><a href="/shikaku/">すべての資格を見る</a></div><div class="home-qualifications">${qualificationCards}</div></section><section class="page-section home-section" aria-labelledby="tools-heading"><div class="section-heading"><div><p class="eyebrow">データツール</p><h2 id="tools-heading">複数の資格を整理する</h2></div></div><div class="tool-grid"><article class="tool-card">${renderIcon('calendar')}<h3><a href="/schedule/">試験日程</a></h3><p>資格ごとの申込・試験・合格発表を確認できます。</p><span class="meta">公開中</span></article><article class="tool-card">${renderIcon('compare')}<h3><a href="/compare/">資格比較</a></h3><p>条件や試験方式を同じ項目で比較できます。</p><span class="meta">公開中</span></article><article class="tool-card">${renderIcon('update')}<h3><a href="/updates/">更新情報</a></h3><p>公式発表による変更と訂正を一覧で確認できます。</p><span class="meta">公開中</span></article></div></section><section class="page-section trust-summary"><div><p class="eyebrow">データの信頼性</p><h2>推測値で空欄を埋めません</h2><p>公式発表前の日付、料金、制度情報は掲載せず、確認できた情報だけを出典とともに表示します。</p></div><div class="trust-summary__points"><p>${renderIcon('document')}<span>登録済みの公式情報源</span></p><p>${renderIcon('clock')}<span>公式情報確認日を明記</span></p><p>${renderIcon('update')}<span>変更・訂正を履歴化</span></p></div></section></div>`;
+  const scheduleState = `<div class="home-schedule-entry"><div class="home-schedule-entry__icon">${renderIcon('calendar')}</div><div><h3>公式確認済みの日程を一覧で確認</h3><p>申込開始・締切、試験日、合格発表を資格横断で探せます。日付が未確認の予定は掲載しません。</p></div>${renderButtonLink({ href: '/schedule/', label: '試験日程を見る', variant: 'secondary', icon: 'calendar' })}</div>`;
+  const body = `<div class="container"><section class="home-hero"><div class="home-hero__visual" aria-hidden="true"></div><div class="home-hero__main"><p class="eyebrow home-hero__eyebrow">${renderIcon('document')}資格試験を、公式情報から考える</p><h1>資格試験の公式情報を、<br>わかりやすく整理。</h1><p class="home-hero__lead">試験日、申込み条件、試験内容を、確認済みの公式情報に基づいて掲載します。</p><form class="home-search" role="search" action="/shikaku/" method="get"><label for="home-search-input">資格名から探す</label><div class="home-search__row"><div class="search-control">${renderIcon('search')}<input id="home-search-input" name="q" type="search" placeholder="例：宅建、ITパス、簿記" autocomplete="off"></div><button class="button button--primary" type="submit">検索する<span aria-hidden="true"> →</span></button></div></form><div class="home-intro__actions">${renderButtonLink({ href: '/schedule/', label: '試験日程を見る', variant: 'secondary', icon: 'calendar' })}<a class="home-all-link" href="/shikaku/">資格一覧を見る<span aria-hidden="true"> →</span></a></div><div class="popular-links" aria-label="主な資格"><span>主な資格</span><a href="/shikaku/takken/">宅建</a><a href="/shikaku/it-passport/">ITパスポート</a><a href="/shikaku/bookkeeping/">日商簿記</a><a href="/shikaku/fp/">FP技能検定</a></div></div><aside class="trust-panel" aria-label="情報の信頼性"><p class="eyebrow">このサイトの読み方</p><h2>確認できた事実を、<br>確かめながら読む。</h2><ol class="trust-steps"><li><span>01</span><div><strong>公式情報を確認</strong><p>試験実施機関の発表をもとに整理します。</p></div></li><li><span>02</span><div><strong>年度と確認日を表示</strong><p>いつの情報かを事実ごとに明示します。</p></div></li><li><span>03</span><div><strong>出典までたどれる</strong><p>公式ソースと変更履歴を確認できます。</p></div></li></ol></aside></section><section class="page-section home-section" aria-labelledby="schedule-heading"><div class="section-heading"><div><p class="eyebrow">試験日程</p><h2 id="schedule-heading">申込みから合格発表まで</h2></div><a href="/schedule/">日程一覧へ<span aria-hidden="true"> →</span></a></div>${scheduleState}</section><section class="page-section home-section" aria-labelledby="qualifications-heading"><div class="section-heading"><div><p class="eyebrow">掲載資格</p><h2 id="qualifications-heading">資格から情報を探す</h2></div><a href="/shikaku/">すべての資格を見る<span aria-hidden="true"> →</span></a></div><div class="home-qualifications">${qualificationCards}</div></section><section class="page-section home-section" aria-labelledby="tools-heading"><div class="section-heading"><div><p class="eyebrow">便利な入口</p><h2 id="tools-heading">目的から探す</h2></div></div><div class="tool-grid"><article class="tool-card">${renderIcon('calendar')}<h3><a href="/schedule/">試験日程</a></h3><p>資格ごとの申込・試験・合格発表を確認。</p><span class="tool-card__link">日程を調べる →</span></article><article class="tool-card">${renderIcon('compare')}<h3><a href="/compare/">資格比較</a></h3><p>条件や試験方式を同じ項目で比較。</p><span class="tool-card__link">資格を比較する →</span></article><article class="tool-card">${renderIcon('update')}<h3><a href="/updates/">更新情報</a></h3><p>公式発表による変更と訂正を確認。</p><span class="tool-card__link">変更を見る →</span></article></div></section><section class="page-section trust-summary"><div><p class="eyebrow">データの信頼性</p><h2>推測値で空欄を埋めません</h2><p>公式発表前の日付、料金、制度情報は掲載せず、確認できた情報だけを出典とともに表示します。</p></div><div class="trust-summary__points"><p>${renderIcon('document')}<span>登録済みの公式情報源</span></p><p>${renderIcon('clock')}<span>公式情報確認日を明記</span></p><p>${renderIcon('update')}<span>変更・訂正を履歴化</span></p></div></section></div>`;
   return renderPublicDocument({
     title: '資格試験の公式情報',
     description:

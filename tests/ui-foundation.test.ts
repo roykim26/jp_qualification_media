@@ -44,7 +44,11 @@ describe('shared UI foundation', () => {
     expect(home).toContain('site-footer');
     expect(home).toContain('mobile-bottom-nav');
     expect(home).toContain('試験日程を見る');
-    expect(home).toContain('aria-disabled="true"');
+    expect(home).toContain('aria-label="資格を検索"');
+    expect(home).toContain('name="q" type="search"');
+    expect(home).toContain('href="/shikaku/" aria-current="page"');
+    expect(home).toContain('home-hero__visual');
+    expect(home).toContain('home-qualification__field');
 
     const notFound = renderNotFoundPage();
     expect(notFound).toContain('ページが見つかりません');

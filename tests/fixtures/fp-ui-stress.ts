@@ -38,6 +38,8 @@ function fact(
     sourceSnapshotId: `snapshot:fp:ui-stress:${input.factKey}`,
     synthetic: false,
     verifiedAt: '2026-08-13T03:45:00.000Z',
+    provenanceStatus: 'verified',
+    officialVerifiedAt: '2026-08-13T03:45:00.000Z',
     sourceUrl: input.sourceUrl,
   };
 }

@@ -1,5 +1,14 @@
 import { z } from 'zod';
 
+export {
+  coverageFieldSchema,
+  coverageRequiredLevels,
+  coverageRequirementSchema,
+  dataCoverageContractSchema,
+  validateDataCoverageContract,
+} from './data-coverage-contract.js';
+export type { DataCoverageContract } from './data-coverage-contract.js';
+
 export const qualificationSlugs = [
   'takken',
   'gyoseishoshi',
@@ -55,6 +64,7 @@ export const candidateFactSchema = z.object({
   providerId: z.string().nullable().optional(),
   examComponent: z.string().nullable().optional(),
   deliveryMode: z.string().nullable().optional(),
+  paymentMethod: z.string().nullable().optional(),
   examYear: z.number().int().positive(),
   factKey: z.string().min(1),
   valueType: z.enum(valueType),
@@ -72,6 +82,10 @@ export const publicFactSchema = candidateFactSchema.extend({
   status: z.literal('approved'),
   verifiedAt: z.string().datetime(),
   sourceUrl: z.string().url().optional(),
+  /** Provenance status is independent of an old revision timestamp. */
+  provenanceStatus: z.enum(['verified', 'fixture', 'incomplete']).optional(),
+  /** Present only when a real snapshot has a final human approve decision. */
+  officialVerifiedAt: z.string().datetime().optional(),
   sequence: z.number().int().nonnegative().optional(),
 });
 export type PublicFact = z.infer<typeof publicFactSchema>;
