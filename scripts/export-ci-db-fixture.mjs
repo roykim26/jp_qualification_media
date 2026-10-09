@@ -91,7 +91,7 @@ for (const row of snapshots)
   );
 for (const row of candidates)
   lines.push(
-    `INSERT INTO candidate_facts (id,qualification_id,provider_id,exam_level_id,exam_component,delivery_mode,exam_year,fact_key,value_type,normalized_value,display_value,evidence_text,status,risk_level,source_id,source_snapshot_id,synthetic,created_at) VALUES (${sqlString(row.id)},${sqlString(row.qualification_id)},${sqlString(row.provider_id)},${sqlString(row.exam_level_id)},${sqlString(row.exam_component)},${sqlString(row.delivery_mode)},${row.exam_year},${sqlString(row.fact_key)},${sqlString(row.value_type)}::fact_value_type,${sqlJson(row.normalized_value)},${sqlString(row.display_value)},${sqlString(row.evidence_text)},'approved',${sqlString(row.risk_level)}::risk_level,${sqlString(row.source_id)},${sqlString(row.source_snapshot_id)},false,${fixedTime});`,
+    `INSERT INTO candidate_facts (id,qualification_id,provider_id,exam_level_id,exam_component,delivery_mode,payment_method,exam_year,fact_key,value_type,normalized_value,display_value,evidence_text,status,risk_level,source_id,source_snapshot_id,synthetic,created_at) VALUES (${sqlString(row.id)},${sqlString(row.qualification_id)},${sqlString(row.provider_id)},${sqlString(row.exam_level_id)},${sqlString(row.exam_component)},${sqlString(row.delivery_mode)},${sqlString(row.payment_method)},${row.exam_year},${sqlString(row.fact_key)},${sqlString(row.value_type)}::fact_value_type,${sqlJson(row.normalized_value)},${sqlString(row.display_value)},${sqlString(row.evidence_text)},'approved',${sqlString(row.risk_level)}::risk_level,${sqlString(row.source_id)},${sqlString(row.source_snapshot_id)},false,${fixedTime});`,
   );
 for (const row of candidates)
   lines.push(
@@ -99,7 +99,7 @@ for (const row of candidates)
   );
 for (const row of candidates)
   lines.push(
-    `INSERT INTO facts (id,qualification_id,provider_id,exam_level_id,exam_component,delivery_mode,exam_year,fact_key,current_revision_id,status) VALUES (${sqlString(row.fact_id)},${sqlString(row.qualification_id)},${sqlString(row.provider_id)},${sqlString(row.exam_level_id)},${sqlString(row.exam_component)},${sqlString(row.delivery_mode)},${row.exam_year},${sqlString(row.fact_key)},${sqlString(row.revision_id)},'approved');`,
+    `INSERT INTO facts (id,qualification_id,provider_id,exam_level_id,exam_component,delivery_mode,payment_method,exam_year,fact_key,current_revision_id,status) VALUES (${sqlString(row.fact_id)},${sqlString(row.qualification_id)},${sqlString(row.provider_id)},${sqlString(row.exam_level_id)},${sqlString(row.exam_component)},${sqlString(row.delivery_mode)},${sqlString(row.payment_method)},${row.exam_year},${sqlString(row.fact_key)},${sqlString(row.revision_id)},'approved');`,
   );
 lines.push('COMMIT;', '');
 

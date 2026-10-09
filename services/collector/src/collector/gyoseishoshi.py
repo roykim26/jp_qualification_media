@@ -150,14 +150,88 @@ def _extract_guide_candidates(
         display = deadline.group(0)
         add("application_deadline", f"{2018 + end_y:04d}-{end_m:02d}-{end_d:02d}T{hour:02d}:00:00+09:00", display, "datetime", display)
 
+        add("application_open", f"{2018 + start_y:04d}-{start_m:02d}-{start_d:02d}T09:00:00+09:00", display, "datetime", display)
+
+    application_open = re.search(
+        r"インターネットによる受験申込み.*?令和([0-9０-９]+)年\s*([0-9０-９]+)月\s*([0-9０-９]+)日（[^）]+）\s*午前([0-9０-９]+)時\s*(?:から|～)",
+        text,
+    )
+    if application_open and not any(x.fact_key == "application_open" for x in result):
+        year, month, day, hour = (int(_digits(value)) for value in application_open.group(1, 2, 3, 4))
+        evidence = application_open.group(0)
+        add("application_open", f"{2018 + year:04d}-{month:02d}-{day:02d}T{hour:02d}:00:00+09:00", evidence, "datetime", evidence)
+
+    application_methods = re.search(
+        r"受験申込みには「(インターネットによる受験申込み)」と「(郵送による受験申込み)」の２つの方法があります。",
+        text,
+    )
+    if application_methods:
+        display = application_methods.group(0)
+        add("application_method", "インターネットによる受験申込み・郵送による受験申込み", display, "text", display)
+
     fee = re.search(r"受験手数料は\s*([0-9０-９,，]+)円", text)
     if fee and not any(x.fact_key == "fee" for x in result):
         amount = int(_digits(fee.group(1)).replace(",", ""))
         add("fee", str(amount), fee.group(0), "money", fee.group(0))
 
+    # The guide states the fee is paid within the application reception period
+    # and gives the postal postmark cut-off, but publishes no separate 払込期限.
+    payment_deadline = re.search(r"受験手数料は、受験願書の受付期間内に払い込んでください。", text)
+    postal_deadline = re.search(r"受験願書は、受付締切日までの消印があり[^。]*を受け付けます。", text)
+    if payment_deadline and postal_deadline:
+        evidence = f"{payment_deadline.group(0)} {postal_deadline.group(0)}"
+        add("payment_deadline_rule", "申込受付期間内", evidence, "text", evidence)
+
     method = re.search(r"試験方法\s*試験は、([^。]+。)", text)
     if method and not any(x.fact_key == "exam_method" for x in result):
         add("exam_method", method.group(1), method.group(0), "text", method.group(0))
+
+    exam_time = re.search(r"試験時間\s*午後([0-9０-９]+)時から午後([0-9０-９]+)時まで", text)
+    if exam_time:
+        start_hour, end_hour = (int(_digits(value)) for value in exam_time.group(1, 2))
+        duration = (end_hour - start_hour) * 60
+        display = exam_time.group(0)
+        add("exam_time", str(duration), display, "integer", display)
+
+    subject_rows = [
+        row.get_text(" ", strip=True)
+        for row in soup.select("table.info-table tr")
+        if "出題数" in row.get_text(" ", strip=True)
+    ]
+    laws_subject = next((row for row in subject_rows if "必要な法令等" in row), None)
+    basic_subject = next((row for row in subject_rows if "必要な基礎知識" in row), None)
+    if laws_subject and basic_subject:
+        laws_count_match = re.search(r"出題数([０-９0-9]+)題", laws_subject)
+        basic_count_match = re.search(r"出題数([０-９0-9]+)題", basic_subject)
+        if laws_count_match is not None and basic_count_match is not None:
+            laws_count, basic_count = (int(_digits(match.group(1))) for match in (laws_count_match, basic_count_match))
+            evidence = f"{laws_subject} / {basic_subject}"
+            add("exam_subjects", "行政書士の業務に関し必要な法令等・行政書士の業務に関し必要な基礎知識", evidence, "text", evidence)
+            add("question_count", str(laws_count + basic_count), evidence, "integer", evidence)
+
+    question_format = re.search(r"出題の形式は、([^。]+。)\s*記述式は、([^。]+。)", text)
+    if question_format:
+        evidence = question_format.group(0)
+        add("question_format", "択一式・記述式", evidence, "text", evidence)
+
+    result_date = re.search(r"合格発表は、令和([0-9０-９]+)年([0-9０-９]+)月([0-9０-９]+)日（[^）]+）午前９時から", text)
+    if result_date:
+        year, month, day = (int(_digits(value)) for value in result_date.group(1, 2, 3))
+        evidence = result_date.group(0)
+        add("result_date", f"{2018 + year:04d}-{month:02d}-{day:02d}", evidence, "date", evidence)
+
+    passing_standard = re.search(
+        r"次の要件のいずれも満たした者を合格とします。\s*①\s*([^②]+)\s*②\s*([^③]+)\s*③\s*([^（]+パーセント以上である者)",
+        text,
+    )
+    if passing_standard:
+        evidence = passing_standard.group(0)
+        add("passing_standard", "法令等50%以上・基礎知識40%以上・全体60%以上", evidence, "text", evidence)
+
+    scoring_method = re.search(r"択一式問題の採点を完了した段階で合格基準を満たしていないと認められる場合には、記述式問題の採点を行わないことがあります。", text)
+    if scoring_method:
+        evidence = scoring_method.group(0)
+        add("scoring_method", "択一式が合格基準未達の場合は記述式を採点しないことがある", evidence, "text", evidence)
     return result
 
 

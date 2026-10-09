@@ -3,7 +3,16 @@ import {
   renderQualificationDirectory,
   renderQualificationPage,
   renderQualificationSectionPage,
+  renderComparePage,
+  renderEditorialPage,
+  renderGuideIndex,
+  renderSchedulePage,
+  renderUpdatesPage,
 } from '../apps/web/src/render.js';
+import {
+  editorialComparisonPage,
+  editorialGuidePage,
+} from '../apps/web/src/editorial.js';
 import { launchQualifications } from '../packages/schema/src/qualifications.js';
 
 const itPassport = launchQualifications.find(
@@ -11,6 +20,53 @@ const itPassport = launchQualifications.find(
 )!;
 
 describe('IT Passport public page rendering', () => {
+  it('renders Fundamental IT subject A/B specifications as distinct facts', () => {
+    const qualification = launchQualifications.find(
+      (item) => item.slug === 'fundamental-it-engineer',
+    )!;
+    const html = renderQualificationSectionPage(
+      {
+        qualification,
+        status: 'partially_announced',
+        officialVerifiedAt: '2026-08-11T00:00:00.000Z',
+        facts: [
+          {
+            qualificationSlug: qualification.slug,
+            examLevelId: null,
+            examYear: 2026,
+            factKey: 'exam_subject_a_time',
+            valueType: 'integer',
+            normalizedValue: 90,
+            displayValue: '90分',
+            status: 'approved',
+            riskLevel: 'medium',
+            sourceId: 'source:fundamental-it:exam',
+            sourceSnapshotId: 'snapshot:official',
+            synthetic: false,
+            verifiedAt: '2026-08-11T00:00:00.000Z',
+          },
+          {
+            qualificationSlug: qualification.slug,
+            examLevelId: null,
+            examYear: 2026,
+            factKey: 'exam_subject_b_question_count',
+            valueType: 'integer',
+            normalizedValue: 20,
+            displayValue: '20問',
+            status: 'approved',
+            riskLevel: 'medium',
+            sourceId: 'source:fundamental-it:exam',
+            sourceSnapshotId: 'snapshot:official',
+            synthetic: false,
+            verifiedAt: '2026-08-11T00:00:00.000Z',
+          },
+        ],
+      },
+      'exam-content',
+    );
+    expect(html).toContain('科目A 試験時間');
+    expect(html).toContain('科目B 出題数');
+  });
   it('renders an explicit awaiting-official empty state', () => {
     const html = renderQualificationPage({
       qualification: itPassport,
@@ -24,6 +80,21 @@ describe('IT Passport public page rendering', () => {
     expect(html).toContain('https://www.ipa.go.jp/shiken/');
     expect(html).toContain('情報ステータスの見方');
     expect(html).not.toContain('undefined');
+  });
+
+  it('renders the safe field-level missing reason instead of a generic claim', () => {
+    const html = renderQualificationSectionPage(
+      {
+        qualification: itPassport,
+        status: 'under_review',
+        facts: [],
+        officialVerifiedAt: null,
+        missingReasons: { eligibility: 'pending_review' },
+      },
+      'application',
+    );
+    expect(html).toContain('公式情報確認中');
+    expect(html).not.toContain('公式情報は未確認です');
   });
 
   it('renders source details for approved facts and escapes user-facing values', () => {
@@ -80,12 +151,87 @@ describe('IT Passport public page rendering', () => {
       ],
     };
     const application = renderQualificationSectionPage(view, 'application');
-    expect(application).toContain('申込み・受験資格の公式情報は未確認です');
+    expect(application).toContain(
+      '申込み・受験資格：公開できる公式情報はありません',
+    );
     expect(application).not.toContain('CBT方式');
     const examContent = renderQualificationSectionPage(view, 'exam-content');
     expect(examContent).toContain('CBT方式');
     expect(examContent).toContain('試験内容');
     expect(examContent).toContain('更新・訂正について');
+  });
+
+  it('keeps annual facts isolated by year and exposes the five page types', () => {
+    const view = {
+      qualification: itPassport,
+      status: 'verified' as const,
+      officialVerifiedAt: '2026-08-11T00:00:00.000Z',
+      facts: [
+        {
+          qualificationSlug: 'it-passport' as const,
+          examLevelId: null,
+          examYear: 2026,
+          factKey: 'application_open_2026_may_sessions',
+          valueType: 'datetime' as const,
+          normalizedValue: '2026-03-24T21:30:00+09:00',
+          displayValue: '2026年度の申込情報',
+          status: 'approved' as const,
+          riskLevel: 'high' as const,
+          sourceId: 'source:it-passport:jitec-application',
+          sourceSnapshotId: 'snapshot:official:2026',
+          synthetic: false,
+          verifiedAt: '2026-08-11T00:00:00.000Z',
+        },
+        {
+          qualificationSlug: 'it-passport' as const,
+          examLevelId: null,
+          examYear: 2025,
+          factKey: 'exam_date',
+          valueType: 'date' as const,
+          normalizedValue: '2025-12-01',
+          displayValue: '2025年度の試験日',
+          status: 'approved' as const,
+          riskLevel: 'high' as const,
+          sourceId: 'source:it-passport:jitec-home',
+          sourceSnapshotId: 'snapshot:official:2025',
+          synthetic: false,
+          verifiedAt: '2025-12-01T00:00:00.000Z',
+        },
+        {
+          qualificationSlug: 'it-passport' as const,
+          examLevelId: null,
+          examYear: 2026,
+          factKey: 'passing_standard',
+          valueType: 'text' as const,
+          normalizedValue: 'official-standard',
+          displayValue: '公式合格基準',
+          status: 'approved' as const,
+          riskLevel: 'high' as const,
+          sourceId: 'source:it-passport:ipa',
+          sourceSnapshotId: 'snapshot:official:standard',
+          synthetic: false,
+          verifiedAt: '2026-08-11T00:00:00.000Z',
+        },
+      ],
+    };
+
+    const annual = renderQualificationSectionPage(view, 'annual', 2026);
+    expect(annual).toContain('2026年度の申込情報');
+    expect(annual).not.toContain('2025年度の試験日');
+    expect(annual).not.toContain('公式合格基準');
+    expect(annual).toContain('2026年試験日程');
+
+    const application = renderQualificationSectionPage(view, 'application');
+    expect(application).toContain('2026年度の申込情報');
+
+    const passRate = renderQualificationSectionPage(view, 'pass-rate');
+    expect(passRate).toContain('公式合格基準');
+    expect(passRate).not.toContain('2026年度の申込情報');
+
+    expect(passRate).toContain('/shikaku/it-passport/2026/');
+    expect(passRate).toContain('/shikaku/it-passport/application/');
+    expect(passRate).toContain('/shikaku/it-passport/exam-content/');
+    expect(passRate).toContain('/shikaku/it-passport/pass-rate/');
   });
 });
 
@@ -185,6 +331,222 @@ describe('shared qualification page rendering', () => {
     expect(html).toContain('ITパスポート');
     expect(html).not.toContain('行政書士');
     expect(html).toContain('/shikaku/takken/');
+  });
+
+  it('renders the qualification search form, query state, and empty state', () => {
+    const html = renderQualificationDirectory([], 'not-found');
+    expect(html).toContain('name="q"');
+    expect(html).toContain('value="not-found"');
+    expect(html).toContain('一致する資格が見つかりません');
+    expect(html).toContain('/shikaku/');
+  });
+
+  it('renders filtered directory search results', () => {
+    const bookkeeping = launchQualifications.find(
+      (item) => item.slug === 'bookkeeping',
+    )!;
+    const html = renderQualificationDirectory(
+      [{ ...bookkeeping, status: 'awaiting_official' }],
+      '簿記',
+    );
+    expect(html).toContain('「簿記」に一致する資格');
+    expect(html).toContain('日商簿記');
+    expect(html).not.toContain('ITパスポート');
+  });
+
+  it('renders the public schedule page with filters and official events', () => {
+    const takken = launchQualifications.find((item) => item.slug === 'takken')!;
+    const html = renderSchedulePage(
+      [
+        {
+          id: 'takken:2026:exam_date',
+          type: 'exam_date',
+          label: '試験日',
+          qualification: takken,
+          examYear: 2026,
+          displayValue: '2026年10月18日',
+          dateValue: '2026-10-18',
+          startValue: '2026-10-18',
+          factKey: 'exam_date',
+          verifiedAt: '2026-08-12T00:00:00.000Z',
+          sourceUrl: 'https://www.retio.or.jp/exam/',
+          sequence: 0,
+        },
+      ],
+      { year: '2026', qualification: 'takken' },
+    );
+    expect(html).toContain('試験日程');
+    expect(html).toContain('selected>2026年');
+    expect(html).toContain('selected>宅地建物取引士');
+    expect(html).toContain('2026年10月18日');
+    expect(html).toContain('公式ソース');
+    expect(html).toContain('/ics/takken/2026.ics');
+    expect(html).toContain('/ics/takken/2026/takken%3A2026%3Aexam_date.ics');
+  });
+
+  it('renders the schedule empty state without invented dates', () => {
+    const html = renderSchedulePage([]);
+    expect(html).toContain('表示できる公式日程はまだありません');
+    expect(html).toContain('未確認の日付は掲載しません');
+    expect(html).not.toContain('undefined');
+  });
+
+  it('renders the compare selector and selected qualification table', () => {
+    const takken = launchQualifications.find((item) => item.slug === 'takken')!;
+    const itPassport = launchQualifications.find(
+      (item) => item.slug === 'it-passport',
+    )!;
+    const html = renderComparePage(
+      {
+        qualifications: [takken, itPassport],
+        rows: [
+          {
+            key: 'exam_method',
+            label: '試験方式',
+            cells: {
+              takken: {
+                value: '筆記試験',
+                factKey: 'exam_method',
+                examYear: 2026,
+                verifiedAt: '2026-08-12T00:00:00.000Z',
+              },
+              'it-passport': {
+                value: null,
+                factKey: null,
+                examYear: null,
+                verifiedAt: null,
+              },
+            },
+          },
+        ],
+      },
+      launchQualifications,
+    );
+    expect(html).toContain('資格比較');
+    expect(html).toContain('checked');
+    expect(html).toContain('筆記試験');
+    expect(html).toContain('掲載情報なし');
+    expect(html).toContain('/shikaku/takken/');
+  });
+
+  it('renders the compare empty state until two qualifications are selected', () => {
+    const html = renderComparePage(
+      { qualifications: [], rows: [] },
+      launchQualifications,
+    );
+    expect(html).toContain('比較する資格を2件以上選択してください');
+    expect(html).not.toContain('undefined');
+  });
+
+  it('renders public update events with before and after values', () => {
+    const takken = launchQualifications.find((item) => item.slug === 'takken')!;
+    const html = renderUpdatesPage([
+      {
+        id: 'change:takken:exam_date',
+        eventType: 'exam_date',
+        eventLabel: '試験日の変更',
+        qualification: takken,
+        factKey: 'exam_date',
+        factLabel: '試験日',
+        examYear: 2026,
+        previousValue: '2026年10月11日',
+        newValue: '2026年10月18日',
+        affectedPages: ['qualification:takken', 'schedule'],
+        sourceUrl: 'https://www.retio.or.jp/exam/',
+        createdAt: '2026-08-14T00:00:00.000Z',
+        verifiedAt: '2026-08-13T00:00:00.000Z',
+      },
+    ]);
+    expect(html).toContain('更新情報');
+    expect(html).toContain('変更前');
+    expect(html).toContain('2026年10月11日');
+    expect(html).toContain('変更後');
+    expect(html).toContain('2026年10月18日');
+    expect(html).toContain('公式ソース');
+  });
+
+  it('renders the updates empty state without pretending a page changed', () => {
+    const html = renderUpdatesPage([]);
+    expect(html).toContain('公開できる更新情報はまだありません');
+    expect(html).toContain('ページ確認だけでは更新情報を作成しません');
+    expect(html).not.toContain('undefined');
+  });
+
+  it('renders a static comparison guide without inventing dynamic facts', () => {
+    const page = editorialComparisonPage('takken-vs-gyoseishoshi')!;
+    const html = renderEditorialPage(
+      page,
+      'comparison',
+      '/compare/takken-vs-gyoseishoshi/',
+    );
+    expect(html).toContain('宅建と行政書士の違い');
+    expect(html).toContain('公式情報で比較する');
+    expect(html).toContain('/compare/?qualifications=takken%2Cgyoseishoshi');
+    expect(html).toContain('関連ページ');
+    expect(html).not.toContain('undefined');
+  });
+
+  it('renders a guide with a readable checklist and related links', () => {
+    const page = editorialGuidePage('application-checklist')!;
+    const html = renderEditorialPage(
+      page,
+      'guide',
+      '/guide/application-checklist/',
+    );
+    expect(html).toContain('受験申込み前の確認チェックリスト');
+    expect(html).toContain('対象の試験を特定する');
+    expect(html).toContain('関連ページ');
+    expect(html).not.toContain('公式確認済み');
+    expect(html).toContain(
+      '<link rel="canonical" href="/guide/application-checklist/">',
+    );
+  });
+
+  it('renders the guide index with all required guide entries', () => {
+    const html = renderGuideIndex([
+      {
+        slug: 'official-information-check',
+        page: editorialGuidePage('official-information-check')!,
+      },
+      {
+        slug: 'how-to-read-pass-rates',
+        page: editorialGuidePage('how-to-read-pass-rates')!,
+      },
+    ]);
+    expect(html).toContain('資格試験ガイド');
+    expect(html).toContain('/guide/official-information-check/');
+    expect(html).toContain('/guide/how-to-read-pass-rates/');
+    expect(html).not.toContain('undefined');
+  });
+
+  it('marks parameterized discovery pages as noindex while retaining their canonical URL', () => {
+    const directory = renderQualificationDirectory([], 'IT');
+    const schedule = renderSchedulePage([], { year: '2026' });
+    const comparison = renderComparePage(
+      { qualifications: [itPassport], rows: [] },
+      launchQualifications,
+    );
+
+    for (const html of [directory, schedule, comparison]) {
+      expect(html).toContain('<meta name="robots" content="noindex,follow">');
+    }
+    expect(directory).toContain('<link rel="canonical" href="/shikaku/">');
+    expect(schedule).toContain('<link rel="canonical" href="/schedule/">');
+    expect(comparison).toContain('<link rel="canonical" href="/compare/">');
+  });
+
+  it('uses the configured public origin for canonical URLs', () => {
+    const previousOrigin = process.env.SITE_ORIGIN;
+    process.env.SITE_ORIGIN = 'https://shikakucheck.com/';
+    try {
+      const html = renderGuideIndex([]);
+      expect(html).toContain(
+        '<link rel="canonical" href="https://shikakucheck.com/guide/">',
+      );
+    } finally {
+      if (previousOrigin === undefined) delete process.env.SITE_ORIGIN;
+      else process.env.SITE_ORIGIN = previousOrigin;
+    }
   });
 
   it('keeps the third qualification identity available', () => {

@@ -3,12 +3,12 @@
   "qualifications": [
     {
       "slug": "takken",
-      "expectedFacts": 6,
+      "expectedFacts": 16,
       "pageContains": "宅地建物取引士"
     },
     {
       "slug": "gyoseishoshi",
-      "expectedFacts": 6,
+      "expectedFacts": 15,
       "pageContains": "行政書士"
     },
     {
@@ -23,12 +23,12 @@
     },
     {
       "slug": "bookkeeping",
-      "expectedFacts": 38,
+      "expectedFacts": 58,
       "pageContains": "日商簿記"
     },
     {
       "slug": "fp",
-      "expectedFacts": 39,
+      "expectedFacts": 75,
       "pageContains": "FP技能検定"
     }
   ]

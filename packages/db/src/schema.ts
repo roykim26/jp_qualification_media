@@ -6,6 +6,7 @@ import {
   boolean,
   timestamp,
   jsonb,
+  index,
   uniqueIndex,
   primaryKey,
 } from 'drizzle-orm/pg-core';
@@ -72,9 +73,64 @@ export const sources = pgTable(
     allowedDomain: text('allowed_domain').notNull(),
     sourceType: text('source_type').notNull(),
     active: boolean('active').notNull().default(true),
+    qualificationId: text('qualification_id').references(
+      () => qualifications.id,
+    ),
+    contentScope: text('content_scope'),
+    updateCycle: text('update_cycle'),
+    parserAdapter: text('parser_adapter'),
+    defaultRisk: riskLevel('default_risk'),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
   },
   (t) => [uniqueIndex('sources_url_idx').on(t.canonicalUrl)],
 );
+export const sourceScopes = pgTable(
+  'source_scopes',
+  {
+    id: text('id').primaryKey(),
+    sourceId: text('source_id')
+      .notNull()
+      .references(() => sources.id),
+    qualificationId: text('qualification_id')
+      .notNull()
+      .references(() => qualifications.id),
+    providerId: text('provider_id'),
+    examLevelId: text('exam_level_id'),
+    examComponent: text('exam_component'),
+    deliveryMode: text('delivery_mode'),
+    paymentMethod: text('payment_method'),
+    contentScope: text('content_scope').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index('source_scopes_unique_dimensions_idx').on(
+      t.sourceId,
+      t.qualificationId,
+      t.providerId,
+      t.examLevelId,
+      t.examComponent,
+      t.deliveryMode,
+      t.paymentMethod,
+    ),
+  ],
+);
+export const captureRuns = pgTable('capture_runs', {
+  id: text('id').primaryKey(),
+  startedAt: timestamp('started_at', { withTimezone: true }).notNull(),
+  finishedAt: timestamp('finished_at', { withTimezone: true }),
+  status: text('status').notNull(),
+  requestCount: integer('request_count').notNull().default(0),
+  errorType: text('error_type'),
+  errorMessage: text('error_message'),
+  collectorVersion: text('collector_version'),
+  createdAt: timestamp('created_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
 export const snapshots = pgTable(
   'snapshots',
   {
@@ -86,10 +142,40 @@ export const snapshots = pgTable(
     objectKey: text('object_key').notNull(),
     synthetic: boolean('synthetic').notNull().default(false),
     retrievedAt: timestamp('retrieved_at', { withTimezone: true }).notNull(),
+    captureRunId: text('capture_run_id').references(() => captureRuns.id),
+    originalUrl: text('original_url'),
+    finalUrl: text('final_url'),
+    httpStatus: integer('http_status'),
+    retrievedAtJst: timestamp('retrieved_at_jst', { withTimezone: true }),
+    title: text('title'),
+    etag: text('etag'),
+    lastModified: text('last_modified'),
+    responseHeaders: jsonb('response_headers').$type<Record<string, string>>(),
+    textVersion: text('text_version'),
+    collectorVersion: text('collector_version'),
   },
   (t) => [
     uniqueIndex('snapshot_idempotency_idx').on(t.sourceId, t.contentHash),
   ],
+);
+export const sourceChecks = pgTable(
+  'source_checks',
+  {
+    id: text('id').primaryKey(),
+    sourceId: text('source_id')
+      .notNull()
+      .references(() => sources.id),
+    captureRunId: text('capture_run_id').references(() => captureRuns.id),
+    snapshotId: text('snapshot_id').references(() => snapshots.id),
+    checkedAt: timestamp('checked_at', { withTimezone: true }).notNull(),
+    status: text('status').notNull(),
+    httpStatus: integer('http_status'),
+    message: text('message'),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [index('source_checks_latest_idx').on(t.sourceId, t.checkedAt)],
 );
 export const candidateFacts = pgTable(
   'candidate_facts',
@@ -102,6 +188,7 @@ export const candidateFacts = pgTable(
     providerId: text('provider_id'),
     examComponent: text('exam_component'),
     deliveryMode: text('delivery_mode'),
+    paymentMethod: text('payment_method'),
     examYear: integer('exam_year').notNull(),
     factKey: text('fact_key').notNull(),
     valueType: factValueType('value_type').notNull(),
@@ -129,6 +216,7 @@ export const candidateFacts = pgTable(
       t.examLevelId,
       t.examComponent,
       t.deliveryMode,
+      t.paymentMethod,
       t.examYear,
       t.factKey,
     ),
@@ -162,6 +250,7 @@ export const facts = pgTable(
     providerId: text('provider_id'),
     examComponent: text('exam_component'),
     deliveryMode: text('delivery_mode'),
+    paymentMethod: text('payment_method'),
     examYear: integer('exam_year').notNull(),
     factKey: text('fact_key').notNull(),
     currentRevisionId: text('current_revision_id').references(
@@ -176,6 +265,7 @@ export const facts = pgTable(
       t.examLevelId,
       t.examComponent,
       t.deliveryMode,
+      t.paymentMethod,
       t.examYear,
       t.factKey,
     ),
@@ -190,6 +280,22 @@ export const reviews = pgTable('reviews', {
   reviewerId: text('reviewer_id').notNull(),
   reason: text('reason'),
   createdAt: timestamp('created_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+export const factRetractions = pgTable('fact_retractions', {
+  id: text('id').primaryKey(),
+  factId: text('fact_id')
+    .notNull()
+    .references(() => facts.id)
+    .unique(),
+  rejectedCandidateId: text('rejected_candidate_id')
+    .notNull()
+    .references(() => candidateFacts.id)
+    .unique(),
+  reviewerId: text('reviewer_id').notNull(),
+  reason: text('reason').notNull(),
+  retractedAt: timestamp('retracted_at', { withTimezone: true })
     .notNull()
     .defaultNow(),
 });

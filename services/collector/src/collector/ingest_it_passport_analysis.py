@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+from hashlib import sha256
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -12,6 +13,27 @@ import psycopg
 
 QUALIFICATION_ID = "qualification:it-passport"
 CAPTURE_ROOT = Path("var/official-snapshots/it-passport").resolve()
+
+
+def capture_record(source_id: str, content_hash: str, snapshot_path: Path) -> dict[str, object]:
+    report = json.loads((CAPTURE_ROOT / "capture-report.json").read_text(encoding="utf-8"))
+    record = next(
+        (
+            item
+            for item in report.get("results", [])
+            if item.get("source_id") == source_id and item.get("content_hash") == content_hash
+        ),
+        None,
+    )
+    if not record or record.get("status") != "ok" or record.get("status_code") != 200:
+        raise ValueError(f"capture report has no successful record for {source_id}")
+    if Path(str(record.get("snapshot_path", ""))).resolve() != snapshot_path:
+        raise ValueError("capture report snapshot path does not match ingest path")
+    if not isinstance(record.get("captured_at"), str) or not isinstance(record.get("url"), str):
+        raise ValueError("capture report lacks timestamp or URL")
+    if sha256(snapshot_path.read_bytes()).hexdigest() != content_hash:
+        raise ValueError("raw snapshot hash does not match capture report")
+    return record
 
 
 def ingest_analysis(
@@ -48,20 +70,44 @@ def ingest_analysis(
                 snapshot_path = CAPTURE_ROOT / f"{content_hash}.html"
                 if not snapshot_path.exists():
                     raise ValueError(f"snapshot file missing: {snapshot_path}")
+                record = capture_record(source_result["source_id"], content_hash, snapshot_path)
                 snapshot_id = f"snapshot:it-passport:{content_hash}"
                 cursor.execute(
+                    """INSERT INTO capture_runs
+                    (id,started_at,finished_at,status,request_count,collector_version)
+                    VALUES (%s,%s,%s,'succeeded',%s,'collector.capture_it_passport')
+                    ON CONFLICT (id) DO NOTHING""",
+                    (f"capture-run:it-passport:{content_hash}", record["captured_at"], record["captured_at"], record.get("attempts", 1)),
+                )
+                cursor.execute(
                     """INSERT INTO snapshots
-                    (id, source_id, content_hash, object_key, synthetic, retrieved_at)
-                    VALUES (%s, %s, %s, %s, false, now())
-                    ON CONFLICT (source_id, content_hash) DO NOTHING""",
+                    (id,source_id,content_hash,object_key,synthetic,retrieved_at,capture_run_id,original_url,final_url,http_status,retrieved_at_jst,collector_version)
+                    VALUES (%s,%s,%s,%s,false,%s,%s,%s,%s,%s,%s,'collector.capture_it_passport')
+                    ON CONFLICT (source_id,content_hash) DO UPDATE SET
+                      object_key=EXCLUDED.object_key,synthetic=EXCLUDED.synthetic,retrieved_at=EXCLUDED.retrieved_at,
+                      capture_run_id=EXCLUDED.capture_run_id,original_url=EXCLUDED.original_url,final_url=EXCLUDED.final_url,
+                      http_status=EXCLUDED.http_status,retrieved_at_jst=EXCLUDED.retrieved_at_jst,collector_version=EXCLUDED.collector_version""",
                     (
                         snapshot_id,
                         source_result["source_id"],
                         content_hash,
                         str(snapshot_path),
+                        record["captured_at"],
+                        f"capture-run:it-passport:{content_hash}",
+                        record["url"],
+                        record["url"],
+                        record["status_code"],
+                        record["captured_at"],
                     ),
                 )
                 inserted_snapshots += cursor.rowcount
+                cursor.execute(
+                    """INSERT INTO source_checks
+                    (id,source_id,capture_run_id,snapshot_id,checked_at,status,http_status,message)
+                    VALUES (%s,%s,%s,%s,%s,'changed',%s,'Captured official page; candidate staging is pending review.')
+                    ON CONFLICT (id) DO NOTHING""",
+                    (f"source-check:it-passport:{content_hash}", source_result["source_id"], f"capture-run:it-passport:{content_hash}", snapshot_id, record["captured_at"], record["status_code"]),
+                )
                 for candidate in candidates:
                     if candidate["status"] != "pending_review":
                         raise ValueError("only pending_review candidates may be ingested")

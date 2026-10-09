@@ -1,0 +1,138 @@
+import type { PublicFact, Qualification } from './index.js';
+
+export type CalendarEventType =
+  'application_open' | 'application_deadline' | 'exam_date' | 'result_date';
+
+export type PublicCalendarEvent = {
+  id: string;
+  type: CalendarEventType;
+  label: string;
+  qualification: Qualification;
+  examYear: number;
+  displayValue: string;
+  dateValue: string | null;
+  startValue: string | null;
+  providerId?: string | null;
+  examLevelId?: string | null;
+  examComponent?: string | null;
+  deliveryMode?: string | null;
+  paymentMethod?: string | null;
+  factKey: string;
+  verifiedAt: string;
+  sourceUrl?: string;
+  sequence: number;
+};
+
+const calendarEventLabels: Record<CalendarEventType, string> = {
+  application_open: '申込開始',
+  application_deadline: '申込締切',
+  exam_date: '試験日',
+  result_date: '合格発表',
+};
+
+const calendarFactPrefixes: readonly [CalendarEventType, string][] = [
+  ['application_open', 'application_open'],
+  ['application_open', 'application_start'],
+  ['application_deadline', 'application_deadline'],
+  ['exam_date', 'exam_dates'],
+  ['exam_date', 'exam_date'],
+  ['exam_date', 'exam_schedule'],
+  ['result_date', 'result_date'],
+];
+
+function eventTypeForFactKey(factKey: string): CalendarEventType | null {
+  return (
+    calendarFactPrefixes.find(([, prefix]) =>
+      factKey.startsWith(prefix),
+    )?.[0] ?? null
+  );
+}
+
+function temporalValuesFromFact(fact: PublicFact): string[] {
+  if (typeof fact.normalizedValue === 'string') {
+    return [
+      ...fact.normalizedValue.matchAll(
+        /\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}(?::\d{2})?(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?)?/g,
+      ),
+    ].map((match) => match[0]);
+  }
+  if (
+    fact.normalizedValue &&
+    typeof fact.normalizedValue === 'object' &&
+    'date' in fact.normalizedValue
+  ) {
+    const value = (fact.normalizedValue as { date?: unknown }).date;
+    return typeof value === 'string' ? [value] : [];
+  }
+  return [];
+}
+
+function dateValueFromTemporal(value: string | null): string | null {
+  return value?.match(/\d{4}-\d{2}-\d{2}/)?.[0] ?? null;
+}
+
+function stableEventId(fact: PublicFact): string {
+  const dimensions = [
+    fact.qualificationSlug,
+    fact.examYear,
+    fact.factKey,
+    fact.providerId ?? '',
+    fact.examLevelId ?? '',
+    fact.examComponent ?? '',
+    fact.deliveryMode ?? '',
+  ];
+  if (fact.paymentMethod) dimensions.push(fact.paymentMethod);
+  return dimensions.join(':');
+}
+
+export function buildPublicCalendarEvents(
+  qualifications: readonly Qualification[],
+  facts: readonly PublicFact[],
+): PublicCalendarEvent[] {
+  const events: PublicCalendarEvent[] = [];
+  for (const fact of facts) {
+    const type = eventTypeForFactKey(fact.factKey);
+    const qualification = qualifications.find(
+      (item) => item.slug === fact.qualificationSlug,
+    );
+    if (!type || !qualification) continue;
+    const startValues = temporalValuesFromFact(fact);
+    // A schedule description without a concrete date is useful on the page,
+    // but must not become a calendar/ICS event.
+    if (!startValues.length) continue;
+    const occurrences = startValues;
+    occurrences.forEach((startValue, index) => {
+      events.push({
+        id: `${stableEventId(fact)}${occurrences.length > 1 ? `:occurrence:${index + 1}` : ''}`,
+        type,
+        label: calendarEventLabels[type],
+        qualification,
+        examYear: fact.examYear,
+        displayValue: fact.displayValue,
+        dateValue: dateValueFromTemporal(startValue),
+        startValue,
+        providerId: fact.providerId,
+        examLevelId: fact.examLevelId,
+        examComponent: fact.examComponent,
+        deliveryMode: fact.deliveryMode,
+        paymentMethod: fact.paymentMethod,
+        factKey: fact.factKey,
+        verifiedAt: fact.verifiedAt,
+        sourceUrl: fact.sourceUrl,
+        sequence: fact.sequence ?? 0,
+      });
+    });
+  }
+  return events.sort(
+    (left, right) =>
+      (left.dateValue ?? '9999-12-31').localeCompare(
+        right.dateValue ?? '9999-12-31',
+      ) ||
+      left.examYear - right.examYear ||
+      left.qualification.officialNameJa.localeCompare(
+        right.qualification.officialNameJa,
+        'ja-JP',
+      ) ||
+      left.type.localeCompare(right.type),
+  );
+}

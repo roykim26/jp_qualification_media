@@ -4,6 +4,8 @@ import {
   type ServerResponse,
 } from 'node:http';
 import { Pool } from 'pg';
+import { uiStyles } from '../../../packages/ui/src/index.js';
+import { adminStyles } from './styles.js';
 
 const port = Number(process.env.ADMIN_PORT ?? 3001);
 const reviewerId = process.env.ADMIN_REVIEWER_ID;
@@ -46,36 +48,58 @@ function page(
   const cards = rows
     .map(
       (row) => `
-    <article class="card" data-id="${escapeHtml(row.id)}">
+    <article class="card review-card" data-id="${escapeHtml(row.id)}">
       <h2>${escapeHtml(row.fact_key)} · ${escapeHtml(row.exam_year)}</h2>
-      <p><b>机构：</b>${escapeHtml(row.provider_id || '未指定')}　<b>级别：</b>${escapeHtml(row.exam_level_id || '共通')}　<b>科目：</b>${escapeHtml(row.exam_component || '共通')}　<b>实施方式：</b>${escapeHtml(row.delivery_mode || '未指定')}</p>
+      <p class="review-meta"><span><b>机构：</b>${escapeHtml(row.provider_id || '未指定')}</span><span><b>级别：</b>${escapeHtml(row.exam_level_id || '共通')}</span><span><b>科目：</b>${escapeHtml(row.exam_component || '共通')}</span><span><b>实施方式：</b>${escapeHtml(row.delivery_mode || '未指定')}</span><span><b>支付方式：</b>${escapeHtml(row.payment_method || '未指定')}</span></p>
       <p><b>候选值：</b>${escapeHtml(row.display_value)}</p>
-      ${row.evidence_text ? `<blockquote><b>官方原文：</b>${escapeHtml(row.evidence_text)}</blockquote>` : ''}
+      ${row.evidence_text ? `<blockquote class="review-evidence"><b>官方原文：</b>${escapeHtml(row.evidence_text)}</blockquote>` : ''}
       <p><b>风险：</b>${escapeHtml(row.risk_level)}　<b>状态：</b>${escapeHtml(row.status)}</p>
-      <p><b>官方来源：</b><a href="${escapeHtml(row.canonical_url)}" target="_blank" rel="noreferrer">${escapeHtml(row.canonical_url)}</a></p>
+      <p class="review-source"><b>官方来源：</b><a href="${escapeHtml(row.canonical_url)}" target="_blank" rel="noreferrer">${escapeHtml(row.canonical_url)}</a></p>
       <p><b>快照：</b>${escapeHtml(row.snapshot_hash)}</p>
-      <textarea placeholder="必须填写人工复核理由" aria-label="review reason"></textarea>
-      <div class="actions">
-        <button data-decision="approve">批准</button>
-        <button data-decision="reject">拒绝</button>
-        <button data-decision="defer">延期</button>
+      <div class="field"><label for="reason-${escapeHtml(row.id)}">人工复核理由</label><textarea id="reason-${escapeHtml(row.id)}" placeholder="例如：已逐项核对官方原文和适用年度" aria-describedby="help-${escapeHtml(row.id)} error-${escapeHtml(row.id)}" required></textarea><p id="help-${escapeHtml(row.id)}" class="field__help">批准、拒绝或延期前必须填写。</p><p id="error-${escapeHtml(row.id)}" class="field__error" aria-live="polite"></p></div>
+      <div class="review-actions">
+        <button type="button" data-decision="approve">批准候选</button>
+        <button type="button" data-decision="reject">拒绝候选</button>
+        <button type="button" data-decision="defer">延期审核</button>
       </div>
-      <output></output>
+      <output aria-live="polite" aria-atomic="true"></output>
     </article>`,
     )
     .join('');
-  return `<!doctype html><meta charset="utf-8"><title>${qualificationTitle}审核队列</title>
-  <style>body{font:16px system-ui;max-width:1000px;margin:2rem auto;padding:0 1rem;background:#f6f7f9}.card{background:white;border:1px solid #ddd;border-radius:8px;padding:1rem;margin:1rem 0}.actions{display:flex;gap:.5rem;margin-top:.7rem}button{padding:.5rem .9rem;cursor:pointer}textarea{width:100%;min-height:4rem;margin-top:.5rem}output{display:block;margin-top:.7rem}</style>
-  <h1>${qualificationTitle}人工审核队列</h1><p>高风险事实必须逐项核对官方原文后决定。批准会创建事实修订，不会绕过审核链。</p>
-  <p>待审核：${rows.length} 条</p>${cards || '<p>当前没有待审核候选。</p>'}
+  return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${qualificationTitle}审核队列</title><style>${uiStyles}${adminStyles}</style></head><body><main class="admin-shell"><header class="admin-header"><div><p class="eyebrow">人工审核</p><h1>${qualificationTitle}审核队列</h1><p>高风险事实必须逐项核对官方原文后决定。批准会创建事实修订，不会绕过审核链。</p></div><p class="badge badge--info">待审核：${rows.length} 条</p></header><section class="admin-list" aria-label="待审核事实">
+  ${cards || '<div class="feedback feedback--empty"><div><h2>当前没有待审核候选</h2><p>新的候选事实进入人工审核后会显示在这里。</p></div></div>'}</section></main>
   <script>
-  for (const card of document.querySelectorAll('.card')) for (const button of card.querySelectorAll('button')) button.onclick = async () => {
-    const reason = card.querySelector('textarea').value.trim();
-    if (!reason) return alert('请填写审核理由');
-    const response = await fetch('/internal/reviews/' + card.dataset.id, { method:'POST', headers:{'content-type':'application/json','x-reviewer-id':prompt('审核人 ID') || ''}, body:JSON.stringify({decision:button.dataset.decision, reason}) });
-    const result = await response.json(); card.querySelector('output').textContent = response.ok ? '已记录：' + result.decision : '失败：' + (result.error || 'unknown'); if(response.ok) card.remove();
+  const decisionLabels = { approve: '批准候选', reject: '拒绝候选', defer: '延期审核' };
+  for (const card of document.querySelectorAll('.review-card')) for (const button of card.querySelectorAll('button')) button.onclick = async () => {
+    const textarea = card.querySelector('textarea');
+    const error = card.querySelector('.field__error');
+    const output = card.querySelector('output');
+    const reason = textarea.value.trim();
+    error.textContent = '';
+    if (!reason) { error.textContent = '请填写审核理由。'; textarea.focus(); return; }
+    const decision = button.dataset.decision;
+    if (!confirm('将记录为“' + decisionLabels[decision] + '”，是否继续？')) return;
+    const reviewer = prompt('审核人 ID');
+    if (!reviewer) { output.textContent = '操作已取消。'; return; }
+    const buttons = card.querySelectorAll('button');
+    for (const item of buttons) item.disabled = true;
+    button.dataset.originalLabel = button.textContent;
+    button.textContent = '处理中…';
+    output.textContent = '正在保存审核结果。';
+    try {
+      const response = await fetch('/internal/reviews/' + encodeURIComponent(card.dataset.id), { method:'POST', headers:{'content-type':'application/json','x-reviewer-id':reviewer}, body:JSON.stringify({decision, reason}) });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'request failed');
+      output.textContent = '已记录：' + decisionLabels[result.decision];
+      card.dataset.completed = 'true';
+      setTimeout(() => card.remove(), 500);
+    } catch {
+      output.textContent = '保存失败。输入内容已保留，请重试。';
+      for (const item of buttons) item.disabled = false;
+      button.textContent = button.dataset.originalLabel;
+    }
   };
-  </script>`;
+  </script></body></html>`;
 }
 
 async function listCandidates(
@@ -89,7 +113,7 @@ async function listCandidates(
   });
   try {
     const result = await pool.query(
-      `SELECT c.id, c.provider_id, c.exam_level_id, c.exam_component, c.delivery_mode, c.fact_key, c.exam_year, c.display_value, c.evidence_text, c.status, c.risk_level,
+      `SELECT c.id, c.provider_id, c.exam_level_id, c.exam_component, c.delivery_mode, c.payment_method, c.fact_key, c.exam_year, c.display_value, c.evidence_text, c.status, c.risk_level,
       s.content_hash AS snapshot_hash, src.canonical_url
       FROM candidate_facts c JOIN snapshots s ON s.id=c.source_snapshot_id JOIN sources src ON src.id=c.source_id
       WHERE c.qualification_id=$1 AND c.status='pending_review' ORDER BY c.created_at, c.fact_key`,
@@ -108,7 +132,7 @@ async function reviewCandidate(
 ): Promise<void> {
   if (!databaseUrl)
     throw new Error('DATABASE_URL is required for the local review queue');
-  if (!['approve', 'reject', 'defer'].includes(decision))
+  if (!['approve', 'reject', 'defer', 'requeue'].includes(decision))
     throw new Error('invalid decision');
   if (!reason.trim()) throw new Error('review reason required');
   const pool = new Pool({
@@ -124,6 +148,8 @@ async function reviewCandidate(
     );
     if (!candidate.rowCount) throw new Error('candidate not found');
     const row = candidate.rows[0];
+    if (decision === 'requeue' && row.status !== 'rejected')
+      throw new Error('only rejected candidates can be requeued');
     const status =
       decision === 'approve'
         ? 'approved'
@@ -143,13 +169,15 @@ async function reviewCandidate(
         `SELECT id AS fact_id, current_revision_id FROM facts
          WHERE qualification_id=$1 AND provider_id IS NOT DISTINCT FROM $2
            AND exam_level_id IS NOT DISTINCT FROM $3 AND exam_component IS NOT DISTINCT FROM $4
-           AND delivery_mode IS NOT DISTINCT FROM $5 AND exam_year=$6 AND fact_key=$7 FOR UPDATE`,
+           AND delivery_mode IS NOT DISTINCT FROM $5 AND payment_method IS NOT DISTINCT FROM $6
+           AND exam_year=$7 AND fact_key=$8 FOR UPDATE`,
         [
           row.qualification_id,
           row.provider_id,
           row.exam_level_id,
           row.exam_component,
           row.delivery_mode,
+          row.payment_method,
           row.exam_year,
           row.fact_key,
         ],
@@ -157,7 +185,7 @@ async function reviewCandidate(
       const revisionId = `revision:${id}`;
       await client.query(
         `INSERT INTO fact_revisions (id,candidate_fact_id,status,normalized_value,display_value,valid_from,verified_at,idempotency_key)
-        VALUES ($1,$2,'approved',$3::jsonb,$4,now(),now(),$5) ON CONFLICT (idempotency_key) DO NOTHING`,
+        VALUES ($1,$2,'approved',$3::jsonb,$4,now(),now(),$5) ON CONFLICT DO NOTHING`,
         [
           revisionId,
           id,
@@ -166,22 +194,34 @@ async function reviewCandidate(
           `approve:${id}`,
         ],
       );
-      await client.query(
-        `INSERT INTO facts (id,qualification_id,provider_id,exam_level_id,exam_component,delivery_mode,exam_year,fact_key,current_revision_id,status)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'approved') ON CONFLICT (qualification_id,provider_id,exam_level_id,exam_component,delivery_mode,exam_year,fact_key)
-        DO UPDATE SET current_revision_id=EXCLUDED.current_revision_id,status='approved'`,
-        [
-          previous.rowCount ? previous.rows[0].fact_id : `fact:${id}`,
-          row.qualification_id,
-          row.provider_id,
-          row.exam_level_id,
-          row.exam_component,
-          row.delivery_mode,
-          row.exam_year,
-          row.fact_key,
-          revisionId,
-        ],
-      );
+      const factId = previous.rowCount
+        ? previous.rows[0].fact_id
+        : `fact:${id}`;
+      if (previous.rowCount) {
+        // Nullable dimensions are compared above with IS NOT DISTINCT FROM.
+        // A unique-index upsert cannot reliably use that same null semantics.
+        await client.query(
+          "UPDATE facts SET current_revision_id=$1,status='approved' WHERE id=$2",
+          [revisionId, factId],
+        );
+      } else {
+        await client.query(
+          `INSERT INTO facts (id,qualification_id,provider_id,exam_level_id,exam_component,delivery_mode,payment_method,exam_year,fact_key,current_revision_id,status)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'approved')`,
+          [
+            factId,
+            row.qualification_id,
+            row.provider_id,
+            row.exam_level_id,
+            row.exam_component,
+            row.delivery_mode,
+            row.payment_method,
+            row.exam_year,
+            row.fact_key,
+            revisionId,
+          ],
+        );
+      }
       await client.query(
         `INSERT INTO change_events
           (id,fact_id,event_type,previous_revision_id,new_revision_id,affected_pages)
@@ -189,7 +229,7 @@ async function reviewCandidate(
          ON CONFLICT (id) DO NOTHING`,
         [
           `change:${id}`,
-          previous.rowCount ? previous.rows[0].fact_id : `fact:${id}`,
+          factId,
           eventTypeForFact(row.fact_key),
           previous.rowCount ? previous.rows[0].current_revision_id : null,
           revisionId,
@@ -197,6 +237,82 @@ async function reviewCandidate(
         ],
       );
     }
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+    await pool.end();
+  }
+}
+
+async function retractCiCurrentFact(
+  rejectedCandidateId: string,
+  reason: string,
+): Promise<void> {
+  if (!databaseUrl)
+    throw new Error('DATABASE_URL is required for the local review queue');
+  if (!reason.trim()) throw new Error('retraction reason required');
+  const pool = new Pool({
+    connectionString: databaseUrl,
+    connectionTimeoutMillis: 5000,
+  });
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const rejected = await client.query(
+      'SELECT * FROM candidate_facts WHERE id=$1 FOR UPDATE',
+      [rejectedCandidateId],
+    );
+    if (!rejected.rowCount || rejected.rows[0].status !== 'rejected')
+      throw new Error(
+        'candidate must be rejected before a current fact can be retracted',
+      );
+    const row = rejected.rows[0];
+    const current = await client.query(
+      `SELECT f.id
+       FROM facts f
+       JOIN fact_revisions fr ON fr.id=f.current_revision_id
+       JOIN candidate_facts c ON c.id=fr.candidate_fact_id
+       JOIN snapshots s ON s.id=c.source_snapshot_id
+       WHERE f.status='approved' AND f.qualification_id=$1
+         AND f.provider_id IS NOT DISTINCT FROM $2
+         AND f.exam_level_id IS NOT DISTINCT FROM $3
+         AND f.exam_component IS NOT DISTINCT FROM $4
+         AND f.delivery_mode IS NOT DISTINCT FROM $5
+         AND f.payment_method IS NOT DISTINCT FROM $6
+         AND f.exam_year=$7 AND f.fact_key=$8
+         AND s.object_key LIKE 'ci://%'
+       FOR UPDATE`,
+      [
+        row.qualification_id,
+        row.provider_id,
+        row.exam_level_id,
+        row.exam_component,
+        row.delivery_mode,
+        row.payment_method,
+        row.exam_year,
+        row.fact_key,
+      ],
+    );
+    if (current.rowCount !== 1)
+      throw new Error('expected exactly one CI-backed current fact to retract');
+    const factId = current.rows[0].id as string;
+    await client.query("UPDATE facts SET status='superseded' WHERE id=$1", [
+      factId,
+    ]);
+    await client.query(
+      `INSERT INTO fact_retractions (id,fact_id,rejected_candidate_id,reviewer_id,reason)
+       VALUES ($1,$2,$3,$4,$5) ON CONFLICT (rejected_candidate_id) DO NOTHING`,
+      [
+        `retraction:${rejectedCandidateId}`,
+        factId,
+        rejectedCandidateId,
+        reviewerId,
+        reason,
+      ],
+    );
     await client.query('COMMIT');
   } catch (error) {
     await client.query('ROLLBACK');
@@ -281,13 +397,38 @@ const server = createServer(async (req, res) => {
         'application/json',
       );
     }
+    if (
+      req.method === 'POST' &&
+      req.url?.startsWith('/internal/retractions/')
+    ) {
+      if (!authorized(req))
+        return send(
+          res,
+          401,
+          JSON.stringify({ error: 'reviewer authentication required' }),
+          'application/json',
+        );
+      const id = decodeURIComponent(
+        req.url.slice('/internal/retractions/'.length),
+      );
+      let body = '';
+      for await (const chunk of req) body += chunk;
+      const input = JSON.parse(body) as { reason?: string };
+      await retractCiCurrentFact(id, input.reason ?? '');
+      return send(
+        res,
+        200,
+        JSON.stringify({ id, status: 'superseded' }),
+        'application/json',
+      );
+    }
     return send(res, 404, 'not found', 'text/plain; charset=utf-8');
   } catch (error) {
     return send(
       res,
       400,
       JSON.stringify({
-        error: error instanceof Error ? error.message : 'request failed',
+        error: 'request failed',
       }),
       'application/json',
     );

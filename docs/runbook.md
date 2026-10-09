@@ -2,6 +2,8 @@
 
 本项目仅支持本地开发。不得配置生产数据库、生产对象存储、AdSense 或真实凭据。
 
+`SITE_ORIGIN` 用于 canonical、`robots.txt` 和 `sitemap.xml` 的绝对 URL；本地可使用 `http://127.0.0.1:3000`。已确认的生产值为 `https://shikakucheck.com`；应只在部署平台的生产环境变量中设置，不能提交真实生产凭据。生产环境缺少该变量时公开站拒绝生成 SEO 文件。
+
 1. `pnpm install`
 2. `docker compose up -d`（只在需要本地 PostgreSQL/MinIO 时）
 3. `pnpm db:migrate`
@@ -10,7 +12,7 @@
 
 `fixtures/official-snapshots` 中的内容必须使用 `synthetic`/`test-only` 标识；当前没有动态生产事实种子。公开 API 仅返回已批准正式事实，空库时返回空集合。
 
-当前阶段 1 用户页面范围为宅建和 IT Passport。统一页面入口为 `/shikaku/`，资格详情使用 `/shikaku/{slug}/`、`/application/` 和 `/exam-content/`；页面只通过公开 API 读取事实。
+当前阶段 2 用户页面范围为 6 个首发资格。统一页面入口为 `/shikaku/`，每个资格提供概要、`/{year}/` 年度日程、`/application/`、`/exam-content/` 和 `/pass-rate/` 五类页面；页面只通过公开 API 读取事实，年度页严格按 `examYear` 隔离。日程页和资格年度页提供 `/ics/{qualification}/{year}.ics` 全年下载，日程事件提供单事件下载；没有明确日期的事实不会生成 ICS。`/compare/` 提供动态比较器与 3 篇静态比较指南；`/guide/` 提供 4 篇不包含动态事实的通用指南。
 
 ## 阶段边界
 
