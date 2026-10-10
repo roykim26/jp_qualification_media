@@ -1,5 +1,15 @@
 # 阶段记录与剩余问题
 
+## 2026-10-10：行政書士入库链对齐基本情報口径
+
+- `services/collector/src/collector/ingest_gyoseishoshi.py` 在连库之前增加 `capture_record()` 四重校验：`capture-report.json` 内该来源须 `status=ok` 且 `status_code=200`、报告 `snapshot_path` 与入库路径全等、报告必须带 `content_hash` 与 `captured_at`、磁盘原始字节重算 sha256 必须与报告相符，适配器解析哈希再与报告二次比对。任一不符即抛错、零写入。
+- 入库补齐溯源链：写 `capture_runs`、`snapshots` 全溯源列（`capture_run_id`/`original_url`/`final_url`/`http_status`/`retrieved_at`/`retrieved_at_jst`/`collector_version`，`ON CONFLICT (source_id,content_hash) DO UPDATE` 幂等回写，抓取时刻取报告值不再用 `now()`）、`source_checks`；候选 `risk_level` 改取适配器给出的值，不在 SQL 里硬编码。
+- 真实数据自证（只读，不连库）：对 2026-09-08 的 `var/official-snapshots/gyoseishoshi/capture-report.json` 跑 `capture_record()`，home／abstract／guide 三条均通过，sha256 与磁盘快照相符。
+- 端到端入库验证（经项目所有者授权，写本机 localhost 开发库，`GYOSEISHOSHI_LOCAL_WRITE=1`）：用磁盘上 2026-09-08 的真实 `guide.html` 重跑新链，返回 `candidates: 0`。写回读数——`snapshots` 行 `capture_run_id`/`original_url=https://www.gyosei-shiken.or.jp/doc/guide/guide.html`/`http_status=200`/`retrieved_at=2026-09-08 02:10:08.722939+00`（取自报告，原为写库时刻 `2026-09-11`）全部就位，`capture_runs` 新增 1 行（`succeeded`、`request_count=1`）、`source_checks` 新增 1 行（`changed`、200）；15 条候选因 id 与既有 approved 行相同被 `ON CONFLICT DO NOTHING` 跳过，`pending_official` 仍 0，门禁重跑仍 `6/6`、`gyoseishoshi` API/页面 `verified`。批准动作未执行。
+- 快照行构成更正（先前误把候选 join 计数 21 当成快照行数）：`source:gyoseishoshi:guide` 实际只有 3 行 —— 1 行真实抓取（已补全溯源）+ 2 行 CI 夹具复刻写入（`object_key` 为 `ci://official-snapshot/…`、`retrieved_at` 固定 `2026-01-01`），夹具行按口径保持无元数据、不伪装官方来源。
+- 文档同步：`docs/gyoseishoshi-source-contract.md`（入库表写入范围、四重校验、已知剩余项 1 改写）、`docs/data-gate-semantics.md`（§11 第 3 项、§10 读数日期与 Python 计数）。
+- 回归读数：Vitest 81/81、`pytest services/collector/tests services/parser/tests` 92 passed（新增 3 项 `capture_record` 用例）、`node --test scripts/verify-lib.test.mjs` 7/7、`eslint .` 干净、`prettier --check` 全项目通过、build 通过、`verify:all` `status=passed, passed=6/6, failed=0`（含入库后复跑）。
+
 ## 2026-10-09：数据完整性整改收口（工作包 A–H）
 
 - 覆盖契约冻结为机器可读文件 `config/data-coverage-contract.json`（6 资格 × 字段 × 维度 × 页面 × 判级），并由 `scripts/verify-lib.mjs` 的 `evaluateCoverage()` 逐资格判定缺口。
@@ -15,7 +25,7 @@
 - 基本情報技術者的 10 条事实 `delivery_mode` 为 `NULL`，契约三条 `conditional` requirement 因「空 scoped」被整条跳过 ⇒ 0 缺口不代表字段齐备；补维度会立即暴露 10 个缺口，且 `exam_subject_a_*` 命名不满足前缀匹配规则。**属判级/契约产品决策，待项目所有者确认。**
 - 2027 年度簿记配点已公告（3 级第1問45／第2問25／第3問30、合計100、合格70以上）⇒ 覆盖年度滚到 2027 前，簿记 3 级 `scoring_method` 需从 `not_applicable` 回改并按三次授权流程重新采集。
 - 历史统计字段（`pass_rate` 等）六资格零官方来源（工作包 F）。
-- `sources.qualification_id` 有 32/40 条为 `NULL`；行政書士入库链不写 `capture_runs`/`source_checks`，与基本情報链路口径不一致。
+- `sources.qualification_id` 有 32/40 条为 `NULL`；行政書士入库链不写 `capture_runs`/`source_checks`，与基本情報链路口径不一致（该项已于 2026-10-10 对齐，见上方最新一节）。
 - `services/api/src/release.ts` 的 `rollbackApprovedFact` 维度 join 漏 `payment_method`，与 0014 迁移的 `facts_current_key_idx` 不一致。
 - `escapeHtml` 在 4 处重复定义；迁移目录存在 `0010_` 重号；`services/parser` 仍是空壳。
 
