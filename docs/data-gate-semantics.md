@@ -96,14 +96,14 @@ Why：审核人 ID 放进 URL 就可被任意 `<img src=…>`、浏览器历史�
 
 改 TypeScript 必须先 build 再 verify —— `scripts/verify-all.mjs` 跑的是 `dist/` 编译产物。
 
-| 命令                                                                                | 读数                                                                                                        |
-| ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `pnpm build`（本机直调 `node_modules\.bin\tsc.cmd -p tsconfig.json`）               | 通过                                                                                                        |
-| `pnpm test`（`vitest run tests --pool=threads --poolOptions.threads.singleThread`） | 81/81，10 个文件                                                                                            |
-| `pnpm test:python`（`pytest services/collector/tests services/parser/tests`）       | 92 passed（2026-10-09 为 89，行政書士 `capture_record` 新增 3 项用例）                                      |
-| `node --test scripts/verify-lib.test.mjs`                                           | 7/7                                                                                                         |
-| `pnpm verify:all`                                                                   | `status=passed`、`qualifications=6`、`passed=6`、`failed=0`，各资格 `coverageGaps=[]`、`pending_official=0` |
-| `pnpm lint`（`eslint .`）                                                           | 干净                                                                                                        |
+| 命令                                                                                | 读数                                                                                                                      |
+| ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm build`（本机直调 `node_modules\.bin\tsc.cmd -p tsconfig.json`）               | 通过                                                                                                                      |
+| `pnpm test`（`vitest run tests --pool=threads --poolOptions.threads.singleThread`） | 81/81，10 个文件                                                                                                          |
+| `pnpm test:python`（`pytest services/collector/tests services/parser/tests`）       | 100 passed（2026-10-09 为 89，行政書士 `capture_record` +3；2026-10-10 FP 对齐 +8：6 条 `capture_record` + 2 条报告合并） |
+| `node --test scripts/verify-lib.test.mjs`                                           | 7/7                                                                                                                       |
+| `pnpm verify:all`                                                                   | `status=passed`、`qualifications=6`、`passed=6`、`failed=0`，各资格 `coverageGaps=[]`、`pending_official=0`               |
+| `pnpm lint`（`eslint .`）                                                           | 干净                                                                                                                      |
 
 正式事实总数 **176**：takken 16、gyoseishoshi 15、it-passport 2、fundamental-it-engineer 10、bookkeeping 58、fp 75。覆盖缺口 **18 → 0**。
 
@@ -116,3 +116,4 @@ Why：审核人 ID 放进 URL 就可被任意 `<img src=…>`、浏览器历史�
 3. 行政書士入库链已于 2026-10-10 对齐 FE 口径（校验 `capture-report.json`、写 `capture_runs` 与 `snapshots` 全溯源列、写 `source_checks`），并在本机开发库对真实快照重跑一次入库验证通过：真实抓取行就地补全溯源、候选新增 0 条、门禁仍 `6/6`。仍在的只是夹具行（`ci://` object key）按设计不带元数据，见 §5。
 4. `services/api/src/release.ts` 的 `rollbackApprovedFact` 维度 join 漏 `payment_method`，与 0014 迁移建立的 `facts_current_key_idx` 及候选幂等索引不一致。
 5. 历史统计字段（`pass_rate` 等）六资格全为零官方来源，归工作包 F。
+6. FP 入库链已于 2026-10-10 同口径对齐（`capture_record()` 四重校验、写 `capture_runs` 与 `snapshots` 全溯源列、写 `source_checks`），`capture_fp.py` 的报告改为按 `source_id` 合并以免再次整份覆盖丢证据。但**本轮只到代码与用例层**：磁盘上那 4 个 2026-09-08／09-11 入库快照在 `capture-report.json` 里没有记录（旧报告已被覆盖且 `var/` 不入库），新链对它们直接拒绝入库，因此没有本机端到端实跑读数；要跑通需先授权一次抓取，而抓取若导致哈希变化会新增 `pending_review` 并让门禁硬失败。详见 `docs/fp-source-contract.md` 已知剩余项 1。
