@@ -1,10 +1,20 @@
 # 阶段记录与剩余问题
 
+## 2026-10-10：采集报告合并抽为共享模块，推广到行政書士／簿记／IT Passport
+
+- 新增 `services/collector/src/collector/capture_report.py`：`merge_capture_report()`（按 `source_id` 合并，本次运行里没有 `content_hash` 的失败记录不会抹掉上一次成功记录；该来源此前没落盘过才写入失败记录）与 `write_capture_report()`（合并 + 落盘 + 返回报告）。计数字段定为 `source_count`＝本次运行条数、`retained_source_count`＝文件累计保留条数，`results` 为合并后的全集，`captured_at`/`candidate_ingest` 含义不变。
+- `capture_fp.py` 删除本地那份实现改用共享模块；`capture_gyoseishoshi.py`、`capture_bookkeeping.py`、`capture_it_passport.py` 的报告写入同批换成 `write_capture_report()`，四链从此共用一份语义，不再整份覆盖。
+- 读取侧无需改动：`ingest_fp.py`／`ingest_gyoseishoshi.py`／`ingest_bookkeeping.py`／`ingest_it_passport_analysis.py` 的 `capture_record()` 都是按 `source_id`（it-passport 还叠加 `content_hash`）在 `results` 里取记录，合并后的多余条目不影响选取；陈旧记录会撞哈希校验而被拒绝，不会静默用旧内容入库。
+- 用例：新增 `tests/test_capture_report.py` 5 项（保留未参与本次运行的来源、同来源新记录替换旧的、失败保留上次成功记录、无历史时失败也留痕、`source_count`/`retained_source_count` 与落盘内容一致）；`tests/test_gyoseishoshi_capture.py`、`tests/test_bookkeeping_capture.py` 各加 1 项用假 fetcher 真跑一次采集，验证这两条链的报告确实保留了外部来源记录。FP 原有 2 项合并用例移入共享模块测试，`test_fp_capture.py` 回到只测 FP 自身契约。
+- 尚未统一：基本情報 `capture_fundamental_it.py` 与宅建 `capture_takken.py`（含两份 directly-cited 报告）仍是整份覆盖 —— 前者快照是内容寻址文件名所以文件不被覆盖，但报告同样会丢。已记在 `docs/data-gate-semantics.md` §11 第 7 项。
+- 文档同步：`docs/fp-source-contract.md`（合并段改写为共享模块口径、键命名更正）、`docs/gyoseishoshi-source-contract.md`（采集行）、`docs/data-gate-semantics.md`（§8 采集行、§10 Python 计数、§11 新增第 7 项）。
+- 回归读数：`pytest -p no:cacheprovider --basetemp=.pytest-basetemp services/collector/tests services/parser/tests` 105 passed、Vitest 81/81、`node --test scripts/verify-lib.test.mjs` 7/7、`eslint .` 干净、build 通过、`prettier --check`（项目 `format:check` glob）通过、`verify:all` `status=passed, passed=6/6, failed=0`（本轮纯 Python + 文档，未写库，事实计数不变）。
+
 ## 2026-10-10：FP 入库链同口径对齐（只到代码与用例层，未抓取未写库）
 
 - `services/collector/src/collector/ingest_fp.py` 增加与行政書士同构的 `capture_record()` 四重校验（报告须 `status=ok`+`status_code=200`、`snapshot_path` 与入库路径全等、必须带 `content_hash` 与 `captured_at`、磁盘原始字节 sha256 与报告相符，适配器解析哈希再二次比对），连库之前完成，任一不符零写入。原先合并成一条的守卫拆为「拒绝 `NODE_ENV=production`」与「必须 `FP_LOCAL_WRITE=1`」两条，报错各自指明。
 - 溯源写入对齐：`capture_runs`（`capture-run:fp:<content_hash>`、`succeeded`、`request_count` 取报告 `attempts`）、`snapshots` 全溯源列并以 `ON CONFLICT (source_id,content_hash) DO UPDATE` 幂等回写（`retrieved_at`/`retrieved_at_jst` 取报告真实抓取时刻，不再用 `now()`；`collector_version=collector.capture_fp`）、`source_checks`（`source-check:fp:<content_hash>`、`changed`）。FP 特有的部分保留不动：候选 id 带 `provider`／`exam_level`／`exam_component`／`delivery_mode` 四维，语句仍是 `ON CONFLICT (id) DO UPDATE … WHERE candidate_facts.status='pending_review'`，即已批准候选不会被重跑覆盖。
-- 根因修复 `capture_fp.py`：`capture-report.json` 由整份覆盖改为按 `source_id` 合并（新增 `run_source_count` 表示本次运行条数，`source_count` 变成累计保留来源数）；某来源本次抓取失败时保留上一次成功记录，因为那才对应磁盘上的字节。此前 2026-09-22 一次 capture-only 运行把 2026-09-08 那份 9/9 成功的报告整份覆盖掉（`docs/data-local-snapshot-audit-2026-09-07.md` 有当时读数），而 `var/` 在 `.gitignore` 第 18 行、报告既不在磁盘也不在 git，无法恢复。
+- 根因修复 `capture_fp.py`：`capture-report.json` 由整份覆盖改为按 `source_id` 合并（当时新增 `run_source_count` 表示本次运行条数，`source_count` 变成累计保留来源数）；某来源本次抓取失败时保留上一次成功记录，因为那才对应磁盘上的字节。**该键命名已被下一节的共享实现取代**（现为 `source_count`＝本次运行、`retained_source_count`＝累计保留）。此前 2026-09-22 一次 capture-only 运行把 2026-09-08 那份 9/9 成功的报告整份覆盖掉（`docs/data-local-snapshot-audit-2026-09-07.md` 有当时读数），而 `var/` 在 `.gitignore` 第 18 行、报告既不在磁盘也不在 git，无法恢复。
 - 只读核算（未写库）：磁盘 4 个入库 HTML 的 sha256 与库里 4 条真实快照行逐条相符（`c0efa64e9fcb`／`d8603a927e58`／`8a77e714535c`／`9a460642fe3d`），离线解析出 53 条候选 id，53 条全部已是 `approved` ⇒ 报告补齐后重跑候选新增 0 条、`pending_official` 仍为 0。顺带查出本机 FP 另有 3 条 `ci://official-snapshot/…` 夹具快照行（`retrieved_at=2026-01-01`）挂着 24／8／7＝39 条 `approved` 候选。
 - 本轮明确未执行：不抓取、不写库。新链对那 4 个无报告快照直接抛 `capture report has no successful record`，所以没有端到端实跑读数；跑通需要先给 `FP_LIVE_AUTHORIZED=1` 采一次，而官方页改版会使哈希变化、候选 id 全部变成新的 pending，触发门禁 `pending_official != 0` 硬失败，届时要逐条审核并重算 baseline 计数。三段 INSERT 语句的列名与字面量依据是行政書士同日在本机真实库已执行通过的同构语句，FP 侧本轮仅由 pytest 合成报告自证。
 - 文档同步：`docs/fp-source-contract.md` 新增三次授权表、四重校验清单、候选幂等语义、报告合并口径与 5 条已知剩余项；`docs/data-gate-semantics.md` §11 新增第 6 项、§10 Python 读数更新。

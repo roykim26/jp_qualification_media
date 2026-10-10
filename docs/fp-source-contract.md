@@ -38,7 +38,7 @@
 
 `snapshots` 行用 `ON CONFLICT (source_id,content_hash) DO UPDATE` 幂等回写全溯源列，`retrieved_at`/`retrieved_at_jst` 取报告里的真实抓取时刻而非 `now()`，`collector_version` 记为 `collector.capture_fp`；`capture_runs.id` 为 `capture-run:fp:<content_hash>`、`source_checks.id` 为 `source-check:fp:<content_hash>`。候选 id 带四维（`provider`／`exam_level`／`exam_component`／`delivery_mode`），入库语句是 `ON CONFLICT (id) DO UPDATE … WHERE candidate_facts.status='pending_review'`，即**已批准的候选不会被重跑覆盖**。
 
-`capture-report.json` 自 2026-10-10 起改为按 `source_id` 合并：`source_count` 是累计保留来源数，新增 `run_source_count` 是本次运行条数；某来源本次抓取失败时，保留上一次成功记录（那才对应磁盘上的字节），失败只在 `run_source_count` 里体现。此前整份覆盖的行为曾让 2026-09-08 的 9／9 成功报告消失。
+`capture-report.json` 自 2026-10-10 起按 `source_id` 合并写入，实现落在共享模块 `services/collector/src/collector/capture_report.py`（`write_capture_report()`），行政書士／簿记／IT Passport 三条采集链共用。报告里 `source_count` 是**本次运行**条数，`retained_source_count` 是文件里累计保留的来源记录数，`results` 是合并后的全集；某来源本次抓取失败时保留上一次成功记录（那才对应磁盘上的字节），失败记录只在该来源从未成功落盘时才会写入。此前整份覆盖的行为曾让 2026-09-08 的 9／9 成功报告消失。
 
 ## 已知剩余项
 

@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from hashlib import sha256
 from pathlib import Path
 
+from collector.capture_report import write_capture_report
 from collector.fp import FP_SOURCES
 from collector.http_policy import SafeFetcher, SourcePolicy
 
@@ -49,40 +50,6 @@ def selected_capture_sources(
     )
 
 
-def merge_capture_report(
-    root: Path,
-    run_results: list[dict[str, object]],
-    captured_at: str,
-) -> dict[str, object]:
-    # Records are merged by source_id: a whole-file rewrite previously discarded
-    # the provenance that ingest_fp.capture_record() needs.
-    report_path = root / "capture-report.json"
-    retained: dict[str, dict[str, object]] = {}
-    if report_path.exists():
-        previous = json.loads(report_path.read_text(encoding="utf-8"))
-        retained = {
-            str(item["source_id"]): item
-            for item in previous.get("results", [])
-            if item.get("source_id")
-        }
-    for item in run_results:
-        key = str(item["source_id"])
-        previous_item = retained.get(key)
-        # A failed fetch must not erase the evidence of the last stored capture;
-        # the retained record still describes the bytes on disk.
-        if previous_item is not None and "content_hash" not in item and "content_hash" in previous_item:
-            continue
-        retained[key] = item
-    results = list(retained.values())
-    return {
-        "captured_at": captured_at,
-        "run_source_count": len(run_results),
-        "source_count": len(results),
-        "results": results,
-        "candidate_ingest": "not_run",
-    }
-
-
 def capture_registered_sources(
     output_root: str | Path = CAPTURE_ROOT,
     *,
@@ -113,9 +80,7 @@ def capture_registered_sources(
             results.append(item)
         finally:
             fetcher.close()
-    report = merge_capture_report(root, results, datetime.now(timezone.utc).isoformat())
-    (root / "capture-report.json").write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    return report
+    return write_capture_report(root, results, datetime.now(timezone.utc).isoformat())
 
 
 if __name__ == "__main__":
