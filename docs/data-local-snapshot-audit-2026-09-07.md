@@ -160,7 +160,7 @@
 
 ### FP 多日期候选与审核
 
-适配器现将同一维度下的日期序列作为单个 `json` 候选保存，并把 `exam_dates` 明确映射为覆盖契约 `exam_date` 的满足来源；日历和 ICS 依现有 ISO 日期展开逻辑产生独立事件。为使本地数据库来源链完整，新增的三项日程来源通过 `0010_fp_annual_schedule_sources.sql` 迁移登记。金财 2026 年明细产生 10 条候选：学科 PBT 与资产咨询实技面接各有报名开始、报名截止、`exam_dates`、`exam_schedule`、结果日；全部经审核服务逐项批准。
+适配器现将同一维度下的日期序列作为单个 `json` 候选保存，并把 `exam_dates` 明确映射为覆盖契约 `exam_date` 的满足来源；日历和 ICS 依现有 ISO 日期展开逻辑产生独立事件。为使本地数据库来源链完整，新增的三项日程来源通过 `0010_fp_annual_schedule_sources.sql` 迁移登记（该文件当时与 `0010_drop_legacy_candidate_unique.sql` 重号，2026-10-10 按下一个空号更名为 `0016_fp_annual_schedule_sources.sql`，内容不变，仍是向 `sources` 登记三行）。金财 2026 年明细产生 10 条候选：学科 PBT 与资产咨询实技面接各有报名开始、报名截止、`exam_dates`、`exam_schedule`、结果日；全部经审核服务逐项批准。
 
 审核后，FP 覆盖门禁不再报告金财 1 级学科的报名/考试/结果缺口，也不再报告资产咨询实技的报名/考试/结果缺口。它仍因 JAFP CBT 的未采集字段、金财学科 `scoring_method` 及所有资格尚未由工作包 G 投影的 `source_url`/`official_verified_at` 而保持 `blocked`。本轮没有更新 release baseline 或 CI fixture。
 

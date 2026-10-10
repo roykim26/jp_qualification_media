@@ -10,6 +10,7 @@ import type {
 } from '../../../packages/schema/src/index.js';
 import { launchQualifications } from '../../../packages/schema/src/qualifications.js';
 import {
+  escapeHtml,
   renderBadge,
   renderButtonLink,
   renderFeedbackState,
@@ -482,15 +483,6 @@ const officialSourcesBySlug: Record<
     },
   ],
 };
-
-function escapeHtml(value: string): string {
-  return value
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;');
-}
 
 function formatVerifiedAt(value: string | null): string {
   if (!value) return '未確認';

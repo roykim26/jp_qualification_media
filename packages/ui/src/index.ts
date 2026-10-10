@@ -88,7 +88,7 @@ export function renderFeedbackState(input: {
   return `<section class="feedback feedback--${input.kind}"${live}><div class="feedback__icon">${renderIcon(input.kind === 'loading' ? 'update' : input.kind === 'error' ? 'close' : 'document')}</div><div><h2>${escapeHtml(input.title)}</h2><p>${escapeHtml(input.body)}</p>${input.actions ? `<div class="feedback__actions">${input.actions}</div>` : ''}</div></section>`;
 }
 
-function escapeHtml(value: string): string {
+export function escapeHtml(value: string): string {
   return value
     .replaceAll('&', '&amp;')
     .replaceAll('<', '&lt;')

@@ -4,7 +4,10 @@ import {
   type ServerResponse,
 } from 'node:http';
 import { Pool } from 'pg';
-import { uiStyles } from '../../../packages/ui/src/index.js';
+import {
+  escapeHtml as escapeHtmlText,
+  uiStyles,
+} from '../../../packages/ui/src/index.js';
 import { adminStyles } from './styles.js';
 
 const port = Number(process.env.ADMIN_PORT ?? 3001);
@@ -38,12 +41,7 @@ function authorizedRead(req: IncomingMessage): boolean {
 }
 
 function escapeHtml(value: unknown): string {
-  return String(value ?? '')
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;');
+  return escapeHtmlText(String(value ?? ''));
 }
 
 function page(
