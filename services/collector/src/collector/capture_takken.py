@@ -12,11 +12,14 @@ from datetime import datetime, timezone
 from hashlib import sha256
 from pathlib import Path
 
+from collector.capture_report import write_capture_report
 from collector.http_policy import SafeFetcher, SourcePolicy
 from collector.takken import TAKKEN_SOURCE
 
 
 CAPTURE_ROOT = Path("var/official-snapshots/takken")
+DIRECTLY_CITED_REPORT = "directly-cited-capture-report.json"
+DIRECTLY_CITED_DOCUMENT_REPORT = "directly-cited-document-capture-report.json"
 
 DIRECTLY_CITED_CAPTURE_SOURCES = {
     "capture-only:takken:exam-detail": "https://www.retio.or.jp/exam/exam_detail",
@@ -67,16 +70,7 @@ def capture_registered_source(output_root: str | Path = CAPTURE_ROOT) -> dict[st
     if fetched.error:
         item["error"] = fetched.error
 
-    report = {
-        "captured_at": datetime.now(timezone.utc).isoformat(),
-        "source_count": 1,
-        "results": [item],
-        "candidate_ingest": "not_run",
-    }
-    (root / "capture-report.json").write_text(
-        json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
-    )
-    return report
+    return write_capture_report(root, [item], datetime.now(timezone.utc).isoformat())
 
 
 def capture_directly_cited_sources(
@@ -119,16 +113,12 @@ def capture_directly_cited_sources(
         if fetched.error:
             item["error"] = fetched.error
         results.append(item)
-    report = {
-        "captured_at": datetime.now(timezone.utc).isoformat(),
-        "source_count": len(results),
-        "results": results,
-        "candidate_ingest": "not_run",
-    }
-    (root / "directly-cited-capture-report.json").write_text(
-        json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    return write_capture_report(
+        root,
+        results,
+        datetime.now(timezone.utc).isoformat(),
+        DIRECTLY_CITED_REPORT,
     )
-    return report
 
 
 def capture_directly_cited_documents(output_root: str | Path = CAPTURE_ROOT) -> dict[str, object]:
@@ -164,16 +154,12 @@ def capture_directly_cited_documents(output_root: str | Path = CAPTURE_ROOT) -> 
         item.update(content_hash=digest, bytes=len(fetched.body), snapshot_path=str(path))
     if fetched.error:
         item["error"] = fetched.error
-    report = {
-        "captured_at": datetime.now(timezone.utc).isoformat(),
-        "source_count": 1,
-        "results": [item],
-        "candidate_ingest": "not_run",
-    }
-    (root / "directly-cited-document-capture-report.json").write_text(
-        json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    return write_capture_report(
+        root,
+        [item],
+        datetime.now(timezone.utc).isoformat(),
+        DIRECTLY_CITED_DOCUMENT_REPORT,
     )
-    return report
 
 
 if __name__ == "__main__":

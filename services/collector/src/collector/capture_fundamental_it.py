@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 from hashlib import sha256
 from pathlib import Path
 
+from collector.capture_report import write_capture_report
 from collector.fundamental_it import FUNDAMENTAL_IT_SOURCES
 from collector.http_policy import SafeFetcher, SourcePolicy
 
@@ -67,16 +68,7 @@ def capture_registered_sources(
             results.append(result)
         finally:
             fetcher.close()
-    report = {
-        "captured_at": datetime.now(timezone.utc).isoformat(),
-        "source_count": len(results),
-        "results": results,
-        "candidate_ingest": "not_run",
-    }
-    (root / "capture-report.json").write_text(
-        json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
-    )
-    return report
+    return write_capture_report(root, results, datetime.now(timezone.utc).isoformat())
 
 
 if __name__ == "__main__":
