@@ -1,5 +1,15 @@
 # 阶段记录与剩余问题
 
+## 2026-10-11：`sources.qualification_id` 回填本机实跑（PR #12 的收尾读数）
+
+- 上面那节留的「本机尚未 apply」已按明示授权补跑：`NODE_ENV=development DATABASE_URL=...qualification_media node_modules/.bin/tsx.cmd packages/db/src/seed.ts`，全部输出只有一行 `Seeded 6 stable qualification records (no dynamic facts); bound 32 sources to their qualification.` ⇒ 与只读预演的 32 完全吻合。这是本项唯一的一次库写入（32 行 `UPDATE`）。
+- 前后计数对照（同一开发库）：
+  - `sources.qualification_id` NULL **32 → 0**、已设 **8 → 40**；分布 `bookkeeping 15 / fp 15 / takken 1 / gyoseishoshi 3 / it-passport 3 / fundamental-it-engineer 3 = 40`，与预演逐档一致。
+  - 其余计数一律不动：`facts` approved 176 → 176、`candidate_facts` 281 → 281、approved `fact_revisions` 268 → 268、`change_events` 176 → 176、`snapshots` 40 → 40、非合成 `pending_review` 0 → 0、`schema_migrations` 18 → 18、`source_scopes` **0 → 0**（未启用）。
+  - 四列溯源元数据按设计继续留 NULL：`content_scope`／`parser_adapter`／`update_cycle`／`default_risk` 各仍 32 条 NULL（抽查 `source:fp:jafp-2-3-application-outline-pdf` 与 `source:fp:kinzai-fp-faq` 仍保持 backfill 脚本写的 `capture_only_evidence`，未被覆写）。
+- 本机与 CI 的来源口径现已对齐到「seed 登记的每条来源都有资格」：CI 空库 `bound 38`、本机 `bound 32`（差的那 8 条早在 backfill 时就有值）⇒ 两边最终都是 100% 非 NULL；本机总数 40、CI 38 的差异仍只是那 2 条脚本专有来源。
+- 入库后复跑门禁：`verify:all` `status=passed, qualifications=6, passed=6, failed=0`，176 facts（16/15/2/10/58/75）、API 与页面全 `verified`、`coverageGaps=[]`、`pending_official=0`——印证「该列无读取方 ⇒ 回填不改门禁」。
+
 ## 2026-10-10：`sources.qualification_id` 32 条 NULL 的回填落点（改 seed，不改迁移）
 
 - 先只读盘底（`var/` 探针跑 `SELECT`、跑完即删）：`sources` 40 条，`qualification_id` NULL 32 条、已设 8 条（全是 FP；其中 6 条由迁移登记、由 `scripts/backfill-fp-provenance.mjs` 在本机 UPDATE 补上，另 **2 条只存在于本机**——`source:fp:jafp-2-3-application-outline-pdf` 与 `source:fp:kinzai-fp-faq` 由该脚本 INSERT，没有迁移，所以 CI 空库只有 38 条来源）。32 条按可推导性分两类——
