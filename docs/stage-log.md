@@ -2,7 +2,7 @@
 
 ## 2026-10-10：`sources.qualification_id` 32 条 NULL 的回填落点（改 seed，不改迁移）
 
-- 先只读盘底（`var/` 探针跑 `SELECT`、跑完即删）：`sources` 40 条，`qualification_id` NULL 32 条、已设 8 条（全是 FP，由 `scripts/backfill-fp-provenance.mjs` 在本机写入，无迁移）。32 条按可推导性分两类——
+- 先只读盘底（`var/` 探针跑 `SELECT`、跑完即删）：`sources` 40 条，`qualification_id` NULL 32 条、已设 8 条（全是 FP；其中 6 条由迁移登记、由 `scripts/backfill-fp-provenance.mjs` 在本机 UPDATE 补上，另 **2 条只存在于本机**——`source:fp:jafp-2-3-application-outline-pdf` 与 `source:fp:kinzai-fp-faq` 由该脚本 INSERT，没有迁移，所以 CI 空库只有 38 条来源）。32 条按可推导性分两类——
   - **13 条有候选事实**，其 `candidate_facts.qualification_id` 去重后恰好 1 个值 ⇒ 有数据证据；**0 条**跨两个资格。
   - **19 条是「注册而未用」**：`candidate_facts` 0 条且 `snapshots` 也 0 条，库里没有任何证据能推导其资格，只有来源 id 前缀与 `source_type` 表达登记意图。
 - 该列**当前无任何读取方**：`grep` 全仓只有 `scripts/backfill-fp-provenance.mjs:149` 的 `WHERE src.qualification_id IS NULL` 与 `tests/source-provenance-model.test.ts:21` 的「列存在」断言；`services/api/src/public-facts.ts:86`、`scripts/verify-lib.mjs:169`、`apps/admin/src/server.ts:121` 都 join `sources` 但不取该列。⇒ 回填属溯源元数据完整性，不改门禁、不改 API、不改 admin。
@@ -10,7 +10,7 @@
 - 实现：`packages/db/src/seed.ts` 在插完资格与来源后跑一条幂等 `UPDATE sources s SET qualification_id = q.id FROM qualifications q WHERE s.qualification_id IS NULL AND split_part(s.id,':',1)='source' AND split_part(s.id,':',2) = CASE q.slug WHEN 'fundamental-it-engineer' THEN 'fundamental-it' ELSE q.slug END`，并把绑定条数打进原有的 seed 日志行。`CASE` 那支是命名陷阱：基本情報的来源 id 用 `source:fundamental-it:*`，而资格 slug 是 `fundamental-it-engineer`（13 条里 11 条前缀＝派生结果，差的正是这 2 条）。
 - 只留 `qualification_id`，**不填** `content_scope`／`update_cycle`／`parser_adapter`／`default_risk`：这四列无法从来源 id 推导，而那 19 条注册而未用的来源又没有快照证据，填了就是凭空补全（违铁律 1）。`source_scopes` 仍 0 行——它是 0012 设计的权威 N:N 表，等真出现一条来源服务两个资格时再启用。
 - 只读预演（本机开发库，未写库）：该谓词命中 **32/32** 条 NULL、`(source, qualification)` 配对数也是 **32**（无一行匹配两个资格）、未命中 **0** 条；回填后分布 `bookkeeping 15 / fp 15 / takken 1 / gyoseishoshi 3 / it-passport 3 / fundamental-it-engineer 3 = 40`（现为 `fp 8`＋`(NULL) 32`）。
-- 无 DB 用例覆盖：`tests/setup.ts` 删除 `DATABASE_URL`，Vitest 连不到库，seed 又是脚本而非查询层。自证两路——CI 在空库上 `db:seed` 会打印 `bound N sources to their qualification.`（本机尚未 apply，`db:seed` 要写 32 行，需另行授权），以及上面的只读谓词预演。
+- 无 DB 用例覆盖：`tests/setup.ts` 删除 `DATABASE_URL`，Vitest 连不到库，seed 又是脚本而非查询层。自证两路——上面的只读谓词预演，以及 PR #12 的 CI 日志实跑读数：`Seeded 6 stable qualification records (no dynamic facts); bound 38 sources to their qualification.`，即 CI 空库上迁移与 seed 登记的全部 38 条来源都被绑定，**无一条漏网**（本机 40 条比 CI 多那 2 条脚本专有的 FP 来源）。本机尚未 apply（`db:seed` 要 UPDATE 32 行，需另行授权）；`release-gate` 通过 55s。
 - 文档：`docs/data-gate-semantics.md` §11 第 2 项改写为已定口径；`packages/db/migrations/0017_*` 曾按迁移方案建过程稿，验证 seed 落点后已删除，迁移目录仍 0000–0016。
 - 回归读数：`node_modules/.bin/tsc.cmd -p tsconfig.json` 通过（`dist/` 已重建）、Vitest 81/81（10 files）、`node --test scripts/verify-lib.test.mjs` 7/7、`eslint .` 干净、`prettier --check`（项目 `format:check` 的 glob）通过、`verify:all` `status=passed, qualifications=6, passed=6, failed=0`，176 facts（16/15/2/10/58/75）、六资格 API 与页面均 `verified`、`coverageGaps=[]`、`pending_official=0`；本轮未抓取、未写库，Python 侧无改动故未重跑 pytest。
 
