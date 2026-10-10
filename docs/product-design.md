@@ -1286,7 +1286,7 @@ apps/web                 用户网站
 apps/admin               管理后台
 services/api             公开与后台 API
 services/collector       采集调度和下载
-services/parser          资格适配器和提取
+services/parser          资格适配器和提取（目前只落共享候选契约 ParsedCandidate；六条链的提取仍在 services/collector）
 services/validator       校验、冲突与风险判断
 services/publisher       正式事实发布和页面刷新
 packages/schema          共享类型和数据契约
