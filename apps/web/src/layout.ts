@@ -1,4 +1,8 @@
-import { renderIcon, uiStyles } from '../../../packages/ui/src/index.js';
+import {
+  escapeHtml,
+  renderIcon,
+  uiStyles,
+} from '../../../packages/ui/src/index.js';
 import { webStyles } from './styles.js';
 
 export type PublicNavKey =
@@ -38,15 +42,6 @@ const publicNav = [
   { key: 'compare' as const, label: '比較する', href: '/compare/' },
   { key: 'updates' as const, label: '更新情報', href: '/updates/' },
 ];
-
-function escapeHtml(value: string): string {
-  return value
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;');
-}
 
 function renderNavItem(
   item: (typeof publicNav)[number],

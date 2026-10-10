@@ -1,5 +1,18 @@
 # 阶段记录与剩余问题
 
+## 2026-10-10：重复实现与迁移重号的结构性清理（纯代码，未抓取未写库）
+
+- `escapeHtml` 原在 4 处各写一份：`packages/ui/src/index.ts`、`apps/web/src/layout.ts`、`apps/web/src/render.ts` 三份逐字符相同（签名 `(value: string) => string`），`apps/admin/src/server.ts` 那份多一层 `String(value ?? '')` 容错（签名 `(value: unknown) => string`）。现把 `packages/ui` 那份改为 `export function escapeHtml` 作为唯一转义实现，web 两处删本地定义改为从 ui 导入；admin 保留同名本地薄封装只委托一行，其 21 处调用点一字未改。
+- 刻意不合并：`apps/web/src/server.ts` 的 `escapeXml` 把 `'` 编成 `&apos;`（sitemap XML 用），与 HTML 的 `&#39;` 是两种输出，属不同契约而非重复实现，合并会改 sitemap 字节。
+- 等价性自证（不依赖库）：11 个样本（空串、`&<>"'` 混排、日文、`null`／`undefined`／数字／对象）逐一比对 `escapeHtml(String(v ?? ''))` 与两份旧实现，mismatches=0。渲染侧回归由 `tests/web-render.test.ts` 24 项与 `verify:all` 的 web 步骤兜住——后者断言页面正文含状态标签、`gate.pageContains` 与路由 marker，不只是 HTTP 200。
+- 迁移重号：`packages/db/migrations/` 下 `0010_drop_legacy_candidate_unique.sql` 与 `0010_fp_annual_schedule_sources.sql` 同号，后者按下一个空号 `git mv` 为 `0016_fp_annual_schedule_sources.sql`，序号恢复为 0000–0016 无重号无缺口。
+  - 判据：`packages/db/src/migrate.ts` 以**文件名**作 `schema_migrations.name` 主键、`readdir().sort()` 全量顺序执行，序号只是人读的排序提示，引擎不解析；本机开发库 `schema_migrations` 17 行与 17 个文件严格一一对应（无缺档、无孤儿记录），重号从未造成漏跑或错序。
+  - 语义影响：遍历全部迁移，没有任何迁移 `UPDATE sources` 或引用这三行 fp `source:fp:*-schedule` id，故把该文件移到末尾不改变全新库的结果；其内容本身是 `INSERT … ON CONFLICT (id) DO NOTHING`，在已建库上会以新名重跑一次并成 0 行 no-op，旧名记录留在 `schema_migrations` 作无害孤儿（runner 只遍历文件，不校验记录）。
+  - 全新顺序由 CI 独立自证：`release-gate` 每次在空的 `qualification_media_ci` 上 `db:migrate` → `db:seed` → 恢复夹具 → `release:check`。本机未新建临时库（建/删库需另行授权）。
+  - `docs/data-local-snapshot-audit-2026-09-07.md` 引用旧文件名的位置就地注明更名缘由，不改写当时的结论。
+- 更正一条长期记错的口径：`services/parser` **不是空壳**。它含 `pyproject.toml`（`jp-qualification-parser`）、`src/parser/__init__.py` 的 `ParsedCandidate` 桩模型、`tests/test_parser.py` 1 条用例，且被 CI `pip install -e services/parser` 安装、被 README 与 `docs/product-design.md` 列为「资格适配器和提取」层，`test:python` 也显式传它的 `tests` 目录。删或填它属结构决策，不在本轮纯清理范围，因此本轮**未动**。
+- 回归读数：`node_modules/.bin/tsc.cmd -p tsconfig.json` 通过、Vitest 81/81（10 files）、`eslint .` 干净、`prettier --check`（项目 `format:check` 的 glob）通过、`pytest services/collector/tests services/parser/tests` 109 passed、`node --test scripts/verify-lib.test.mjs` 7/7、`verify:all` `status=passed, passed=6/6, failed=0`，176 facts 不变、六资格 API 与页面均 `verified`、`coverageGaps=[]`、`pending_official=0`。
+
 ## 2026-10-10：`rollbackApprovedFact` 维度 join 补 `payment_method`（§11 第 4 项收口）
 
 - `services/api/src/release.ts:69-80` 那条「取上一条 approved revision」的子查询，原先只比 `qualification_id`／`provider_id`／`exam_level_id`／`exam_component`／`delivery_mode`／`exam_year`／`fact_key` 七维，与 0014 迁移把 `payment_method` 纳入 `facts_current_key_idx` 与 `candidate_idempotency_idx` 之后的身份口径不一致。只在 `delivery_mode` 之后加一行 `AND f.payment_method IS NOT DISTINCT FROM c.payment_method`，不重构、不动别的 SQL 与索引。
@@ -68,8 +81,8 @@
 - 2027 年度簿记配点已公告（3 级第1問45／第2問25／第3問30、合計100、合格70以上）⇒ 覆盖年度滚到 2027 前，簿记 3 级 `scoring_method` 需从 `not_applicable` 回改并按三次授权流程重新采集。
 - 历史统计字段（`pass_rate` 等）六资格零官方来源（工作包 F）。
 - `sources.qualification_id` 有 32/40 条为 `NULL`；行政書士入库链不写 `capture_runs`/`source_checks`，与基本情報链路口径不一致（该项已于 2026-10-10 对齐，见上方最新一节）。
-- `services/api/src/release.ts` 的 `rollbackApprovedFact` 维度 join 漏 `payment_method`，与 0014 迁移的 `facts_current_key_idx` 不一致。（已于 2026-10-10 收口，见最上一节。）
-- `escapeHtml` 在 4 处重复定义；迁移目录存在 `0010_` 重号；`services/parser` 仍是空壳。
+- `services/api/src/release.ts` 的 `rollbackApprovedFact` 维度 join 漏 `payment_method`，与 0014 迁移的 `facts_current_key_idx` 不一致。（已于 2026-10-10 收口，见当日「`rollbackApprovedFact` 维度 join 补 `payment_method`」一节。）
+- ~~`escapeHtml` 在 4 处重复定义~~、~~迁移目录存在 `0010_` 重号~~ —— 两项已于 2026-10-10 收口，见当日「重复实现与迁移重号的结构性清理」一节。`services/parser` **更正：它不是空壳**，而是含 `ParsedCandidate` 桩模型与 1 条用例、且被 CI `pip install -e services/parser` 安装、被 README 与 `docs/product-design.md` 列为「资格适配器和提取」层的独立包；删它与否属结构决策，不在纯清理范围。
 
 ## 2026-09-07：阶段 3 技术 SEO 基线
 
