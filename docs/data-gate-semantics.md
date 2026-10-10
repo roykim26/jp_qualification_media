@@ -112,7 +112,7 @@ Why：审核人 ID 放进 URL 就可被任意 `<img src=…>`、浏览器历史�
 ## 11. 尚未闭合的口径问题
 
 1. FE 的科目级事实与契约维度/命名对不上（见 `docs/fundamental-it-engineer-source-contract.md` 门禁告警节），补维度前需先定命名与判级方案。
-2. `sources.qualification_id` 有 32/40 条为 `NULL`，来源→资格关系目前靠候选事实表达。
+2. `sources.qualification_id` 原有 32/40 条 `NULL`，已于 2026-10-10 定口径：回填放在 `packages/db/src/seed.ts`（不放迁移），因为 `qualifications` 的行只由 seed 写入，迁移里的 `UPDATE ... FROM qualifications` 在空库上会匹配 0 行。只填这一列，`content_scope` 等四列继续留 `NULL`（19 条「注册而未用」的来源没有快照证据，不凭空补全）。该列**没有任何读取方**（来源→资格关系仍由 `candidate_facts` 表达），所以回填不改门禁、API 与 admin 行为；`source_scopes` 是 0012 设计的权威 N:N 表，目前 0 行，等出现一条来源服务两个资格时再启用。详见 `docs/stage-log.md` 当日「`sources.qualification_id` 32 条 NULL 的回填落点」一节。
 3. 行政書士入库链已于 2026-10-10 对齐 FE 口径（校验 `capture-report.json`、写 `capture_runs` 与 `snapshots` 全溯源列、写 `source_checks`），并在本机开发库对真实快照重跑一次入库验证通过：真实抓取行就地补全溯源、候选新增 0 条、门禁仍 `6/6`。仍在的只是夹具行（`ci://` object key）按设计不带元数据，见 §5。
 4. `services/api/src/release.ts` 的 `rollbackApprovedFact` 维度 join 已于 2026-10-10 补上 `payment_method`，与 0014 迁移建立的 `facts_current_key_idx` 及候选幂等索引同口径。修前本机读数：按「去掉 `payment_method` 的七维」分组全库恰好 1 组装着 2 条事实（`qualification:takken`／`exam_year=2026`／`fact_key=payment_deadline_rule`，渠道 `convenience_store` 与 `pay_easy`），旧 SQL 在这两条上互相挑到对方渠道的 revision（跨渠道串号），加上 `AND f.payment_method IS NOT DISTINCT FROM c.payment_method` 后两条查询均返回 0 行，即正确抛 `no previous approved revision available`。该函数全仓只有定义、无调用方，属正确性收口，不改门禁、不改线上行为；`tests/setup.ts` 会删除 `DATABASE_URL`，Vitest 连不到库，因此这条 SQL 只有只读探针自证、没有 DB 覆盖。
 5. 历史统计字段（`pass_rate` 等）六资格全为零官方来源，归工作包 F。
