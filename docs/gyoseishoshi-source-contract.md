@@ -58,11 +58,11 @@
 
 ## 采集、入库、批准是三次独立授权
 
-| 阶段 | 入口                                                       | 授权开关                                                                                                          | 写什么                                                                                                                        |
-| ---- | ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| 采集 | `services/collector/src/collector/capture_gyoseishoshi.py` | `GYOSEISHOSHI_LIVE_AUTHORIZED=1`                                                                                  | 只写 `var/official-snapshots/gyoseishoshi/` 与 `capture-report.json`，不连数据库                                              |
-| 入库 | `services/collector/src/collector/ingest_gyoseishoshi.py`  | `GYOSEISHOSHI_LOCAL_WRITE=1`，且 `DATABASE_URL` 主机必须是 localhost/127.0.0.1，且 `NODE_ENV` 不得为 `production` | `capture_runs` + `snapshots`（含全溯源列）+ `source_checks` + `candidate_facts`（`pending_review`），返回 `approval: not_run` |
-| 批准 | `apps/admin/src/server.ts` 审核队列                        | 请求头 `x-reviewer-id`                                                                                            | `reviews`、`fact_revisions`、`facts`、`change_events`                                                                         |
+| 阶段 | 入口                                                       | 授权开关                                                                                                          | 写什么                                                                                                                                      |
+| ---- | ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| 采集 | `services/collector/src/collector/capture_gyoseishoshi.py` | `GYOSEISHOSHI_LIVE_AUTHORIZED=1`                                                                                  | 只写 `var/official-snapshots/gyoseishoshi/` 与 `capture-report.json`（按 `source_id` 合并，共用 `collector/capture_report.py`），不连数据库 |
+| 入库 | `services/collector/src/collector/ingest_gyoseishoshi.py`  | `GYOSEISHOSHI_LOCAL_WRITE=1`，且 `DATABASE_URL` 主机必须是 localhost/127.0.0.1，且 `NODE_ENV` 不得为 `production` | `capture_runs` + `snapshots`（含全溯源列）+ `source_checks` + `candidate_facts`（`pending_review`），返回 `approval: not_run`               |
+| 批准 | `apps/admin/src/server.ts` 审核队列                        | 请求头 `x-reviewer-id`                                                                                            | `reviews`、`fact_revisions`、`facts`、`change_events`                                                                                       |
 
 入库前必须确认快照路径在 `var/official-snapshots/gyoseishoshi` 之下且后缀为 `.html`，否则 `ingest_snapshot()` 直接拒绝；解析出问题（`structure_changed`）时以 `snapshot parse failed` 报错退出，不写半条数据。
 
