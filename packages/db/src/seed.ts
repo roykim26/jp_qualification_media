@@ -33,8 +33,23 @@ try {
   await client.query(
     "INSERT INTO sources (id, institution_id, canonical_url, allowed_domain, source_type, active) VALUES ('source:it-passport:ipa-exam', 'institution:ipa', 'https://www.ipa.go.jp/shiken/', 'www.ipa.go.jp', 'official_exam_information', true), ('source:it-passport:jitec-home', 'institution:ipa', 'https://www3.jitec.ipa.go.jp/JitesCbt/', 'www3.jitec.ipa.go.jp', 'official_cbt_entry', true), ('source:it-passport:jitec-application', 'institution:ipa', 'https://www3.jitec.ipa.go.jp/JitesCbt/html/application/applies.html', 'www3.jitec.ipa.go.jp', 'official_cbt_application', true) ON CONFLICT (id) DO NOTHING",
   );
+  // Source ids carry the qualification as `source:<slug>:...`, but 基本情報
+  // registers as `source:fundamental-it:*` while its slug is
+  // `fundamental-it-engineer`.
+  const bound = await client.query(
+    `UPDATE sources s
+        SET qualification_id = q.id
+       FROM qualifications q
+      WHERE s.qualification_id IS NULL
+        AND split_part(s.id, ':', 1) = 'source'
+        AND split_part(s.id, ':', 2) = CASE q.slug
+            WHEN 'fundamental-it-engineer' THEN 'fundamental-it'
+            ELSE q.slug
+          END
+      RETURNING s.id`,
+  );
   console.log(
-    `Seeded ${launchQualifications.length} stable qualification records (no dynamic facts).`,
+    `Seeded ${launchQualifications.length} stable qualification records (no dynamic facts); bound ${bound.rowCount} sources to their qualification.`,
   );
 } finally {
   await client.end();
