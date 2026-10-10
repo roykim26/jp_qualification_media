@@ -1,5 +1,18 @@
 # 阶段记录与剩余问题
 
+## 2026-10-10：`services/parser` 补齐为共享候选契约（只动 Python，未抓取未写库）
+
+- 这一项是上一轮留下的结构决策（「删或填」）。两条路的对比：
+  - **填成真实适配层**（六条链的候选 dataclass 全改为消费 `services/parser` 的契约）：能消除可见的字段漂移——`TakkenFactCandidate` 带 `exam_year` 但不带 `value_type`，`BookkeepingFactCandidate` 反之，共同字段 `fact_key`／`normalized_value`／`display_value`／`source_id`／`source_snapshot_id`／`risk_level`／`status`／`synthetic` 在六个文件里各抄一遍。代价是要动六条采集+入库链，而候选 id 由字段值算出，任何口径漂移都会撞门禁（`requireNoOfficialPending` 对非合成 pending 是硬失败）。
+  - **连同 CI／README／docs 引用一起移除**：改动面实测 6 处——`.github/workflows/release-gate.yml:47` 的 `cache-dependency-path` 与 `:50` 的 `pip install -e services/parser`、`package.json:15` 的 `test:python`、`services/collector/pyproject.toml` 的 `pythonpath = ["src", "../parser/src"]`、`README.md:60` 目录清单、`docs/product-design.md:1289`。且 §22.2 服务边界把 `services/parser`／`services/validator`／`services/publisher` 并列成规划层，只删第一个会留下「同一张表里两个还没建、一个已删」的不一致。
+- 取**折中：本轮只把契约本身补实，不动六条链、不动 CI**。这样包不再是「会误导的桩」，但门禁暴露面为零。
+- 改前取证：`grep -rn ParsedCandidate` 全仓只命中 `services/parser/src/parser/__init__.py` 的定义与它自己那条用例，六条 collector 链无一处 import ⇒ 扩字段属纯增量，不会改变任何现有行为。
+- `ParsedCandidate` 现与 `packages/schema` 的 `candidateFactSchema`（`packages/schema/src/index.ts:60-79`）同口径：必填 `fact_key`／`exam_year`／`value_type`／`normalized_value`／`display_value`／`source_id`／`source_snapshot_id`，身份维度 `provider_id`／`exam_level_id`／`exam_component`／`delivery_mode`／`payment_method` 可空（含当日 `rollbackApprovedFact` 补的 `payment_method`，与 0014 索引一致），`value_type`／`status`／`risk_level` 用与 TS 侧逐字对齐的 `Literal` 枚举，`extra='forbid'` 保留。
+- 刻意保留的差异：`synthetic` 默认 **True**，与六条 collector dataclass 一致，而 TS 侧默认 `false`。两者方向不同是安全的——公开 API 只放行 `synthetic = false` 的行（`services/api/src/public-facts.ts:95`），Python 采集侧默认按夹具处理，漏标只会让事实进不了公开面，不会把夹具漏进公开面。
+- 用例 1 → 7：默认为合成、三条必填溯源（空串与缺失各断一次，参数化 3 项）、三个枚举越界各 1 项、含 `payment_method` 的全身份维度、`extra='forbid'` 拒未知字段。
+- 回归读数：`uv run --project services/collector --extra test python -m pytest services/collector/tests services/parser/tests` **115 passed**（109 → 115，+6）、`eslint .` 干净、`prettier --check`（项目 `format:check` 的 glob）通过、`verify:all` `status=passed, passed=6/6, failed=0`，176 facts 与六资格 `coverageGaps=[]` 不变（本轮未改 TypeScript，`dist/` 未变）。跑 pytest 会生成 `services/collector/uv.lock`，按既有口径提交前删除。
+- 未做（等需求出现再动）：让六条链改为继承/消费该契约。真要做时必须先离线核算候选 id 与快照哈希不变，否则门禁硬失败。
+
 ## 2026-10-10：重复实现与迁移重号的结构性清理（纯代码，未抓取；本机开发库按授权跑过一次 `db:migrate`）
 
 - `escapeHtml` 原在 4 处各写一份：`packages/ui/src/index.ts`、`apps/web/src/layout.ts`、`apps/web/src/render.ts` 三份逐字符相同（签名 `(value: string) => string`），`apps/admin/src/server.ts` 那份多一层 `String(value ?? '')` 容错（签名 `(value: unknown) => string`）。现把 `packages/ui` 那份改为 `export function escapeHtml` 作为唯一转义实现，web 两处删本地定义改为从 ui 导入；admin 保留同名本地薄封装只委托一行，其 21 处调用点一字未改。
@@ -16,7 +29,7 @@
     - `verify:all` 迁移后复跑：`status=passed, passed=6/6, failed=0`，176 facts（六资格 16/15/2/10/58/75）不变，六资格 API 与页面均 `verified`，`coverageGaps=[]`。
     - 旧名那 1 条孤儿记录保留未删：删除是又一次库写入，且 runner 不校验记录，留着不影响任何判据；如需清理要另行授权。本轮未新建、也未删除临时库。
   - `docs/data-local-snapshot-audit-2026-09-07.md` 引用旧文件名的位置就地注明更名缘由，不改写当时的结论。
-- 更正一条长期记错的口径：`services/parser` **不是空壳**。它含 `pyproject.toml`（`jp-qualification-parser`）、`src/parser/__init__.py` 的 `ParsedCandidate` 桩模型、`tests/test_parser.py` 1 条用例，且被 CI `pip install -e services/parser` 安装、被 README 与 `docs/product-design.md` 列为「资格适配器和提取」层，`test:python` 也显式传它的 `tests` 目录。删或填它属结构决策，不在本轮纯清理范围，因此本轮**未动**。
+- 更正一条长期记错的口径：`services/parser` **不是空壳**。它含 `pyproject.toml`（`jp-qualification-parser`）、`src/parser/__init__.py` 的 `ParsedCandidate` 桩模型、`tests/test_parser.py` 1 条用例，且被 CI `pip install -e services/parser` 安装、被 README 与 `docs/product-design.md` 列为「资格适配器和提取」层，`test:python` 也显式传它的 `tests` 目录。删或填它属结构决策，不在本轮纯清理范围，因此本轮**未动**。（后续：同日已选「填」的收敛版，见顶部「`services/parser` 补齐为共享候选契约」一节。）
 - 回归读数：`node_modules/.bin/tsc.cmd -p tsconfig.json` 通过、Vitest 81/81（10 files）、`eslint .` 干净、`prettier --check`（项目 `format:check` 的 glob）通过、`pytest services/collector/tests services/parser/tests` 109 passed、`node --test scripts/verify-lib.test.mjs` 7/7、`verify:all` `status=passed, passed=6/6, failed=0`，176 facts 不变、六资格 API 与页面均 `verified`、`coverageGaps=[]`、`pending_official=0`。
 
 ## 2026-10-10：`rollbackApprovedFact` 维度 join 补 `payment_method`（§11 第 4 项收口）
@@ -88,7 +101,7 @@
 - 历史统计字段（`pass_rate` 等）六资格零官方来源（工作包 F）。
 - `sources.qualification_id` 有 32/40 条为 `NULL`；行政書士入库链不写 `capture_runs`/`source_checks`，与基本情報链路口径不一致（该项已于 2026-10-10 对齐，见上方最新一节）。
 - `services/api/src/release.ts` 的 `rollbackApprovedFact` 维度 join 漏 `payment_method`，与 0014 迁移的 `facts_current_key_idx` 不一致。（已于 2026-10-10 收口，见当日「`rollbackApprovedFact` 维度 join 补 `payment_method`」一节。）
-- ~~`escapeHtml` 在 4 处重复定义~~、~~迁移目录存在 `0010_` 重号~~ —— 两项已于 2026-10-10 收口，见当日「重复实现与迁移重号的结构性清理」一节。`services/parser` **更正：它不是空壳**，而是含 `ParsedCandidate` 桩模型与 1 条用例、且被 CI `pip install -e services/parser` 安装、被 README 与 `docs/product-design.md` 列为「资格适配器和提取」层的独立包；删它与否属结构决策，不在纯清理范围。
+- ~~`escapeHtml` 在 4 处重复定义~~、~~迁移目录存在 `0010_` 重号~~ —— 两项已于 2026-10-10 收口，见当日「重复实现与迁移重号的结构性清理」一节。`services/parser` **更正：它不是空壳**，而是含 `ParsedCandidate` 桩模型与 1 条用例、且被 CI `pip install -e services/parser` 安装、被 README 与 `docs/product-design.md` 列为「资格适配器和提取」层的独立包；删它与否属结构决策，不在纯清理范围（同日已按「填」的收敛版收口，见顶部）。
 
 ## 2026-09-07：阶段 3 技术 SEO 基线
 
