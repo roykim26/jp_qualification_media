@@ -1,12 +1,21 @@
 # 阶段记录与剩余问题
 
+## 2026-10-10：报告合并推广到基本情報与宅建，六条采集链全部共用
+
+- `capture_fundamental_it.py` 与 `capture_takken.py` 的三个采集入口（`capture_registered_source()`、`capture_directly_cited_sources()`、`capture_directly_cited_documents()`）全部改用共享的 `write_capture_report()`；宅建两份 directly-cited 报告各按自己的文件名独立合并，新增模块常量 `DIRECTLY_CITED_REPORT`、`DIRECTLY_CITED_DOCUMENT_REPORT` 承载文件名。至此六条采集链同一份语义，`docs/data-gate-semantics.md` §11 第 7 项收口。
+- 宅建是这次风险最高的一条：`capture_directly_cited_sources()` 的 `source_ids` 允许只传子集，旧实现会把未参与本次运行的来源记录整份抹掉，磁盘快照仍在但 `ingest_takken_directly_cited.py` 的 `rows[capture_id]` 直接 KeyError、`ingest_takken.py` 的 `capture_record()` 判定「无报告」。快照一直是内容寻址文件名，被覆盖的只有报告。
+- 读取侧未改动：`ingest_fundamental_it.py`、`ingest_takken.py` 的 `capture_record()` 与 `ingest_takken_directly_cited.py` 都按 `source_id` 在 `results` 里取记录，合并带入的历史条目不影响选取，且陈旧记录会撞 sha256 校验被拒，不会静默用旧内容入库。
+- 用例 +4：`test_fundamental_it_capture.py` 加 1 项（外部来源记录在合并后保留；顺手把假 fetcher 提为模块级 `_FakeFetcher` 并抽出播种报告的 `_seed_foreign_record`）；`test_takken_capture.py` 加 3 项（注册来源报告保留、只跑 2／6 个 directly-cited 来源时第 3 条记录保留、document 报告保留），共用 `_seed_offline_report` 与 `_offline_fetcher`。
+- 文档同步：`docs/data-gate-semantics.md`（§8 采集行改为六条链、§10 Python 读数 105→109、§11 第 7 项改写为已收口）、`docs/fundamental-it-engineer-source-contract.md`（采集行注明按 `source_id` 合并；另更正校验口径——`ingest_fundamental_it.py` 的 `capture_record()` 实为**四重**，原文写成三重、漏了「报告必须带 `content_hash` 与 `captured_at`」那条）、`docs/fp-source-contract.md`（共用链数口径更正）。
+- 本轮纯 Python + 文档，未抓取、未写库，事实计数不变。回归读数见下一行：`pytest -p no:cacheprovider --basetemp=.pytest-basetemp services/collector/tests services/parser/tests` 109 passed、Vitest 81/81、`node --test scripts/verify-lib.test.mjs` 7/7、`eslint .` 干净、`tsc -p tsconfig.json` 通过、`prettier --check`（项目 `format:check` 的 glob）通过、`verify:all` `status=passed, passed=6/6, failed=0`。
+
 ## 2026-10-10：采集报告合并抽为共享模块，推广到行政書士／簿记／IT Passport
 
 - 新增 `services/collector/src/collector/capture_report.py`：`merge_capture_report()`（按 `source_id` 合并，本次运行里没有 `content_hash` 的失败记录不会抹掉上一次成功记录；该来源此前没落盘过才写入失败记录）与 `write_capture_report()`（合并 + 落盘 + 返回报告）。计数字段定为 `source_count`＝本次运行条数、`retained_source_count`＝文件累计保留条数，`results` 为合并后的全集，`captured_at`/`candidate_ingest` 含义不变。
 - `capture_fp.py` 删除本地那份实现改用共享模块；`capture_gyoseishoshi.py`、`capture_bookkeeping.py`、`capture_it_passport.py` 的报告写入同批换成 `write_capture_report()`，四链从此共用一份语义，不再整份覆盖。
 - 读取侧无需改动：`ingest_fp.py`／`ingest_gyoseishoshi.py`／`ingest_bookkeeping.py`／`ingest_it_passport_analysis.py` 的 `capture_record()` 都是按 `source_id`（it-passport 还叠加 `content_hash`）在 `results` 里取记录，合并后的多余条目不影响选取；陈旧记录会撞哈希校验而被拒绝，不会静默用旧内容入库。
 - 用例：新增 `tests/test_capture_report.py` 5 项（保留未参与本次运行的来源、同来源新记录替换旧的、失败保留上次成功记录、无历史时失败也留痕、`source_count`/`retained_source_count` 与落盘内容一致）；`tests/test_gyoseishoshi_capture.py`、`tests/test_bookkeeping_capture.py` 各加 1 项用假 fetcher 真跑一次采集，验证这两条链的报告确实保留了外部来源记录。FP 原有 2 项合并用例移入共享模块测试，`test_fp_capture.py` 回到只测 FP 自身契约。
-- 尚未统一：基本情報 `capture_fundamental_it.py` 与宅建 `capture_takken.py`（含两份 directly-cited 报告）仍是整份覆盖 —— 前者快照是内容寻址文件名所以文件不被覆盖，但报告同样会丢。已记在 `docs/data-gate-semantics.md` §11 第 7 项。
+- 尚未统一：基本情報 `capture_fundamental_it.py` 与宅建 `capture_takken.py`（含两份 directly-cited 报告）仍是整份覆盖 —— 前者快照是内容寻址文件名所以文件不被覆盖，但报告同样会丢。已记在 `docs/data-gate-semantics.md` §11 第 7 项。**该项已由上一节于同日收口，六条采集链现全部共用同一实现。**
 - 文档同步：`docs/fp-source-contract.md`（合并段改写为共享模块口径、键命名更正）、`docs/gyoseishoshi-source-contract.md`（采集行）、`docs/data-gate-semantics.md`（§8 采集行、§10 Python 计数、§11 新增第 7 项）。
 - 回归读数：`pytest -p no:cacheprovider --basetemp=.pytest-basetemp services/collector/tests services/parser/tests` 105 passed、Vitest 81/81、`node --test scripts/verify-lib.test.mjs` 7/7、`eslint .` 干净、build 通过、`prettier --check`（项目 `format:check` glob）通过、`verify:all` `status=passed, passed=6/6, failed=0`（本轮纯 Python + 文档，未写库，事实计数不变）。
 

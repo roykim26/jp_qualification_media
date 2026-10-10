@@ -2,6 +2,7 @@ import pytest
 from hashlib import sha256
 import json
 
+import collector.capture_takken as module
 import collector.ingest_takken as ingest_module
 from collector.capture_takken import (
     DIRECTLY_CITED_CAPTURE_DOCUMENTS,
@@ -42,6 +43,100 @@ def test_takken_capture_uses_immutable_hash_named_snapshot(monkeypatch, tmp_path
 
     assert report["candidate_ingest"] == "not_run"
     assert snapshot.read_bytes() == body
+
+
+def _seed_offline_report(tmp_path, source_id, report_name, url):
+    foreign = {
+        "source_id": source_id,
+        "status": "ok",
+        "status_code": 200,
+        "attempts": 1,
+        "captured_at": "2026-09-08T02:10:08+00:00",
+        "url": url,
+        "content_hash": "c" * 64,
+        "snapshot_path": str(tmp_path / "legacy.html"),
+    }
+    (tmp_path / report_name).write_text(
+        json.dumps({"results": [foreign], "source_count": 1}), encoding="utf-8"
+    )
+
+
+def _offline_fetcher(body):
+    class FakeFetcher:
+        def __init__(self, policy, transport=None):
+            self.policy = policy
+
+        def fetch(self, url):
+            return type("Result", (), {"url": url, "status": "ok", "status_code": 200,
+                                       "attempts": 1, "body": body, "error": None})()
+
+        def close(self):
+            pass
+
+    return FakeFetcher
+
+
+def test_registered_capture_keeps_older_records(monkeypatch, tmp_path):
+    monkeypatch.setenv("TAKKEN_LIVE_AUTHORIZED", "1")
+    _seed_offline_report(
+        tmp_path,
+        "capture-only:takken:legacy",
+        "capture-report.json",
+        "https://www.retio.or.jp/exam/legacy/",
+    )
+    monkeypatch.setattr(
+        "collector.capture_takken.SafeFetcher", _offline_fetcher(b"<html>official mock</html>")
+    )
+
+    report = capture_registered_source(tmp_path)
+
+    assert report["source_count"] == 1
+    assert report["retained_source_count"] == 2
+    assert "capture-only:takken:legacy" in {item["source_id"] for item in report["results"]}
+
+
+def test_directly_cited_partial_run_keeps_the_other_sources(monkeypatch, tmp_path):
+    monkeypatch.setenv("TAKKEN_LIVE_AUTHORIZED", "1")
+    report_name = module.DIRECTLY_CITED_REPORT
+    _seed_offline_report(
+        tmp_path,
+        "capture-only:takken:past-questions",
+        report_name,
+        "https://www.retio.or.jp/exam/past_ques_ans/other/",
+    )
+    monkeypatch.setattr(
+        module, "SafeFetcher", _offline_fetcher(b"<html>official mock</html>")
+    )
+
+    report = capture_directly_cited_sources(
+        tmp_path, ("capture-only:takken:faq", "capture-only:takken:schedule")
+    )
+
+    assert report["source_count"] == 2
+    assert report["retained_source_count"] == 3
+    ids = {item["source_id"] for item in report["results"]}
+    assert ids == {
+        "capture-only:takken:faq",
+        "capture-only:takken:schedule",
+        "capture-only:takken:past-questions",
+    }
+
+
+def test_document_capture_keeps_older_records(monkeypatch, tmp_path):
+    monkeypatch.setenv("TAKKEN_LIVE_AUTHORIZED", "1")
+    _seed_offline_report(
+        tmp_path,
+        "capture-only:takken:legacy-document",
+        module.DIRECTLY_CITED_DOCUMENT_REPORT,
+        "https://www.retio.or.jp/exam/legacy.pdf",
+    )
+    monkeypatch.setattr(module, "SafeFetcher", _offline_fetcher(b"%PDF-official-mock"))
+
+    report = capture_directly_cited_documents(tmp_path)
+
+    assert report["source_count"] == 1
+    assert report["retained_source_count"] == 2
+    assert (tmp_path / module.DIRECTLY_CITED_DOCUMENT_REPORT).exists()
 
 
 def test_takken_ingest_requires_reported_raw_hash(monkeypatch, tmp_path):

@@ -59,13 +59,13 @@ FE 自令和 5 年度起全年以 CBT 随时实施，没有「统一考试日 + 
 
 ## 采集、入库、批准是三次独立授权
 
-| 阶段 | 入口                        | 授权开关                                                        | 写什么                                                                                                                                    |
-| ---- | --------------------------- | --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| 采集 | `capture_fundamental_it.py` | `FUNDAMENTAL_IT_LIVE_AUTHORIZED=1`                              | 只写 `var/official-snapshots/fundamental-it/<sha256>.html` 与 `capture-report.json`                                                       |
-| 入库 | `ingest_fundamental_it.py`  | `FUNDAMENTAL_IT_LOCAL_WRITE=1` + localhost 库 + 非 `production` | `capture_runs`、`snapshots`（含 `original_url`/`http_status`/`retrieved_at_jst`）、`source_checks`、`candidate_facts`（`pending_review`） |
-| 批准 | `apps/admin/src/server.ts`  | 请求头 `x-reviewer-id`                                          | `reviews`、`fact_revisions`、`facts`、`change_events`                                                                                     |
+| 阶段 | 入口                        | 授权开关                                                        | 写什么                                                                                                                                                       |
+| ---- | --------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 采集 | `capture_fundamental_it.py` | `FUNDAMENTAL_IT_LIVE_AUTHORIZED=1`                              | 只写 `var/official-snapshots/fundamental-it/<sha256>.html` 与 `capture-report.json`（按 `source_id` 合并，共用 `collector/capture_report.py`，不再整份覆盖） |
+| 入库 | `ingest_fundamental_it.py`  | `FUNDAMENTAL_IT_LOCAL_WRITE=1` + localhost 库 + 非 `production` | `capture_runs`、`snapshots`（含 `original_url`/`http_status`/`retrieved_at_jst`）、`source_checks`、`candidate_facts`（`pending_review`）                    |
+| 批准 | `apps/admin/src/server.ts`  | 请求头 `x-reviewer-id`                                          | `reviews`、`fact_revisions`、`facts`、`change_events`                                                                                                        |
 
-入库前有 `capture_record()` 三重校验：报告里该来源必须 `status=ok` 且 `status_code=200`；报告中的 `snapshot_path` 必须与入库路径解析后一致；文件原始字节的 sha256 必须等于报告的 `content_hash`。任一条不符即抛错、零写入。快照文件名用内容哈希，天然保留历史版本。
+入库前有 `capture_record()` 四重校验：报告里该来源必须 `status=ok` 且 `status_code=200`；报告中的 `snapshot_path` 必须与入库路径解析后一致；报告必须同时带 `content_hash` 与 `captured_at`；文件原始字节的 sha256 必须等于报告的 `content_hash`（适配器解析出的哈希还会再与报告比对一次）。任一条不符即抛错、零写入。快照文件名用内容哈希，天然保留历史版本。
 
 ## 已知剩余项
 
