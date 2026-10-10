@@ -1,5 +1,18 @@
 # 阶段记录与剩余问题
 
+## 2026-10-10：`rollbackApprovedFact` 维度 join 补 `payment_method`（§11 第 4 项收口）
+
+- `services/api/src/release.ts:69-80` 那条「取上一条 approved revision」的子查询，原先只比 `qualification_id`／`provider_id`／`exam_level_id`／`exam_component`／`delivery_mode`／`exam_year`／`fact_key` 七维，与 0014 迁移把 `payment_method` 纳入 `facts_current_key_idx` 与 `candidate_idempotency_idx` 之后的身份口径不一致。只在 `delivery_mode` 之后加一行 `AND f.payment_method IS NOT DISTINCT FROM c.payment_method`，不重构、不动别的 SQL 与索引。
+- 只读探针前后对照（本机开发库，脚本放 `var/`、只跑 `SELECT`、跑完即删，未写库）：
+  - 按「去掉 `payment_method` 的七维」分组，176 条事实中恰好 **1 组**装着 2 条事实——`qualification:takken`／`exam_year=2026`／`fact_key=payment_deadline_rule`，渠道分别 `convenience_store` 与 `pay_easy`；两条各自只有 **1 条同渠道** approved revision。
+  - 修前：`convenience_store` 那条查询返回 1 行，挑中的是 `pay_easy` 的 revision id；`pay_easy` 那条反之——即跨渠道串号，会把事实回退到另一条支付渠道的口径上。
+  - 修后：两条查询都返回 **0 行**，函数按预期抛 `no previous approved revision available`，这是正确行为（该维度组合下确实不存在「同渠道的上一条」）。
+  - 其余计数复确认：`facts` approved 176、带渠道 2；`candidate_facts` 281、带渠道 2；非合成 `pending_review` 0。
+- 无测试覆盖：`rollbackApprovedFact` 全仓只有定义、无调用方（`grep -rn rollbackApprovedFact` 仅命中定义与 `dist/` 编译产物），且 `tests/setup.ts` 会 `delete process.env.DATABASE_URL`，Vitest 一律连不到库。这条 SQL 属纯 DB 行为，只由上述只读探针自证，未写 mock 用例，也没有不依赖库的纯逻辑可覆盖。
+- 该函数不参与门禁、不改线上行为；事实计数与 `verify:all` 结果均不变。
+- 文档同步：`docs/data-gate-semantics.md` §11 第 4 项改写为已收口并记下前后读数；`docs/stage-log.md` 2026-10-09 节「真实剩余项」同一条就地标注。
+- 回归读数：`node_modules/.bin/tsc.cmd -p tsconfig.json` 通过、Vitest 81/81（10 files）、`pytest services/collector/tests services/parser/tests` 109 passed、`node --test scripts/verify-lib.test.mjs` 7/7、`eslint .` 干净、`prettier --check`（项目 `format:check` 的 glob）通过、`verify:all` `status=passed, passed=6/6, failed=0`，六资格 API/页面均 `verified`、`coverageGaps=[]`、`pending_official=0`。
+
 ## 2026-10-10：报告合并推广到基本情報与宅建，六条采集链全部共用
 
 - `capture_fundamental_it.py` 与 `capture_takken.py` 的三个采集入口（`capture_registered_source()`、`capture_directly_cited_sources()`、`capture_directly_cited_documents()`）全部改用共享的 `write_capture_report()`；宅建两份 directly-cited 报告各按自己的文件名独立合并，新增模块常量 `DIRECTLY_CITED_REPORT`、`DIRECTLY_CITED_DOCUMENT_REPORT` 承载文件名。至此六条采集链同一份语义，`docs/data-gate-semantics.md` §11 第 7 项收口。
@@ -55,7 +68,7 @@
 - 2027 年度簿记配点已公告（3 级第1問45／第2問25／第3問30、合計100、合格70以上）⇒ 覆盖年度滚到 2027 前，簿记 3 级 `scoring_method` 需从 `not_applicable` 回改并按三次授权流程重新采集。
 - 历史统计字段（`pass_rate` 等）六资格零官方来源（工作包 F）。
 - `sources.qualification_id` 有 32/40 条为 `NULL`；行政書士入库链不写 `capture_runs`/`source_checks`，与基本情報链路口径不一致（该项已于 2026-10-10 对齐，见上方最新一节）。
-- `services/api/src/release.ts` 的 `rollbackApprovedFact` 维度 join 漏 `payment_method`，与 0014 迁移的 `facts_current_key_idx` 不一致。
+- `services/api/src/release.ts` 的 `rollbackApprovedFact` 维度 join 漏 `payment_method`，与 0014 迁移的 `facts_current_key_idx` 不一致。（已于 2026-10-10 收口，见最上一节。）
 - `escapeHtml` 在 4 处重复定义；迁移目录存在 `0010_` 重号；`services/parser` 仍是空壳。
 
 ## 2026-09-07：阶段 3 技术 SEO 基线
