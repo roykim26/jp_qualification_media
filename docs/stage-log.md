@@ -1,14 +1,20 @@
 # 阶段记录与剩余问题
 
-## 2026-10-10：重复实现与迁移重号的结构性清理（纯代码，未抓取未写库）
+## 2026-10-10：重复实现与迁移重号的结构性清理（纯代码，未抓取；本机开发库按授权跑过一次 `db:migrate`）
 
 - `escapeHtml` 原在 4 处各写一份：`packages/ui/src/index.ts`、`apps/web/src/layout.ts`、`apps/web/src/render.ts` 三份逐字符相同（签名 `(value: string) => string`），`apps/admin/src/server.ts` 那份多一层 `String(value ?? '')` 容错（签名 `(value: unknown) => string`）。现把 `packages/ui` 那份改为 `export function escapeHtml` 作为唯一转义实现，web 两处删本地定义改为从 ui 导入；admin 保留同名本地薄封装只委托一行，其 21 处调用点一字未改。
 - 刻意不合并：`apps/web/src/server.ts` 的 `escapeXml` 把 `'` 编成 `&apos;`（sitemap XML 用），与 HTML 的 `&#39;` 是两种输出，属不同契约而非重复实现，合并会改 sitemap 字节。
 - 等价性自证（不依赖库）：11 个样本（空串、`&<>"'` 混排、日文、`null`／`undefined`／数字／对象）逐一比对 `escapeHtml(String(v ?? ''))` 与两份旧实现，mismatches=0。渲染侧回归由 `tests/web-render.test.ts` 24 项与 `verify:all` 的 web 步骤兜住——后者断言页面正文含状态标签、`gate.pageContains` 与路由 marker，不只是 HTTP 200。
 - 迁移重号：`packages/db/migrations/` 下 `0010_drop_legacy_candidate_unique.sql` 与 `0010_fp_annual_schedule_sources.sql` 同号，后者按下一个空号 `git mv` 为 `0016_fp_annual_schedule_sources.sql`，序号恢复为 0000–0016 无重号无缺口。
-  - 判据：`packages/db/src/migrate.ts` 以**文件名**作 `schema_migrations.name` 主键、`readdir().sort()` 全量顺序执行，序号只是人读的排序提示，引擎不解析；本机开发库 `schema_migrations` 17 行与 17 个文件严格一一对应（无缺档、无孤儿记录），重号从未造成漏跑或错序。
-  - 语义影响：遍历全部迁移，没有任何迁移 `UPDATE sources` 或引用这三行 fp `source:fp:*-schedule` id，故把该文件移到末尾不改变全新库的结果；其内容本身是 `INSERT … ON CONFLICT (id) DO NOTHING`，在已建库上会以新名重跑一次并成 0 行 no-op，旧名记录留在 `schema_migrations` 作无害孤儿（runner 只遍历文件，不校验记录）。
-  - 全新顺序由 CI 独立自证：`release-gate` 每次在空的 `qualification_media_ci` 上 `db:migrate` → `db:seed` → 恢复夹具 → `release:check`。PR #9 的 CI 日志实测 **17 条 `Applied`**，其中 `Applied 0016_fp_annual_schedule_sources.sql.` 紧随 `0015` 之后、末位应用无报错，整链 `release-gate pass 58s`。本机未新建临时库（建/删库需另行授权）。
+  - 判据：`packages/db/src/migrate.ts` 以**文件名**作 `schema_migrations.name` 主键、`readdir().sort()` 全量顺序执行，序号只是人读的排序提示，引擎不解析；本机开发库 `schema_migrations` 17 行与 17 个文件严格一一对应（无缺档、无孤儿记录），重号从未造成漏跑或错序。（此为本机跑 `db:migrate` 之前的读数；跑后见下。）
+  - 语义影响：遍历全部迁移，没有任何迁移 `UPDATE sources` 或引用这三行 fp `source:fp:*-schedule` id，故把该文件移到末尾不改变全新库的结果；其内容本身是 `INSERT … ON CONFLICT (id) DO NOTHING`，在已建库上会以新名重跑一次并成 0 行 no-op（下文本机实测已钉死），旧名记录留在 `schema_migrations` 作无害孤儿（runner 只遍历文件，不校验记录）。
+  - 全新顺序由 CI 独立自证：`release-gate` 每次在空的 `qualification_media_ci` 上 `db:migrate` → `db:seed` → 恢复夹具 → `release:check`。PR #9 的 CI 日志实测 **17 条 `Applied`**，其中 `Applied 0016_fp_annual_schedule_sources.sql.` 紧随 `0015` 之后、末位应用无报错，整链 `release-gate pass 58s`。
+  - 本机开发库实测（2026-10-10，经授权执行，是本轮唯一的库写入）：命令 `NODE_ENV=development DATABASE_URL=postgresql://qualification_dev:qualification_dev@localhost:5432/qualification_media node_modules/.bin/tsx.cmd packages/db/src/migrate.ts`，全部输出只有一行 `Applied 0016_fp_annual_schedule_sources.sql.`，即重跑确实按新名发生且为 0 行 no-op。前后读数：
+    - `schema_migrations` 17 → **18** 行：旧名 `0010_fp_annual_schedule_sources.sql`（@2026-09-11T01:38:04）保留，新名 `0016_fp_annual_schedule_sources.sql`（@2026-10-10T13:36:48）新增——正是 runner「只认文件名、不校验记录」的形态。
+    - `sources` 40 → **40**，三行 `source:fp:*-schedule` 逐字段未变（`ON CONFLICT (id) DO NOTHING` 生效，未覆写）。
+    - `facts` approved 176 → **176**；`candidate_facts` 281 → **281**；approved `fact_revisions` 268 → **268**；`change_events` 176 → **176**；非合成 `pending_review` 0 → **0**。
+    - `verify:all` 迁移后复跑：`status=passed, passed=6/6, failed=0`，176 facts（六资格 16/15/2/10/58/75）不变，六资格 API 与页面均 `verified`，`coverageGaps=[]`。
+    - 旧名那 1 条孤儿记录保留未删：删除是又一次库写入，且 runner 不校验记录，留着不影响任何判据；如需清理要另行授权。本轮未新建、也未删除临时库。
   - `docs/data-local-snapshot-audit-2026-09-07.md` 引用旧文件名的位置就地注明更名缘由，不改写当时的结论。
 - 更正一条长期记错的口径：`services/parser` **不是空壳**。它含 `pyproject.toml`（`jp-qualification-parser`）、`src/parser/__init__.py` 的 `ParsedCandidate` 桩模型、`tests/test_parser.py` 1 条用例，且被 CI `pip install -e services/parser` 安装、被 README 与 `docs/product-design.md` 列为「资格适配器和提取」层，`test:python` 也显式传它的 `tests` 目录。删或填它属结构决策，不在本轮纯清理范围，因此本轮**未动**。
 - 回归读数：`node_modules/.bin/tsc.cmd -p tsconfig.json` 通过、Vitest 81/81（10 files）、`eslint .` 干净、`prettier --check`（项目 `format:check` 的 glob）通过、`pytest services/collector/tests services/parser/tests` 109 passed、`node --test scripts/verify-lib.test.mjs` 7/7、`verify:all` `status=passed, passed=6/6, failed=0`，176 facts 不变、六资格 API 与页面均 `verified`、`coverageGaps=[]`、`pending_official=0`。
