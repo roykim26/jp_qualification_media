@@ -1,5 +1,15 @@
 # 阶段记录与剩余问题
 
+## 2026-10-10：FP 入库链同口径对齐（只到代码与用例层，未抓取未写库）
+
+- `services/collector/src/collector/ingest_fp.py` 增加与行政書士同构的 `capture_record()` 四重校验（报告须 `status=ok`+`status_code=200`、`snapshot_path` 与入库路径全等、必须带 `content_hash` 与 `captured_at`、磁盘原始字节 sha256 与报告相符，适配器解析哈希再二次比对），连库之前完成，任一不符零写入。原先合并成一条的守卫拆为「拒绝 `NODE_ENV=production`」与「必须 `FP_LOCAL_WRITE=1`」两条，报错各自指明。
+- 溯源写入对齐：`capture_runs`（`capture-run:fp:<content_hash>`、`succeeded`、`request_count` 取报告 `attempts`）、`snapshots` 全溯源列并以 `ON CONFLICT (source_id,content_hash) DO UPDATE` 幂等回写（`retrieved_at`/`retrieved_at_jst` 取报告真实抓取时刻，不再用 `now()`；`collector_version=collector.capture_fp`）、`source_checks`（`source-check:fp:<content_hash>`、`changed`）。FP 特有的部分保留不动：候选 id 带 `provider`／`exam_level`／`exam_component`／`delivery_mode` 四维，语句仍是 `ON CONFLICT (id) DO UPDATE … WHERE candidate_facts.status='pending_review'`，即已批准候选不会被重跑覆盖。
+- 根因修复 `capture_fp.py`：`capture-report.json` 由整份覆盖改为按 `source_id` 合并（新增 `run_source_count` 表示本次运行条数，`source_count` 变成累计保留来源数）；某来源本次抓取失败时保留上一次成功记录，因为那才对应磁盘上的字节。此前 2026-09-22 一次 capture-only 运行把 2026-09-08 那份 9/9 成功的报告整份覆盖掉（`docs/data-local-snapshot-audit-2026-09-07.md` 有当时读数），而 `var/` 在 `.gitignore` 第 18 行、报告既不在磁盘也不在 git，无法恢复。
+- 只读核算（未写库）：磁盘 4 个入库 HTML 的 sha256 与库里 4 条真实快照行逐条相符（`c0efa64e9fcb`／`d8603a927e58`／`8a77e714535c`／`9a460642fe3d`），离线解析出 53 条候选 id，53 条全部已是 `approved` ⇒ 报告补齐后重跑候选新增 0 条、`pending_official` 仍为 0。顺带查出本机 FP 另有 3 条 `ci://official-snapshot/…` 夹具快照行（`retrieved_at=2026-01-01`）挂着 24／8／7＝39 条 `approved` 候选。
+- 本轮明确未执行：不抓取、不写库。新链对那 4 个无报告快照直接抛 `capture report has no successful record`，所以没有端到端实跑读数；跑通需要先给 `FP_LIVE_AUTHORIZED=1` 采一次，而官方页改版会使哈希变化、候选 id 全部变成新的 pending，触发门禁 `pending_official != 0` 硬失败，届时要逐条审核并重算 baseline 计数。三段 INSERT 语句的列名与字面量依据是行政書士同日在本机真实库已执行通过的同构语句，FP 侧本轮仅由 pytest 合成报告自证。
+- 文档同步：`docs/fp-source-contract.md` 新增三次授权表、四重校验清单、候选幂等语义、报告合并口径与 5 条已知剩余项；`docs/data-gate-semantics.md` §11 新增第 6 项、§10 Python 读数更新。
+- 回归读数：`pytest services/collector/tests services/parser/tests` 100 passed（新增 8 项：6 条 `capture_record` + 2 条报告合并）、Vitest 81/81、`node --test scripts/verify-lib.test.mjs` 7/7、`eslint .` 干净、`prettier --check`（项目 `format:check` 的 glob）通过、build 通过、`verify:all` `status=passed, passed=6/6, failed=0`，各资格 `coverageGaps=[]`、公开 API `verified`（本轮未写库，事实计数不变）。
+
 ## 2026-10-10：行政書士入库链对齐基本情報口径
 
 - `services/collector/src/collector/ingest_gyoseishoshi.py` 在连库之前增加 `capture_record()` 四重校验：`capture-report.json` 内该来源须 `status=ok` 且 `status_code=200`、报告 `snapshot_path` 与入库路径全等、报告必须带 `content_hash` 与 `captured_at`、磁盘原始字节重算 sha256 必须与报告相符，适配器解析哈希再与报告二次比对。任一不符即抛错、零写入。
