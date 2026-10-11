@@ -1,5 +1,15 @@
 # 阶段记录与剩余问题
 
+## 2026-10-11：FP 入库入口从 4 个来源扩到 6 个（零抓取、零写库）
+
+- 动机：上一节查出的缺口——`jafp-schedule` 12 ＋ `kinzai-schedule-2026` 10 ＝ 22 条已批准候选挂在库里，但旧 `__main__` mapping 从未含它们（`git log -S` 证明），所以「补齐报告后重跑」最多补得回 4 个来源。本轮按号主点的候选把它补成 6 个，纯代码＋pytest，不联网、不写库。
+- 改法：`services/collector/src/collector/ingest_fp.py` 的 mapping 从 `__main__` 里提到模块级 `INGEST_SOURCES`（文件名 → `source_id` 六条，顺序按来源名字典序），`__main__` 直接遍历它；这样测试能断言覆盖面，而 `INGEST_SOURCES` 与 `FP_SOURCES`／磁盘文件名的对应关系也是可检查的。函数体、四重校验与三段 INSERT 一字未动。
+- 扩两个来源的前置核对（读库 `SELECT`）：那 22 条候选与另外 53 条同维度——`exam_year` 全为 `2026`、`payment_method` 全为 `NULL`，而 `ingest_fp.py` 里这两个参数就是这两个默认值 ⇒ 沿用默认即可复现同形 candidate-id，不需要为 schedule 页加特殊维度。两个 `source_id` 已在 `FP_SOURCES` 注册，磁盘文件名与 `source:fp:` 后缀一致。
+- 新增两条用例（`services/collector/tests/test_fp_ingest.py`）：① `INGEST_SOURCES` 覆盖面必须恰等于「适配器能读出字段的那 6 个来源」，并逐条校验 `source_id` 在 `FP_SOURCES` 内、文件名＝去掉 `source:fp:` 前缀加 `.html`、与 `UNPARSED_FP_SOURCES` 那 7 个不相交；② 给一个解析不出契约字段的页面（`kinzai-2`，合成快照＋逐条相符的报告记录）跑 `ingest_snapshot()`，必须在连库之前抛 `snapshot parse failed` 且消息含 `structure_changed` ⇒ 把「7 个 `structure_changed` 来源刻意不进 mapping」这条划分变成用例约束，而不是注释里的默契。
+- 回归读数：`PYTHONIOENCODING=utf-8 uv run --project services/collector --extra test pytest -q services/collector/tests services/parser/tests` → **117 passed**（上一节基线 115，＋2）。未跑 build／Vitest／门禁：本轮没有改 TypeScript，也没有写库，`verify:all` 的 facts 计数与 `pending_review` 判据不受影响（暴露面只是「将来若授权重抓，会有 75 条而非 53 条跟着哈希走」）。
+- 文档同步：`docs/fp-source-contract.md` 已知剩余项 1 与 `docs/data-gate-semantics.md` §11 第 6 项改为「`INGEST_SOURCES` 覆盖 6 个来源＝75 条」，重抓暴露面 53→**75**，单页最大占比由 68% 记为 36/75＝**48%**；建议的重抓 `source_ids` 收紧口径由「映射内那 4 个」改为「`INGEST_SOURCES` 那 6 个」。
+- 仍待授权（口径不变）：端到端跑通仍要先给一次 `FP_LIVE_AUTHORIZED=1` 采集（新授权单，`source_ids` 收紧到 6 个），再给 `FP_LOCAL_WRITE=1` 入库，批准是第三次；本轮三者皆未发生。取证快照副本仍在 `var/official-snapshots/fp-preserved/`（6 个 `<sha256>.html` ＋ `manifest.json`，本机专有）。
+
 ## 2026-10-11：FP 端到端入库的离线预演与取证快照固化（零抓取、零写库）
 
 - 动机与范围：`docs/data-gate-semantics.md` §11 第 6 项此前只留了一句「补齐报告后重跑则候选新增 0 条」，没有可复核的读数。本轮把它推成一次纯离线预演——解析磁盘快照、按新链规则算 candidate-id、与本机开发库对账，全程不联网、不写库（库侧只 `SELECT`，唯一一条机制判据用临时表实测后 rollback）。探针脚本放 gitignore 的 `var/`，跑完即删。
