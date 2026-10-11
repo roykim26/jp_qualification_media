@@ -1,5 +1,15 @@
 # 阶段记录与剩余问题
 
+## 2026-10-11：工作包 F 第一批的采集侧代码前置（零抓取、零写库、零联网）
+
+- 动机与范围：授权单 `docs/work-package-f-live-capture-authorization.md` 的 §2／§3 记了三条「不做完采集就够不到目标页」的前置，本轮把它们落完。只动 `services/collector` 的采集侧与契约文档，**没有**建 `sources` 迁移、**没有**抓任何页、**没有**连数据库。
+- 注册表读数（改动前后）：`FUNDAMENTAL_IT_SOURCES` **3 ⇒ 4**（新增 `source:fundamental-it:statistics-fe` → `https://www.ipa.go.jp/shiken/reports/toukei_fe.html`）、`BOOKKEEPING_SOURCES` **15 ⇒ 16**（新增 `source:bookkeeping:candidate-data` → `https://www.kentei.ne.jp/bookkeeping/candidate-data`，注册表里带的 `source_type` 写成 `official_statistics`，因为 `pass_rate` 的契约只认这一类）、`capture_takken.DIRECTLY_CITED_CAPTURE_SOURCES` **6 ⇒ 7**（新增 `capture-only:takken:statistics-overview` → `https://www.retio.or.jp/toukei/toukei/`）。三条来源的 `institution_id` 将来分别用库里已有的 `institution:ipa`／`institution:jcci`／`institution:retio`。
+- **收紧形参补上了，而且补到命令行够得到的地方**：`capture_bookkeeping` 与 `capture_fundamental_it` 各加 `selected_capture_sources()`（照 `capture_fp` 的写法，`source_ids=None` 保持整表的例行语义）与 `requested_capture_source_ids()`（读 `<QUAL>_CAPTURE_SOURCE_IDS`，逗号分隔）。后者是必要的：光有形参的话 `python -m collector.capture_bookkeeping` 永远只能等于「重抓 16 条」，授权单写的「收紧」在执行时无法落实。未登记的 id 在建 fetcher 之前抛 `ValueError`，用例把 `SafeFetcher` 换成「一构造就 raise」的桩来证明真的没发请求。
+- **宅建刻意没做多来源重构**：`TAKKEN_SOURCE` 被 `takken.py`／`capture_takken.py`／`ingest_takken.py` 三个模块引用十余处，且 `snapshot_from_html()` 把 `source_id` 钉死在它上面——重构会碰到承载已批准事实的入库链，代价与本批收益不匹配。改走仓库已有的 `capture-only:` 先例（FP 那两条就是同形），后果写进授权单 §1：**宅建这条本轮只能抓、不能入库**，要出事实得先在入库授权轮做多来源重构。
+- 铁律 1 的护栏：新来源**没有**进任何 ingest 映射（两条 ingest 的 `__main__` 映射都是显式列文件名，不受注册表增长影响；`ingest_fundamental_it` 还要求 `FUNDAMENTAL_IT_SOURCE_ID` 显式指定）。`extract_candidates()` 对这两条统计页只会报 `structure_changed`、产 0 候选，各有一条新用例锁住——即使误传去入库也不会造出推断值。
+- 顺手修的一处陈旧口径：`docs/fundamental-it-engineer-source-contract.md` 仍写着「`sources.qualification_id` 同样为 `NULL`（属工作包 G 收尾项）」，而该项已于本日由 seed 回填收口（本机 32→0、CI 38/38）；已改写为「由 `packages/db/src/seed.ts` 绑定、不写进迁移」。
+- 回归读数：`pytest services/collector/tests services/parser/tests` **117 ⇒ 126 通过**（新增 9 条：两条收紧用例 ×2 模块、命令行范围来自环境变量 ×2、`structure_changed` 护栏 ×2、簿记 `source_type` 断言 1，另有 3 条既有用例的 id 集合断言同步 +1 与 1 条硬编码 `source_count == 3` 改为按注册表长度派生）；`npm run build` 通过、Vitest **81 通过**；`npm run format:check` 通过。`services/collector/uv.lock` 被 `uv run` 重新生成，已删除未提交。未跑 `verify:all`：本轮零库写入、零 `sources` 行变化，门禁输入不变。
+
 ## 2026-10-11：工作包 F 采集授权单草稿（零抓取、零写库、零联网）
 
 - 动机与范围：把上一轮调研文档 §4 的建议切法推成一张**可签署的授权单草稿**，产物是新文档 `docs/work-package-f-live-capture-authorization.md`（状态：未签署、未执行），调研文档 §4 末条改为指向它并补上本轮实测的两条执行前事实。全程只读代码与只读查库，未发起任何外部请求。

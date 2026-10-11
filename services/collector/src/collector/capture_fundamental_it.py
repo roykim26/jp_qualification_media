@@ -20,8 +20,21 @@ from collector.http_policy import SafeFetcher, SourcePolicy
 CAPTURE_ROOT = Path("var/official-snapshots/fundamental-it")
 
 
+def selected_capture_sources(
+    source_ids: tuple[str, ...] | None,
+) -> dict[str, dict[str, str]]:
+    # source_ids=None keeps the routine whole-table run; scoped authorizations pass ids.
+    return (
+        dict(FUNDAMENTAL_IT_SOURCES)
+        if source_ids is None
+        else {source_id: FUNDAMENTAL_IT_SOURCES[source_id] for source_id in source_ids}
+    )
+
+
 def capture_registered_sources(
     output_root: str | Path = CAPTURE_ROOT,
+    *,
+    source_ids: tuple[str, ...] | None = None,
 ) -> dict[str, object]:
     if os.getenv("NODE_ENV", "development") == "production":
         raise RuntimeError("live capture refuses NODE_ENV=production")
@@ -29,10 +42,13 @@ def capture_registered_sources(
         raise RuntimeError(
             "set FUNDAMENTAL_IT_LIVE_AUTHORIZED=1 after completing the authorization checklist"
         )
+    unknown = set(source_ids or ()) - set(FUNDAMENTAL_IT_SOURCES)
+    if unknown:
+        raise ValueError(f"unregistered Fundamental IT source: {sorted(unknown)!r}")
     root = Path(output_root).resolve()
     root.mkdir(parents=True, exist_ok=True)
     results: list[dict[str, object]] = []
-    for source_id, source in FUNDAMENTAL_IT_SOURCES.items():
+    for source_id, source in selected_capture_sources(source_ids).items():
         fetcher = SafeFetcher(
             SourcePolicy(
                 source_id=source_id,
@@ -71,5 +87,17 @@ def capture_registered_sources(
     return write_capture_report(root, results, datetime.now(timezone.utc).isoformat())
 
 
+def requested_capture_source_ids() -> tuple[str, ...] | None:
+    """Comma-separated ids from the environment, so a scoped authorization reaches the CLI."""
+    raw = os.getenv("FUNDAMENTAL_IT_CAPTURE_SOURCE_IDS", "")
+    return tuple(item.strip() for item in raw.split(",") if item.strip()) or None
+
+
 if __name__ == "__main__":
-    print(json.dumps(capture_registered_sources(), ensure_ascii=False, indent=2))
+    print(
+        json.dumps(
+            capture_registered_sources(source_ids=requested_capture_source_ids()),
+            ensure_ascii=False,
+            indent=2,
+        )
+    )

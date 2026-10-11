@@ -1,4 +1,5 @@
 from collector.bookkeeping import (
+    BOOKKEEPING_SOURCES,
     BOOKLET_PHRASE,
     extract_candidates,
     is_registered_source_url,
@@ -26,12 +27,30 @@ def test_bookkeeping_source_plan_is_explicit_and_official():
         "source:bookkeeping:report",
         "source:bookkeeping:qa",
         "source:bookkeeping:news-51504",
+        "source:bookkeeping:candidate-data",
     }
     assert all(item["allowed_domain"] == "www.kentei.ne.jp" for item in source_plan())
     assert all(
         item["canonical_url"].startswith("https://www.kentei.ne.jp")
         for item in source_plan()
     )
+
+
+def test_candidate_data_source_is_registered_as_official_statistics():
+    # `pass_rate` only accepts official_statistics / official_result_information,
+    # so the registry value is what the future `sources` row must be seeded with.
+    assert BOOKKEEPING_SOURCES["source:bookkeeping:candidate-data"] == (
+        "https://www.kentei.ne.jp/bookkeeping/candidate-data",
+        "official_statistics",
+    )
+
+
+def test_statistics_page_yields_no_fabricated_candidates():
+    snapshot = snapshot_from_html("source:bookkeeping:candidate-data", "<html><body><p>受験者データ</p></body></html>")
+    candidates, issues = extract_candidates(snapshot)
+
+    assert candidates == []
+    assert [issue.code for issue in issues] == ["structure_changed"]
 
 
 def test_bookkeeping_source_boundary_is_exact():

@@ -29,6 +29,14 @@
 
 当前适配器只会从这些来源产出候选：`class1-exam`／`class2-exam`／`class3-exam` 产出按等级分流的 `question_format`，`qa` 产出统一试验 1／2／3 级的 `eligibility`，`flow-teller` 产出 `payment_deadline_rule`。其余新登记来源（`class1`／`class2`／`class3`／`flow`／`flow-net`／`report`／`news-51504`）只作证据留存，不产出候选。
 
+## 工作包 F 新增的采集登记（2026-10-11，尚未抓取得到内容）
+
+| source_id                           | URL                                                   | `source_type`         | 用途                 |
+| ----------------------------------- | ----------------------------------------------------- | --------------------- | -------------------- |
+| `source:bookkeeping:candidate-data` | `https://www.kentei.ne.jp/bookkeeping/candidate-data` | `official_statistics` | 受験者データ历年序列 |
+
+该来源 2026-10-11 只进了**采集侧**：`BOOKKEEPING_SOURCES` 常量已登记（`capture_bookkeeping.capture_registered_sources()` 现接受 `source_ids` 收紧到它），但**没有建 `sources` 迁移、没有入库、没有任何事实**。URL 取自已抓快照正文里的真实链接（`docs/work-package-f-statistics-sources.md` §2），活性未验证。`extract_candidates()` 目前对它只会报 `structure_changed`（有用例锁定），所以即使误传去入库也不会造出推断值。授权口径见 `docs/work-package-f-live-capture-authorization.md`。
+
 ## 事实维度
 
 日商簿記不得只用 `qualification + year + fact_key` 表达事实。每条候选必须同时携带：

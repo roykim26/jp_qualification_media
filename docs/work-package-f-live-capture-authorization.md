@@ -6,40 +6,44 @@
 
 ## 1. 请求范围（第一批：3 个 HTML 来源）
 
-| 资格     | 拟新增 source_id                      | URL                                                   | 允许域名           | `source_type`         | 采集脚本 / 开关                                                 | 目的（五字段）                                                                        |
-| -------- | ------------------------------------- | ----------------------------------------------------- | ------------------ | --------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| 基本情報 | `source:fundamental-it:statistics-fe` | `https://www.ipa.go.jp/shiken/reports/toukei_fe.html` | `www.ipa.go.jp`    | `official_statistics` | `capture_fundamental_it.py`／`FUNDAMENTAL_IT_LIVE_AUTHORIZED=1` | `applicants`、`examinees`、`passed`、`pass_rate`、`statistics_methodology` 的历年序列 |
-| 宅建     | `source:takken:statistics-overview`   | `https://www.retio.or.jp/toukei/toukei/`              | `www.retio.or.jp`  | `official_statistics` | `capture_takken.py`／`TAKKEN_LIVE_AUTHORIZED=1`                 | 同上，統計概要页                                                                      |
-| 日商簿记 | `source:bookkeeping:candidate-data`   | `https://www.kentei.ne.jp/bookkeeping/candidate-data` | `www.kentei.ne.jp` | `official_statistics` | `capture_bookkeeping.py`／`BOOKKEEPING_LIVE_AUTHORIZED=1`       | 同上，受験者データ（1／2／3 级、统一／网络／团体按页内表头分段）                      |
+| 资格     | 拟新增 source_id                          | URL                                                   | 允许域名           | `source_type`                     | 采集脚本 / 开关                                                                     | 目的（五字段）                                                                        |
+| -------- | ----------------------------------------- | ----------------------------------------------------- | ------------------ | --------------------------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| 基本情報 | `source:fundamental-it:statistics-fe`     | `https://www.ipa.go.jp/shiken/reports/toukei_fe.html` | `www.ipa.go.jp`    | `official_statistics`             | `capture_fundamental_it.py`／`FUNDAMENTAL_IT_LIVE_AUTHORIZED=1`                     | `applicants`、`examinees`、`passed`、`pass_rate`、`statistics_methodology` 的历年序列 |
+| 宅建     | `capture-only:takken:statistics-overview` | `https://www.retio.or.jp/toukei/toukei/`              | `www.retio.or.jp`  | `official_statistics`（入库时用） | `capture_takken.py` 的 `capture_directly_cited_sources`／`TAKKEN_LIVE_AUTHORIZED=1` | 同上，統計概要页                                                                      |
+| 日商簿记 | `source:bookkeeping:candidate-data`       | `https://www.kentei.ne.jp/bookkeeping/candidate-data` | `www.kentei.ne.jp` | `official_statistics`             | `capture_bookkeeping.py`／`BOOKKEEPING_LIVE_AUTHORIZED=1`                           | 同上，受験者データ（1／2／3 级、统一／网络／团体按页内表头分段）                      |
 
 `institution_id` 用库中已存在的值：`institution:ipa`、`institution:retio`、`institution:jcci`。
 
+宅建那一条刻意用 `capture-only:takken:statistics-overview` 而不是 `source:takken:statistics-overview`：`takken.py` 的 `snapshot_from_html()` 把 `source_id` 钉死在单个 `TAKKEN_SOURCE` 常量上（全仓 15 处引用该常量，含 `ingest_takken.py`），所以本批宅建**只能存证、不能入库**；要让它进公开面，得先做多来源重构，那属于第二次（入库）授权的范围。这与 FP 的 `capture-only:fp:*` 先例同形。
+
 **本单第一批不含**：行政書士与 IT Passport（两家的完整历年序列在 PDF 侧，见 §5）、FP 两条（第二批）、宅建 10 年 PDF、簿记两条回次新闻页（`/51246`、`/51136`）、`/pdf/attr.pdf`（属性调查，不承载五字段）。
 
-## 2. 采集之前必须先落的代码动作（可离线完成，不需授权联网）
+## 2. 采集之前必须先落的代码动作（2026-10-11 已落地，零联网）
 
-这三处不是「采集的自然部分」，而是**不做完采集就够不到目标页**的前置条件。逐条给判据读数：
+这三处不是「采集的自然部分」，而是**不做完采集就够不到目标页**的前置条件。本轮落的状态：
 
-1. **注册表**：适配器只认已登记的 `source_id`。`services/collector/src/collector/fundamental_it.py:17` 的 `FUNDAMENTAL_IT_SOURCES` 现有 **3** 条、`bookkeeping.py:16` 的 `BOOKKEEPING_SOURCES` 现有 **15** 条、`takken.py:12` 是**单个** `TAKKEN_SOURCE` 常量而非表。新来源不进去，`snapshot_from_html()` 会 raise `unregistered ... source`；URL 侧两家的严格度不同——`bookkeeping.is_registered_source_url()` 要求逐字命中注册表里的 URL，`fundamental_it.is_registered_source_url()` 只校验主机名（`fundamental_it.py:181`），所以基本情報这条即使 URL 写歪也可能被放行到抓取阶段，注册表要按官方实际链接逐字填。
-2. **宅建的特殊性**：`takken.py` 的 `snapshot_from_html()` 把 `source_id` 硬编码成 `TAKKEN_SOURCE["id"]` ⇒ 统计页即使抓下来，也无法用现行 takken 适配器入库。第一批若包含宅建，必须先把它改成多来源表（或走 `capture-only:` 的仅存证路径，则该来源本轮只能抓不能入库）。
-3. **`sources` 行**：按既有口径登记——迁移（先例：`0001_takken_source.sql`、`0005_fundamental_it_sources.sql`、`0006_bookkeeping_sources.sql`、`0015_bookkeeping_gap_sources.sql`）或 `packages/db/src/seed.ts` 的 `INSERT INTO sources`；`sources.qualification_id` **仍由 seed 绑定，不写进迁移**（理由见 `docs/data-gate-semantics.md` §11 第 2 项）。`source_type` 在库里是自由文本（`packages/db/migrations/0000_stage_0.sql:7` 无 CHECK），所以写错类型**不会有任何报错**——唯一防线是审核人。
+1. **注册表：已登记。** `services/collector/src/collector/fundamental_it.py` 的 `FUNDAMENTAL_IT_SOURCES` 从 **3** 条增到 **4** 条（新增 `source:fundamental-it:statistics-fe`），`bookkeeping.py` 的 `BOOKKEEPING_SOURCES` 从 **15** 条增到 **16** 条（新增 `source:bookkeeping:candidate-data`，`source_type` 写 `official_statistics`），`capture_takken.DIRECTLY_CITED_CAPTURE_SOURCES` 从 **6** 条增到 **7** 条。三家契约文档的来源表同步更新。URL 侧两家的严格度不同——`bookkeeping.is_registered_source_url()` 要求逐字命中注册表里的 URL，`fundamental_it.is_registered_source_url()` 只校验主机名（`fundamental_it.py`），所以基本情報那条即使 URL 写歪也会被放行到抓取阶段；注册表已按官方实际链接逐字填。
+2. **宅建：走仅存证路径，多来源重构仍未做。** `takken.py` 的 `snapshot_from_html()` 仍把 `source_id` 硬编码成 `TAKKEN_SOURCE["id"]`，该常量被 `takken.py`／`capture_takken.py`／`ingest_takken.py` 三处模块共十余处引用，属入侵式重构且触及已批准事实所在的入库链 ⇒ 本轮**没有**改它，改为把统计页登记成 `capture-only:` id。后果要说清：宅建这一条本轮**只能抓、不能入库**，要出事实得先做多来源重构，那是入库授权轮的前置。
+3. **`sources` 行：本轮仍未做。** 采集不需要库行，而既有先例（工作包 E）是「先抓、离线审计通过后再建迁移」。所以 `source:fundamental-it:statistics-fe` 与 `source:bookkeeping:candidate-data` 目前**只存在于采集侧常量表**，库里没有它们的行、也没有快照与候选。将来登记时 `sources.qualification_id` 仍由 `packages/db/src/seed.ts` 绑定、不写进迁移（理由见 `docs/data-gate-semantics.md` §11 第 2 项）；`source_type` 在库里是自由文本（`packages/db/migrations/0000_stage_0.sql:7` 无 CHECK），写错类型**不会有任何报错**——唯一防线是审核人。
 
-## 3. 默认抓取范围比本单宽（执行时的主要踩坑点）
+另外补了一条铁律 1 的护栏：新来源都**没有**加进任何 ingest 映射，`extract_candidates()` 对这两条统计页只会报 `structure_changed`（`test_bookkeeping_contract.py` 与 `test_fundamental_it_contract.py` 各一条用例锁定），所以即使有人误传去入库也不会造出推断值。
 
-各采集函数的默认覆盖面本机实测：
+## 3. 默认抓取范围与本单授权范围的对齐（2026-10-11 已收紧）
 
-| 函数                                                | 是否接受 `source_ids` | 默认触及                       | 落盘命名                                                             |
+各采集函数的覆盖面本机实测（括号内为登记新来源后的条数）：
+
+| 函数                                                | 是否接受 `source_ids` | 默认（`source_ids=None`）触及  | 落盘命名                                                             |
 | --------------------------------------------------- | --------------------- | ------------------------------ | -------------------------------------------------------------------- |
-| `capture_fundamental_it.capture_registered_sources` | **否**                | 全表 3 条                      | `var/official-snapshots/fundamental-it/<sha256>.html`，存在即跳过    |
-| `capture_bookkeeping.capture_registered_sources`    | **否**                | 全表 15 条                     | `var/official-snapshots/bookkeeping/<slug>.html`，**无条件原地覆盖** |
+| `capture_fundamental_it.capture_registered_sources` | **是**（本轮补）      | 整表 4 条                      | `var/official-snapshots/fundamental-it/<sha256>.html`，存在即跳过    |
+| `capture_bookkeeping.capture_registered_sources`    | **是**（本轮补）      | 整表 16 条                     | `var/official-snapshots/bookkeeping/<slug>.html`，**无条件原地覆盖** |
 | `capture_takken.capture_registered_source`          | 无参数（单来源）      | 1 条（`/exam/`），够不到统计页 | `<sha256>.html`，存在即跳过                                          |
-| `capture_takken.capture_directly_cited_sources`     | 是                    | 6 条 `capture-only:`           | `<sha256>.html`，存在即跳过                                          |
-| `capture_fp.capture_registered_sources`             | 是                    | 全表 13 条                     | `<slug>.html`，**无条件原地覆盖**                                    |
+| `capture_takken.capture_directly_cited_sources`     | 是                    | 整表 7 条 `capture-only:`      | `<sha256>.html`，存在即跳过                                          |
+| `capture_fp.capture_registered_sources`             | 是                    | 整表 13 条                     | `<slug>.html`，**无条件原地覆盖**                                    |
 
-结论：
+要点：
 
-- 簿记与基本情報的函数**没有 `source_ids` 形参**，按现状直接执行会一次触及 15 条／3 条已登记来源，远超本单的 1 条。⇒ 执行前要么给这两个函数补 `source_ids`（纯代码＋用例，不联网，建议先做），要么在授权单里显式把「整表重抓」也批准下来。**默认按前者**，本单只授权当批 source_id。
-- 簿记的快照是**固定文件名＋无条件写盘**：重抓会把 `home.html` 等 15 个文件的字节原地换掉，而库里只存哈希，页一改版旧字节永久丢失且门禁与审计都测不出「文件与 `content_hash` 已不符」。这与 FP 已知的同一风险同源（见 `docs/fp-source-contract.md`）。⇒ 若本轮为补 `source_ids` 而仍要整表遍历，先按 FP 的做法把将被覆盖的文件做内容寻址副本（放 gitignore 的 `var/`，不入库）。
+- 簿记与基本情報的函数原先**没有** `source_ids` 形参，按现状执行会一次触及整表来源、远超本单的 1 条。本轮已补 `selected_capture_sources()`（照 `capture_fp` 的写法：`None` 保持整表的例行行为，显式传入才收紧；未登记的 id 在**建 fetcher 之前**抛 `ValueError`），并各加 2 条用例：收紧后 `results` 只含当批 id；未知 id 被拒且**没有构造任何 fetcher**（用例里把 `SafeFetcher` 换成会直接 raise 的桩）。⇒ 签署本单时，执行命令必须显式传 `source_ids`。
+- 簿记的快照是**固定文件名＋无条件写盘**：整表重抓会把 `home.html` 等 16 个文件的字节原地换掉，而库里只存哈希，页一改版旧字节永久丢失，且「文件与 `content_hash` 已不符」在门禁与审计里都测不出。这与 FP 已知的同一风险同源（见 `docs/fp-source-contract.md`）。⇒ 只要按上一条用 `source_ids` 收紧到 `candidate-data` 一条，就不会碰到其余 15 个文件；若因故要整表遍历，先给将被覆盖的文件做内容寻址副本（放 gitignore 的 `var/`，不入库）。
 - 基本情報／宅建的落盘是内容寻址且「存在即跳过」，不存在覆盖丢证据的问题。
 
 ## 4. 入库与批准是另外的授权，且一定让门禁变红
@@ -70,7 +74,7 @@
 - [ ] `NODE_ENV` 不是 `production`。
 - [ ] 采集步骤不配置 `DATABASE_URL`。
 - [ ] 走项目的 `SafeFetcher`，不绕过 HTTPS、超时、重试、缓存、响应大小或重定向限制。
-- [ ] `source_ids` 已收紧到 §1 的当批来源（见 §3，簿记与基本情報需要先补该形参）。
+- [ ] 执行命令带上了 `*_CAPTURE_SOURCE_IDS`，把当批范围收紧到 §1 的来源（不传就等于整表重抓，见 §3 与 §9 的命令）。
 
 ## 8. 项目所有者确认
 
@@ -88,8 +92,23 @@
 
 ## 9. 执行顺序
 
-1. 先落 §2 的注册表与形参改动（离线，含 pytest 自证），单独提 PR 过 `release-gate`。
-2. 设置当批 `<QUAL>_LIVE_AUTHORIZED=1`，逐源 capture-only，记录成功／未变化／404／重定向拒绝／结构异常。
+1. ~~先落 §2 的注册表与形参改动~~ **2026-10-11 已落地**：两条采集函数补了 `source_ids`（并从 `*_CAPTURE_SOURCE_IDS` 环境变量取当批范围，否则命令行只有「整表重抓」一种含义），三条来源进了采集侧常量表，宅建走 `capture-only` 路径。Python 用例 117 ⇒ **126**。
+2. 签署本单后设置当批 `<QUAL>_LIVE_AUTHORIZED=1`，逐源 capture-only，记录成功／未变化／404／重定向拒绝／结构异常。整条可复制命令（在项目根目录、一次性受控读取，三条各跑一次）：
+
+   ```
+   FUNDAMENTAL_IT_LIVE_AUTHORIZED=1 FUNDAMENTAL_IT_CAPTURE_SOURCE_IDS=source:fundamental-it:statistics-fe PYTHONIOENCODING=utf-8 uv run --project services/collector python -m collector.capture_fundamental_it
+   ```
+
+   ```
+   BOOKKEEPING_LIVE_AUTHORIZED=1 BOOKKEEPING_CAPTURE_SOURCE_IDS=source:bookkeeping:candidate-data PYTHONIOENCODING=utf-8 uv run --project services/collector python -m collector.capture_bookkeeping
+   ```
+
+   宅建那条走仅存证路径，需要一次 Python 调用而不是命令行模块（因为它的 `__main__` 只跑根页）：
+
+   ```
+   TAKKEN_LIVE_AUTHORIZED=1 uv run --project services/collector python -c "import json;from collector.capture_takken import capture_directly_cited_sources as c;print(json.dumps(c(source_ids=('capture-only:takken:statistics-overview',)),ensure_ascii=False,indent=2))"
+   ```
+
 3. 对新快照做哈希复核与离线解析，只报「能取到哪些字段、口径是否成文」，不产生候选。
 4. 更新 `docs/work-package-f-statistics-sources.md` 的活性与粒度读数。
-5. 单独请求候选入库授权，再单独请求逐条审核批准授权。
+5. 单独请求候选入库授权，再单独请求逐条审核批准授权。宅建在入库前还要先做多来源重构（§1 说明）。

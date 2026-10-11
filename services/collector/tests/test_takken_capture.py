@@ -166,6 +166,7 @@ def test_directly_cited_capture_rejects_unlisted_urls(monkeypatch, tmp_path):
         "capture-only:takken:faq",
         "capture-only:takken:past-questions",
         "capture-only:takken:registration-course",
+        "capture-only:takken:statistics-overview",
     }
     with pytest.raises(ValueError, match="unregistered directly cited"):
         capture_directly_cited_sources(tmp_path, ("capture-only:takken:unknown",))
