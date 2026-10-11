@@ -19,4 +19,6 @@
 - `POST /internal/reviews/{id}`：仅认证 `reviewer`，请求必须包含 `decision=approve|reject|defer` 与非空 `reason`；高风险事实、无快照事实和来源冲突必须人工决策。
 - `POST /internal/publish`：仅 `publisher`，只接受已批准候选；在事务内创建 revision、关闭旧 revision、更新 current pointer、记录 change event 并触发重建。
 
+实际落地状态（2026-10-11 只读核查，别再按本节假设存在 HTTP 写入面）：四条里**只有 `POST /internal/reviews/{id}` 已实现**，位于 `apps/admin/src/server.ts`，写操作只认 `x-reviewer-id` 请求头。`POST /internal/snapshots` 与 `POST /internal/candidate-facts` 无对应端点——快照与候选由 `services/collector` 的 Python 入库脚本直接写 `snapshots`／`candidate_facts` 表；`POST /internal/publish` 同样无端点，`facts`／`fact_revisions`／`change_events` 的唯一写入方就是上述审核端点，即本节设想的 publisher 发布职责当前由 reviewer 端点在同一事务内承担。角色权限矩阵见 `packages/content-rules/src/index.ts`，其 `validator`／`publisher` 两个角色目前只被 `tests/stage0.test.ts` 断言、无生产调用方；`services/validator` 与 `services/publisher` 目录尚未创建（见 `docs/product-design.md` §22.2 的同一条标注）。
+
 所有内部写接口必须认证、限速并携带幂等键；阶段 0 不暴露匿名写接口，也不绑定认证供应商。
