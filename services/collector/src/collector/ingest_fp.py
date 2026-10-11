@@ -16,6 +16,18 @@ QUALIFICATION_ID = "qualification:fp"
 SNAPSHOT_ROOT = Path("var/official-snapshots/fp").resolve()
 COLLECTOR_VERSION = "collector.capture_fp"
 
+# Every FP source the adapter can actually read fields out of.  A source whose
+# page the parser reports `structure_changed` for must stay out of this mapping:
+# ingest_snapshot() aborts on any parse issue rather than staging nothing.
+INGEST_SOURCES = {
+    "jafp-2-3-outline.html": "source:fp:jafp-2-3-outline",
+    "jafp-schedule.html": "source:fp:jafp-schedule",
+    "kinzai-1-academic.html": "source:fp:kinzai-1-academic",
+    "kinzai-1-practical.html": "source:fp:kinzai-1-practical",
+    "kinzai-eligibility.html": "source:fp:kinzai-eligibility",
+    "kinzai-schedule-2026.html": "source:fp:kinzai-schedule-2026",
+}
+
 
 def capture_record(source_id: str, snapshot_path: Path) -> dict[str, object]:
     report = json.loads((SNAPSHOT_ROOT / "capture-report.json").read_text(encoding="utf-8"))
@@ -96,10 +108,8 @@ if __name__ == "__main__":
     database_url = os.getenv("DATABASE_URL")
     if not database_url:
         raise SystemExit("DATABASE_URL is required")
-    mapping = {
-        "jafp-2-3-outline.html": "source:fp:jafp-2-3-outline",
-        "kinzai-1-academic.html": "source:fp:kinzai-1-academic",
-        "kinzai-1-practical.html": "source:fp:kinzai-1-practical",
-        "kinzai-eligibility.html": "source:fp:kinzai-eligibility",
-    }
-    print(json.dumps([ingest_snapshot(database_url, source, SNAPSHOT_ROOT / name) for name, source in mapping.items()], ensure_ascii=False, indent=2))
+    results = [
+        ingest_snapshot(database_url, source, SNAPSHOT_ROOT / name)
+        for name, source in INGEST_SOURCES.items()
+    ]
+    print(json.dumps(results, ensure_ascii=False, indent=2))
