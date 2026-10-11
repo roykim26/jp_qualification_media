@@ -1,5 +1,17 @@
 # 阶段记录与剩余问题
 
+## 2026-10-11：工作包 F 的只读来源调研（零抓取、零写库、零联网）
+
+- 动机与范围：`docs/data-gate-semantics.md` §11 第 5 项长期只写了一句「历史统计字段六资格全为零官方来源，归工作包 F」，没有读数也没有来源清单。本轮把它推成一份可执行的调研，全程不向外部站点发起请求（也不用搜索引擎），只读契约、只读查库、只解析 `var/official-snapshots/` 里已有的官方快照。产物是新文档 `docs/work-package-f-statistics-sources.md`；三份既有文档（§11 第 5 项、`docs/data-remediation-handoff.md` 工作包 F 引言、README 数据现状句）改为指向它。
+- **定性一：F 不是门禁欠账**。六资格的这类需求在契约里一律 `requiredLevel="post_event"`，而 `scripts/verify-lib.mjs:62` 算覆盖缺口时对 `post_event`／`optional`／`not_applicable` 直接 `continue` ⇒ 门禁永远不会因为 F 变红。这解释了它为什么能长期挂在待办而无人动，也意味着「等门禁报警再说」永远不会发生。
+- 定性二：**是从未登记，不是登记了没批**。`fieldCatalog.pass_rate` 只允许 `official_statistics`／`official_result_information` 两种来源类型，本机 40 条 `sources` 的 `source_type` 分布里这两类**一条都没有**；`applicants`／`examinees`／`passed`／`pass_rate`／`statistics_methodology` 五个 `fact_key` 在 `candidate_facts` 与 `facts` 里均命中 **0 条**（全库总量仍为 facts 176／candidates 281／snapshots 40／sources 40，与基线一致，本轮零写入）。
+- **关键发现：统计页入口就挂在已抓快照的正文里**。方法是对 50 个 HTML（另有 6 份 `fp-preserved/` 副本与 2 份 PDF 不参与锚点解析）去标签扫「合格率／試験結果／統計／実施概況／合格発表／受験者データ／受検者データ」，取命中锚文本的 `<a href>`，按各文件 `rel=canonical` 解析为绝对地址（无 canonical 者回落采集器注册的 `canonical_url`，两个 IT Passport 哈希名页回落库里的 `snapshots.original_url`）。得到 **27 条**候选（23 HTML／4 PDF），域全部落在 `www*.or.jp`／`www*.go.jp`，无外部域混入。引用面最高的几条：金财 `kinzai.or.jp/ginou/fp/result-fp` 与 `kinzai.or.jp/gokaku`（各 8 个快照挂着）、宅建 `retio.or.jp/toukei/toukei/`（9）、簿记 `kentei.ne.jp/bookkeeping/candidate-data`（7）、JAFP `jafp.or.jp/exam/syutoku/`（5）、IPA `www.ipa.go.jp/shiken/reports/toukei_fe.html`（5，按考试区分配布的历年统计表，FE／IT Passport 一条页可覆盖多年度序列）。
+- 最大阻碍：**四条 PDF 恰好是各家最完整的历年序列，而解析链只吃 HTML**。行政書士 `pdf/trans.pdf`（試験結果の推移）与 `pdf/prefsummary.pdf`、宅建 `10years_result2025.pdf`（令和7年度以前の過去10年間）、IT Passport `html/openinfo/pdf/statistics/202606_ip_shikenkekka.pdf`。采集链能落 `.pdf` 字节，但六个 collector 适配器入参都是 `str` HTML，没有任何 PDF 正文解析器 ⇒ 首批只能走 HTML 入口，PDF 提取要另立工作项、不在 F 里顺手加。
+- 另记：`/pdf/attr.pdf`「受験者・合格者の属性」由首轮宽检索发现，属属性调查不是人数序列，未计入 27 条。
+- 与 FP 那类情形的关键区别：F 是**全新来源＋全新候选**，一旦入库必然出现非合成 `pending_review`，而门禁 `pending_official != 0` 是硬失败（不像哈希不变的 FP 重跑可 0 新增）⇒ 采集→入库→批准要么能连着走完，要么停在「只采集、不入库」；来源行仍按既有口径由迁移或 `packages/db/src/seed.ts` 登记、`sources.qualification_id` 由 seed 绑定。
+- 建议切法（未执行，等号主定夺）：第一批三条纯 HTML 且带年度序列的 `source:fundamental-it:statistics-fe`／`source:takken:statistics-overview`／`source:bookkeeping:candidate-data`；第二批 FP 两条；行政書士与 IT Passport 等 PDF 议题定案后再排。采集要新写一张 F 授权单——`docs/work-package-e-live-capture-authorization.md` 注明已于 2026-09-08 执行完毕，不可复用。
+- 回归读数：本轮只新增与修改 `docs/`，未动 TypeScript 与 Python，故未重跑 build／Vitest／pytest（Python 用例仍 117）；`prettier --write` 后 `npm run format:check` 通过；`verify:all` 未跑——本轮零库写入、零来源变更，门禁判据的输入没有任何变化。三个一次性探针脚本（锚点提取、canonical 解析、库侧核对）放在 gitignore 的 `var/`，跑完即删。
+
 ## 2026-10-11：FP 入库入口从 4 个来源扩到 6 个（零抓取、零写库）
 
 - 动机：上一节查出的缺口——`jafp-schedule` 12 ＋ `kinzai-schedule-2026` 10 ＝ 22 条已批准候选挂在库里，但旧 `__main__` mapping 从未含它们（`git log -S` 证明），所以「补齐报告后重跑」最多补得回 4 个来源。本轮按号主点的候选把它补成 6 个，纯代码＋pytest，不联网、不写库。
