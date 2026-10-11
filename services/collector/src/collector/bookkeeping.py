@@ -29,6 +29,9 @@ BOOKKEEPING_SOURCES = {
     "source:bookkeeping:flow-teller": ("https://www.kentei.ne.jp/flow/teller", "official_application_flow"),
     "source:bookkeeping:flow-net": ("https://www.kentei.ne.jp/flow/net", "official_application_flow"),
     "source:bookkeeping:news-51504": ("https://www.kentei.ne.jp/51504", "official_announcement"),
+    # Work package F: the only official page carrying the historical applicant,
+    # examinee, passed and pass-rate series.  No extractor reads it yet.
+    "source:bookkeeping:candidate-data": ("https://www.kentei.ne.jp/bookkeeping/candidate-data", "official_statistics"),
 }
 
 LEVELS = {"1", "2", "3", "basic", "cost-accounting-basic"}

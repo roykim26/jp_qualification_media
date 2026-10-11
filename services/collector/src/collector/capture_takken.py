@@ -28,6 +28,10 @@ DIRECTLY_CITED_CAPTURE_SOURCES = {
     "capture-only:takken:faq": "https://www.retio.or.jp/exam/faq/",
     "capture-only:takken:past-questions": "https://www.retio.or.jp/exam/past_ques_ans/other/",
     "capture-only:takken:registration-course": "https://www.retio.or.jp/exam/tourokukosyu/",
+    # Work package F: 統計概要 carries the historical applicant, examinee, passed
+    # and pass-rate series.  It is capture-only because `snapshot_from_html()`
+    # still pins every Takken snapshot to the single TAKKEN_SOURCE ingestion id.
+    "capture-only:takken:statistics-overview": "https://www.retio.or.jp/toukei/toukei/",
 }
 DIRECTLY_CITED_CAPTURE_DOCUMENTS = {
     "capture-only:takken:2026-internet-application-guide": (

@@ -27,6 +27,12 @@ FUNDAMENTAL_IT_SOURCES = {
         "canonical_url": "https://www.ipa.go.jp/shiken/syllabus/index.html",
         "allowed_domain": "www.ipa.go.jp",
     },
+    # Work package F: IPA publishes the per-examination historical statistics
+    # table here.  No extractor reads it yet.
+    "source:fundamental-it:statistics-fe": {
+        "canonical_url": "https://www.ipa.go.jp/shiken/reports/toukei_fe.html",
+        "allowed_domain": "www.ipa.go.jp",
+    },
 }
 
 

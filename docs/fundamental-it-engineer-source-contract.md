@@ -8,13 +8,16 @@ FE 自令和 5 年度起全年以 CBT 随时实施，没有「统一考试日 + 
 
 来源由 `packages/db/migrations/0005_fundamental_it_sources.sql` 登记，常量表在 `services/collector/src/collector/fundamental_it.py` 的 `FUNDAMENTAL_IT_SOURCES`。
 
-| source_id                        | URL                                                     | source_type                 | 是否产出候选         |
-| -------------------------------- | ------------------------------------------------------- | --------------------------- | -------------------- |
-| `source:fundamental-it:exam`     | `https://www.ipa.go.jp/shiken/kubun/fe.html`            | `official_exam_information` | 是（科目结构）       |
-| `source:fundamental-it:cbt`      | `https://www.ipa.go.jp/shiken/mousikomi/cbt_sg_fe.html` | `official_cbt_application`  | 是（仅两句共用陈述） |
-| `source:fundamental-it:syllabus` | `https://www.ipa.go.jp/shiken/syllabus/index.html`      | `official_syllabus`         | 否，只作大纲证据     |
+| source_id                             | URL                                                     | source_type                 | 是否产出候选         |
+| ------------------------------------- | ------------------------------------------------------- | --------------------------- | -------------------- |
+| `source:fundamental-it:exam`          | `https://www.ipa.go.jp/shiken/kubun/fe.html`            | `official_exam_information` | 是（科目结构）       |
+| `source:fundamental-it:cbt`           | `https://www.ipa.go.jp/shiken/mousikomi/cbt_sg_fe.html` | `official_cbt_application`  | 是（仅两句共用陈述） |
+| `source:fundamental-it:syllabus`      | `https://www.ipa.go.jp/shiken/syllabus/index.html`      | `official_syllabus`         | 否，只作大纲证据     |
+| `source:fundamental-it:statistics-fe` | `https://www.ipa.go.jp/shiken/reports/toukei_fe.html`   | `official_statistics`       | 否，尚未抓取得到内容 |
 
-`sources.qualification_id` 同样为 `NULL`（与行政書士一致，属工作包 G 收尾项）。
+`source:fundamental-it:statistics-fe` 是工作包 F（历史统计）第一批的采集登记，2026-10-11 **只进了采集侧常量表**：没有对应的 `sources` 迁移、没有快照、没有事实。`extract_candidates()` 对它只会报 `structure_changed`（有用例锁定），授权口径见 `docs/work-package-f-live-capture-authorization.md`。
+
+`sources.qualification_id` 由 `packages/db/src/seed.ts` 统一绑定（2026-10-11 本机与 CI 空库均为 100% 已绑定），不在迁移里写。
 
 ## 适配器产出规则
 

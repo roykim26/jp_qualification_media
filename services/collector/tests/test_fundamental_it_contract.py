@@ -41,8 +41,20 @@ def test_fundamental_it_source_plan_is_explicit_and_https_only():
         "source:fundamental-it:exam",
         "source:fundamental-it:cbt",
         "source:fundamental-it:syllabus",
+        "source:fundamental-it:statistics-fe",
     }
     assert all(item["canonical_url"].startswith("https://") for item in source_plan())
+
+
+def test_statistics_page_yields_no_fabricated_candidates():
+    snapshot = snapshot_from_html(
+        "source:fundamental-it:statistics-fe",
+        "<html><body><h2>統計情報（基本情報技術者試験）</h2></body></html>",
+    )
+    candidates, issues = extract_candidates(snapshot)
+
+    assert candidates == []
+    assert [issue.code for issue in issues] == ["structure_changed"]
 
 
 def test_fundamental_it_source_boundary_rejects_unregistered_hosts():

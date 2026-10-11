@@ -16,15 +16,33 @@ from collector.http_policy import SafeFetcher, SourcePolicy
 CAPTURE_ROOT = Path("var/official-snapshots/bookkeeping")
 
 
-def capture_registered_sources(output_root: str | Path = CAPTURE_ROOT) -> dict[str, object]:
+def selected_capture_sources(
+    source_ids: tuple[str, ...] | None,
+) -> dict[str, tuple[str, str]]:
+    # source_ids=None keeps the routine whole-table run; scoped authorizations pass ids.
+    return (
+        dict(BOOKKEEPING_SOURCES)
+        if source_ids is None
+        else {source_id: BOOKKEEPING_SOURCES[source_id] for source_id in source_ids}
+    )
+
+
+def capture_registered_sources(
+    output_root: str | Path = CAPTURE_ROOT,
+    *,
+    source_ids: tuple[str, ...] | None = None,
+) -> dict[str, object]:
     if os.getenv("NODE_ENV", "development") == "production":
         raise RuntimeError("bookkeeping live capture refuses NODE_ENV=production")
     if os.getenv("BOOKKEEPING_LIVE_AUTHORIZED") != "1":
         raise RuntimeError("set BOOKKEEPING_LIVE_AUTHORIZED=1 to authorize official-page capture")
+    unknown = set(source_ids or ()) - set(BOOKKEEPING_SOURCES)
+    if unknown:
+        raise ValueError(f"unregistered bookkeeping source: {sorted(unknown)!r}")
     root = Path(output_root).resolve()
     root.mkdir(parents=True, exist_ok=True)
     results: list[dict[str, object]] = []
-    for source_id, (url, _) in BOOKKEEPING_SOURCES.items():
+    for source_id, (url, _) in selected_capture_sources(source_ids).items():
         fetcher = SafeFetcher(SourcePolicy(source_id, frozenset({"www.kentei.ne.jp"})))
         try:
             fetched = fetcher.fetch(url)
@@ -46,5 +64,17 @@ def capture_registered_sources(output_root: str | Path = CAPTURE_ROOT) -> dict[s
     return write_capture_report(root, results, datetime.now(timezone.utc).isoformat())
 
 
+def requested_capture_source_ids() -> tuple[str, ...] | None:
+    """Comma-separated ids from the environment, so a scoped authorization reaches the CLI."""
+    raw = os.getenv("BOOKKEEPING_CAPTURE_SOURCE_IDS", "")
+    return tuple(item.strip() for item in raw.split(",") if item.strip()) or None
+
+
 if __name__ == "__main__":
-    print(json.dumps(capture_registered_sources(), ensure_ascii=False, indent=2))
+    print(
+        json.dumps(
+            capture_registered_sources(source_ids=requested_capture_source_ids()),
+            ensure_ascii=False,
+            indent=2,
+        )
+    )

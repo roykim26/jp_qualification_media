@@ -58,3 +58,39 @@ def test_capture_run_keeps_records_of_sources_outside_this_run(monkeypatch, tmp_
         item["source_id"] for item in report["results"]
     }
     assert (tmp_path / "capture-report.json").exists()
+
+
+def test_source_ids_narrows_the_run_to_the_authorized_pages(monkeypatch, tmp_path):
+    monkeypatch.setenv("BOOKKEEPING_LIVE_AUTHORIZED", "1")
+    monkeypatch.setattr(module, "SafeFetcher", _FakeFetcher)
+    requested = ("source:bookkeeping:candidate-data",)
+
+    report = capture_registered_sources(tmp_path, source_ids=requested)
+
+    assert [item["source_id"] for item in report["results"]] == list(requested)
+    assert report["source_count"] == 1
+
+
+def test_unregistered_source_id_is_refused_before_any_request(monkeypatch, tmp_path):
+    monkeypatch.setenv("BOOKKEEPING_LIVE_AUTHORIZED", "1")
+
+    class _NeverFetch:
+        def __init__(self, *args, **kwargs):
+            raise AssertionError("must not build a fetcher for an unauthorized source id")
+
+    monkeypatch.setattr(module, "SafeFetcher", _NeverFetch)
+    with pytest.raises(ValueError, match="unregistered bookkeeping source"):
+        capture_registered_sources(tmp_path, source_ids=("source:bookkeeping:unknown",))
+
+
+def test_command_line_scope_comes_from_the_environment(monkeypatch):
+    monkeypatch.delenv("BOOKKEEPING_CAPTURE_SOURCE_IDS", raising=False)
+    assert module.requested_capture_source_ids() is None
+
+    monkeypatch.setenv(
+        "BOOKKEEPING_CAPTURE_SOURCE_IDS", "source:bookkeeping:candidate-data, source:bookkeeping:home"
+    )
+    assert module.requested_capture_source_ids() == (
+        "source:bookkeeping:candidate-data",
+        "source:bookkeeping:home",
+    )
