@@ -2,7 +2,7 @@
 
 阶段 1 的宅建与 IT Passport 本地闭环已归档；阶段 2 的六资格页面、跨资格日程/比较/更新与 ICS 下载，以及阶段 3 的技术 SEO 基线均已完成。当前不连接生产服务、不生成未审核动态事实。
 
-页面完成不等于数据完成。数据现状：176 条已批准正式事实，覆盖缺口 18 → 0，`pnpm verify:all` 六资格全通过；但基本情報技術者的字段完整性依赖 `conditional` 判级的跳过机制，历史统计类字段（合格率等）六资格均无官方来源。逐资格字段账目见 `docs/<qualification>-source-contract.md`，门禁与授权口径见 [docs/data-gate-semantics.md](docs/data-gate-semantics.md)。
+页面完成不等于数据完成。数据现状：176 条已批准正式事实，覆盖缺口 18 → 0，`pnpm verify:all` 六资格全通过；但基本情報技術者的字段完整性依赖 `conditional` 判级的跳过机制，历史统计类字段（合格率等）六资格均无官方来源，其只读调研与候选官方统计页清单见 [docs/work-package-f-statistics-sources.md](docs/work-package-f-statistics-sources.md)。逐资格字段账目见 `docs/<qualification>-source-contract.md`，门禁与授权口径见 [docs/data-gate-semantics.md](docs/data-gate-semantics.md)。
 
 ## 本地启动
 
