@@ -1287,8 +1287,8 @@ apps/admin               管理后台
 services/api             公开与后台 API
 services/collector       采集调度和下载
 services/parser          资格适配器和提取（目前只落共享候选契约 ParsedCandidate；六条链的提取仍在 services/collector）
-services/validator       校验、冲突与风险判断
-services/publisher       正式事实发布和页面刷新
+services/validator       校验、冲突与风险判断（目录尚未创建；校验现分散在 services/collector 的入库校验、packages/schema 的 candidateFactSchema 与门禁 scripts/verify-lib.mjs）
+services/publisher       正式事实发布和页面刷新（目录尚未创建；facts/fact_revisions/change_events 的唯一写入方是 apps/admin 的 POST /internal/reviews/{id}，页面刷新由 apps/web 构建承担）
 packages/schema          共享类型和数据契约
 packages/ui              前端组件
 packages/content-rules   术语、模板、禁用表达
