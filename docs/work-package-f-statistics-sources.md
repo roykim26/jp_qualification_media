@@ -83,7 +83,7 @@
 - 第一批只做 HTML、且天然带年度序列的三条：`source:fundamental-it:statistics-fe`（IPA `toukei_fe.html`）、`source:takken:statistics-overview`（retio `/toukei/toukei/`）、`source:bookkeeping:candidate-data`（日商受験者データ）。理由：一条页覆盖多年、口径成文概率高、不需要 PDF。
 - 第二批 FP 两条：`source:fp:jafp-result-data`、`source:fp:kinzai-result-fp`。维度最复杂，放第二批可先在第一批里跑通 `statistics_methodology` 的记法。
 - 行政書士与 IT Passport 留到 PDF 议题定案后再排（两家的完整历年序列都在 PDF 侧）。
-- 采集要**新写一张工作包 F 授权单**：`docs/work-package-e-live-capture-authorization.md` 已注明 2026-09-08 执行完毕，不可复用；逐条列 URL 与允许域名，并把 `source_ids` 收紧到当批范围。
+- 采集要**新写一张工作包 F 授权单**：`docs/work-package-e-live-capture-authorization.md` 已注明 2026-09-08 执行完毕，不可复用；逐条列 URL 与允许域名，并把 `source_ids` 收紧到当批范围。⇒ 草稿已落在 `docs/work-package-f-live-capture-authorization.md`（未签署、未执行），其中 §2／§3 记了两条执行前必须处理的代码事实：簿记与基本情報的采集函数**没有 `source_ids` 形参**（默认会重抓整表 15 条／3 条），宅建适配器的 `snapshot_from_html()` 把 `source_id` 硬编码成单来源常量。
 
 ## 5. 读数复现方式
 

@@ -1,5 +1,16 @@
 # 阶段记录与剩余问题
 
+## 2026-10-11：工作包 F 采集授权单草稿（零抓取、零写库、零联网）
+
+- 动机与范围：把上一轮调研文档 §4 的建议切法推成一张**可签署的授权单草稿**，产物是新文档 `docs/work-package-f-live-capture-authorization.md`（状态：未签署、未执行），调研文档 §4 末条改为指向它并补上本轮实测的两条执行前事实。全程只读代码与只读查库，未发起任何外部请求。
+- 授权范围（第一批三条，URL 全部来自已抓快照正文）：`source:fundamental-it:statistics-fe`（IPA `shiken/reports/toukei_fe.html`）、`source:takken:statistics-overview`（retio `/toukei/toukei/`）、`source:bookkeeping:candidate-data`（日商 `/bookkeeping/candidate-data`），`source_type` 统一 `official_statistics`，`institution_id` 复用库里已有的 `institution:ipa`／`retio`／`jcci`。行政書士与 IT Passport 不入本单（完整序列在 PDF 侧），FP 两条留第二批。
+- **执行前的三条硬前置（本轮实测，非推断）**：① 六资格的采集开关名逐一核过——`FUNDAMENTAL_IT_LIVE_AUTHORIZED`／`TAKKEN_LIVE_AUTHORIZED`／`BOOKKEEPING_LIVE_AUTHORIZED`／`FP_LIVE_AUTHORIZED`／`GYOSEISHOSHI_LIVE_AUTHORIZED`／`IT_PASSPORT_LIVE_AUTHORIZED`。② 适配器注册表条数：`FUNDAMENTAL_IT_SOURCES` **3**、`BOOKKEEPING_SOURCES` **15**、`FP_SOURCES` **13**、`GYoseishoshi_SOURCES` **3**、`IT_PASSPORT_SOURCES` **3**，而 `takken.py` 是**单个** `TAKKEN_SOURCE` 常量且 `snapshot_from_html()` 把 `source_id` 硬编码成它 ⇒ 宅建统计页抓下来也进不了现行入库链，要先改多来源表。③ **簿记与基本情報的 `capture_registered_sources()` 没有 `source_ids` 形参**（只有 `capture_fp` 与 `capture_takken.capture_directly_cited_sources` 有）⇒ 按现状执行会一次重抓整表 15 条／3 条，远超授权面；先补形参（纯代码＋用例）再执行。
+- 落盘命名的不对称是本单的风险点：`fundamental-it`／`it-passport`／`takken` 写 `<sha256>.html` 且「存在即跳过」；`bookkeeping`／`gyoseishoshi`／`fp` 写**固定文件名并无条件 `write_bytes`** ⇒ 整表重抓会原地覆盖磁盘上唯一的证据字节，而库内只存哈希，门禁与审计都测不出「文件与 `content_hash` 已不符」。若必须整表遍历，先按 FP 的做法留内容寻址副本（gitignore 的 `var/`，不入库）。
+- 口径类读数：`source_type` 在库里是自由文本（`packages/db/migrations/0000_stage_0.sql:7` 无 CHECK／无枚举），`allowedSourceTypes` 只被 `packages/schema/src/data-coverage-contract.ts:49` 做 zod 形状校验、**运行时无任何读取方强制** ⇒ 写错来源类型不会报错，唯一防线是审核人；`is_registered_source_url()` 两家严格度不同，簿记要求逐字命中注册表 URL，基本情報只校验主机名。
+- 与门禁的关系沿用上一轮结论：F 的 `post_event` 需求被 `scripts/verify-lib.mjs:62` 跳过，采集与入库都不会让覆盖缺口变红；但入库必然产生非合成 `pending_review`，`pending_official != 0` 是硬失败 ⇒ 采集／入库／批准三次授权分开，本单只给第一次。
+- 本轮明确未执行：未联网、未抓取、未写库、未登记来源迁移、未改任何采集代码。`docs/work-package-f-statistics-sources.md` 里那 27 条 URL 的活性仍未验证。
+- 回归读数：只新增与修改 `docs/`，未动 TypeScript 与 Python，故未重跑 build／Vitest／pytest；`prettier --write` 新文档后 `npm run format:check` 通过。工作树只剩未跟踪的 `Python/`。
+
 ## 2026-10-11：工作包 F 的只读来源调研（零抓取、零写库、零联网）
 
 - 动机与范围：`docs/data-gate-semantics.md` §11 第 5 项长期只写了一句「历史统计字段六资格全为零官方来源，归工作包 F」，没有读数也没有来源清单。本轮把它推成一份可执行的调研，全程不向外部站点发起请求（也不用搜索引擎），只读契约、只读查库、只解析 `var/official-snapshots/` 里已有的官方快照。产物是新文档 `docs/work-package-f-statistics-sources.md`；三份既有文档（§11 第 5 项、`docs/data-remediation-handoff.md` 工作包 F 引言、README 数据现状句）改为指向它。
