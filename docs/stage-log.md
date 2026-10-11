@@ -1,5 +1,18 @@
 # 阶段记录与剩余问题
 
+## 2026-10-11：FP 端到端入库的离线预演与取证快照固化（零抓取、零写库）
+
+- 动机与范围：`docs/data-gate-semantics.md` §11 第 6 项此前只留了一句「补齐报告后重跑则候选新增 0 条」，没有可复核的读数。本轮把它推成一次纯离线预演——解析磁盘快照、按新链规则算 candidate-id、与本机开发库对账，全程不联网、不写库（库侧只 `SELECT`，唯一一条机制判据用临时表实测后 rollback）。探针脚本放 gitignore 的 `var/`，跑完即删。
+- **更正范围**：没有采集报告记录的取证快照是 **6 个、共 75 条候选**，不是文档里写的「那 4 个／53 条」。按页分布 `jafp-2-3-outline` 36／`jafp-schedule` 12／`kinzai-schedule-2026` 10／`kinzai-1-academic` 8／`kinzai-1-practical` 7／`kinzai-eligibility` 2；这 75 条 id 与库里 6 条真实快照行逐条相符、无重复 id、**全部已是 `approved`**。其余 7 个注册来源解析 0 条并报 `structure_changed`，库里也没有它们的快照行（本来就没入库）。适配器 `sha256(html.encode())` 与磁盘原始字节 **13/13 全等** ⇒ `capture_record()` 的第 4 重校验不会因编码差异失败。
+- 新发现的缺口（此前没记过）：`ingest_fp.py` 的 `__main__` mapping 只覆盖 4 个来源＝53 条，**另外 22 条（两个 schedule 来源）没有任何已提交的入库入口**——`git log -S` 显示 mapping 从未含它们，0016 迁移只有 `INSERT INTO sources`。⇒ 「补齐报告后重跑」最多补得回那 4 个来源；要让 22 条也可重跑得先扩 mapping，代价是把重抓暴露面从 53 抬到 75。
+- FP 总账（本机库读数）：`candidate_facts` 114 全 `approved` 全非合成 ＝ 75（磁盘真实快照）＋ 39（3 条 `ci://` 夹具快照行，24/8/7）；`facts` 75 全 approved；**0 条现行事实挂在 `ci://` 快照上**，39 条夹具候选都不是任何事实的当前 revision；全库 `pending_review` 0。`npm run audit:provenance`：176 条事实里 blocked 4，**全在 takken，FP blocked 0** ⇒ 夹具残留不承重。`source_checks` 对 FP 是 6 条 `blocked` ＋ 2 条 `changed`，**8 条全部由 `scripts/backfill-fp-provenance.mjs` 写入，新链一条 `changed` 都还没落过**；两套 id 要分清——capture-only 那 2 条用的是与新链同形的 `source-check:fp:<content_hash>`（将来幂等），那 6 条 `blocked` 用的是 `source-check:legacy-metadata:snapshot:fp:<content_hash>`（将来新链重跑这 6 个快照会**新增** `changed` 而非取代 `blocked`，两条并排属正常）。11 个 FP 快照行里 **9 个缺 `original_url`／`final_url`／`http_status`／`collector_version`**，正好是那 6 个真实取证行 ＋ 3 个 `ci://` 夹具行。
+- 机制判据（临时表实测，非推断）：`ON CONFLICT (id) DO UPDATE … WHERE candidate_facts.status='pending_review'` 对已批准行 rowcount＝0 且 `normalized_value` 原值不动，对 pending 行 rowcount＝1 并更新 ⇒ 「哈希不变则候选新增 0 条」成立；整事务 rollback，真实表未被触碰。
+- 暴露量与副作用：候选 id 内嵌 `content_hash`，某页哈希一变、该页候选全部变成新的 `pending_review`；单页最大是 `jafp-2-3-outline` 的 36 条＝映射内 53 条的 **68%**。另一条不对称是 `snapshots` 用**无条件** `DO UPDATE` ⇒ 即使哈希不变，也会把那 6 行真实快照的 `retrieved_at` 从 2026-09-07／09-11 改成新的抓取时刻（顺带补全溯源列）；门禁不受影响（§5 的 `official_verified_at` 取 `reviews` 时间），但「证据何时取得」的语义会变，属需项目所有者定性的副作用。
+- 排除的假风险：`SafeFetcher.cache` 是实例内且逐来源新建，抓取不会返回 304／`not_modified` ⇒ 卡不住 `capture_record()` 的 `status=='ok'`；`candidate_idempotency_idx` 含 `source_snapshot_id`，新哈希的候选不会与旧行撞唯一索引。
+- 已落地的动作（号主明示后执行）：把承载那 75 条已批准事实的 6 个 HTML 按 `<sha256>.html` 复制进 `var/official-snapshots/fp-preserved/`——6/6 复制后重算哈希一致，另附 `manifest.json` 记哈希↔来源↔候选数↔字节数，并逐条回库确认 `snapshot:fp:<hash>` 行存在、行上 `source_id` 一致、`object_key` 指向原文件。**原文件未改动**。理由：FP 快照按固定文件名原地覆盖，磁盘字节是这 75 条事实唯一的物理证据而库内只存哈希；页一改版旧字节永久丢失，而「文件与 `content_hash` 已不符」在门禁与审计里都测不出来。基本情報的内容寻址命名没有这问题，FP 补齐映射前先用这份副本兜住。
+- 仍待授权：跑通 FP 端到端需要一次新抓取授权（`FP_LIVE_AUTHORIZED=1`），且 `capture_registered_sources(source_ids=None)` 默认抓 **13** 个 `FP_SOURCES`，超出 `docs/work-package-e-live-capture-authorization.md` 登记的 9 个 FP 来源，而该单注明已于 2026-09-08 执行完毕 ⇒ 重抓要开新单并用 `source_ids` 收紧到映射内那 4 个。
+- 回归读数：本轮只改 `docs/`，未动 TypeScript 与 Python，故未重跑 build／Vitest／pytest；`prettier --write` 三份文档后 `npm run format:check` 通过。未抓取、未写库，门禁与事实计数沿用本日上一节读数（`verify:all` 6/6 PASS、176 facts）。
+
 ## 2026-10-11：`sources.qualification_id` 回填本机实跑（PR #12 的收尾读数）
 
 - 上面那节留的「本机尚未 apply」已按明示授权补跑：`NODE_ENV=development DATABASE_URL=...qualification_media node_modules/.bin/tsx.cmd packages/db/src/seed.ts`，全部输出只有一行 `Seeded 6 stable qualification records (no dynamic facts); bound 32 sources to their qualification.` ⇒ 与只读预演的 32 完全吻合。这是本项唯一的一次库写入（32 行 `UPDATE`）。
