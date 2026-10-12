@@ -288,7 +288,7 @@ def test_ingest_dedup_key_ignores_jsonb_member_order():
     from collector.ingest_bookkeeping import value_key
 
     def key(value, display):
-        return value_key("fee", "bookkeeping:1", "unified", 2026, value, display)
+        return value_key("fee", "bookkeeping:1", "unified", None, 2026, value, display)
 
     assert key({"amount": 8800, "currency": "JPY"}, "1級 8,800円") == key(
         {"currency": "JPY", "amount": 8800}, "1級 8,800円"

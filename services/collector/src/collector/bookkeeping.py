@@ -8,6 +8,7 @@ after official snapshots are captured and their structure is frozen.
 from dataclasses import dataclass
 from hashlib import sha256
 import re
+from unicodedata import normalize
 from urllib.parse import urlsplit
 
 from bs4 import BeautifulSoup
@@ -52,6 +53,7 @@ FIELD_KEYS = {
     "suspension_period", "exam_dates", "eligibility",
     "application_open_rule", "application_deadline_rule", "application_method_rule",
     "payment_deadline_rule", "result_date_rule",
+    "applicants", "examinees", "passed", "pass_rate", "statistics_methodology",
 }
 
 
@@ -77,6 +79,8 @@ class BookkeepingFactCandidate:
     synthetic: bool = True
     evidence_text: str | None = None
     value_type: str = "text"
+    exam_year: int | None = None
+    exam_session: str | None = None
 
 
 @dataclass(frozen=True)
@@ -151,6 +155,8 @@ def extract_candidates(snapshot: BookkeepingSnapshot) -> tuple[list[BookkeepingF
         candidates.extend(_extract_flow_payment_rule(snapshot, soup))
     elif snapshot.source_id == "source:bookkeeping:home":
         candidates.extend(_extract_home(snapshot, soup))
+    elif snapshot.source_id in {*STATISTICS_UNIFIED_SOURCES, STATISTICS_NET_SOURCE, STATISTICS_MIXED_SOURCE, STATISTICS_COSTING_SOURCE}:
+        candidates.extend(_extract_statistics(snapshot, soup, issues))
     if not candidates and not issues:
         issues.append(BookkeepingParseIssue("structure_changed", "no explicitly contracted bookkeeping fields found"))
     return candidates, tuple(issues)
@@ -342,3 +348,199 @@ def _extract_flow_payment_rule(snapshot: BookkeepingSnapshot, soup: BeautifulSou
         _candidate(snapshot, "payment_deadline_rule", "venue_defined", display, level, "unified", evidence=display)
         for level in ("1", "2", "3")
     ]
+
+
+# Work package F: the seven captured statistics pages.  candidate-data itself
+# prints a recent slice of the same tables, so it stays evidence-only and the
+# per-level history pages are the single ingestable series.
+STATISTICS_UNIFIED_SOURCES = {
+    "source:bookkeeping:candidate-data-class1": ("1", "unified"),
+    "source:bookkeeping:candidate-data-class2": ("2", "unified"),
+    "source:bookkeeping:candidate-data-class3": ("3", "unified"),
+}
+STATISTICS_NET_SOURCE = "source:bookkeeping:candidate-data-class23-net"
+STATISTICS_NET_LEVELS = {"2級": "2", "3級": "3"}
+STATISTICS_MIXED_SOURCE = "source:bookkeeping:candidate-data-class4"
+STATISTICS_COSTING_SOURCE = "source:bookkeeping:candidate-data-costing"
+# data_class4 prints 簿記初級（期間 block）above the retired 4級（回 block）.
+STATISTICS_BLOCK_SERIES = {
+    "期間": ("basic", "network"),
+    "回": ("4", "unified"),
+}
+# The coverage contract declares statistics requirements only for 1・2・3級, so 簿記
+# 初級, 4級 and 原価計算初級 rows are parsed but not emitted until those levels are
+# declared.  Their pages stay captured as byte-stable evidence.
+STATISTICS_CONTRACT_SERIES = {
+    ("1", "unified"),
+    ("2", "unified"),
+    ("3", "unified"),
+    ("2", "network"),
+    ("3", "network"),
+}
+# Values are keyed by the officially printed column label.  The net tables carry
+# a bare 「受験者数」 with no 「(申込者数)」 annotation and no 実受験者数 column, so the
+# page never says whether that count is applications or actual examinees; it is
+# deliberately left unmapped instead of guessed into either field.
+STATISTICS_COLUMNS = {
+    "受験者数(申込者数)": ("applicants", "integer"),
+    "実受験者数": ("examinees", "integer"),
+    "合格者数": ("passed", "integer"),
+    "合格率": ("pass_rate", "decimal"),
+}
+STATISTICS_SESSION_RE = re.compile(r"(\d+)\((.+)\)")
+STATISTICS_GREGORIAN_RE = re.compile(r"(\d{4})\.(\d{1,2})\.(\d{1,2})")
+STATISTICS_HEISEI_RE = re.compile(r"H(\d{2})\.(\d{1,2})\.(\d{1,2})")
+STATISTICS_PERIOD_RE = re.compile(r"(\d{4})年")
+STATISTICS_COUNT_RE = re.compile(r"([\d,]+)名")
+STATISTICS_RATE_RE = re.compile(r"(\d+(?:\.\d+)?)%")
+NET_SCOPE_ANCHOR = "3方式いずれも出題範囲や問題の難易度は同じ"
+
+
+def _printed_label(cell: str) -> str:
+    """Fold full-width punctuation, digits and spacing so labels compare reliably."""
+    return re.sub(r"\s+", "", normalize("NFKC", cell))
+
+
+def _statistics_session(first_cell: str) -> tuple[str, int] | None:
+    """Return the 回 number and its calendar year, e.g. 173（2026.06.14）."""
+    match = STATISTICS_SESSION_RE.fullmatch(_printed_label(first_cell))
+    if not match:
+        return None
+    for pattern, base in ((STATISTICS_GREGORIAN_RE, 0), (STATISTICS_HEISEI_RE, 1988)):
+        parsed = pattern.fullmatch(match.group(2))
+        if parsed:
+            return match.group(1), base + int(parsed.group(1))
+    return None
+
+
+def _statistics_period(first_cell: str) -> int | None:
+    """A 期間 row is one fiscal window; the printed start year keys the row."""
+    match = STATISTICS_PERIOD_RE.match(_printed_label(first_cell))
+    return int(match.group(1)) if match else None
+
+
+def _statistics_blocks(table) -> list[tuple[list[str], list[list[str]]]]:
+    """Split a table on each header row: data_class4 prints two blocks in one table."""
+    blocks: list[tuple[list[str], list[list[str]]]] = []
+    for row in table.find_all("tr"):
+        cells = row.find_all(["th", "td"])
+        if not cells:
+            continue
+        labels = [cell.get_text(" ", strip=True) for cell in cells]
+        if any(cell.name == "th" for cell in cells):
+            blocks.append((labels, []))
+        elif blocks:
+            blocks[-1][1].append(labels)
+    return blocks
+
+
+def _statistics_series(source_id: str, table, columns: list[str]) -> tuple[str, str] | None:
+    if source_id in STATISTICS_UNIFIED_SOURCES:
+        return STATISTICS_UNIFIED_SOURCES[source_id]
+    if source_id == STATISTICS_COSTING_SOURCE:
+        return ("cost-accounting-basic", "network")
+    if source_id == STATISTICS_MIXED_SOURCE:
+        return STATISTICS_BLOCK_SERIES.get(_printed_label(columns[0]))
+    if source_id == STATISTICS_NET_SOURCE:
+        heading = table.find_previous(["h2", "h3"])
+        label = _printed_label(heading.get_text("", strip=True)) if heading else ""
+        for name, level in STATISTICS_NET_LEVELS.items():
+            if label == _printed_label(name):
+                return (level, "network")
+    return None
+
+
+def _statistics_row_values(columns: list[str], cells: list[str]):
+    """Return (values, exam_session, exam_year); empty values means unparsed."""
+    values: list[tuple[str, str, str, str]] = []
+    for index, column in enumerate(columns):
+        fact = STATISTICS_COLUMNS.get(_printed_label(column))
+        if fact is None:
+            continue
+        pattern = STATISTICS_RATE_RE if fact[0] == "pass_rate" else STATISTICS_COUNT_RE
+        parsed = pattern.fullmatch(_printed_label(cells[index]))
+        if not parsed:
+            return [], None, None
+        values.append((fact[0], fact[1], parsed.group(1).replace(",", ""), column))
+    key = _printed_label(columns[0])
+    if key == "回":
+        session = _statistics_session(cells[0])
+        if session is None:
+            return [], None, None
+        return values, session[0], session[1]
+    if key == "期間":
+        year = _statistics_period(cells[0])
+        if year is None:
+            return [], None, None
+        return values, None, year
+    return values, None, None
+
+
+def _extract_statistics(
+    snapshot: BookkeepingSnapshot,
+    soup: BeautifulSoup,
+    issues: list[BookkeepingParseIssue],
+) -> list[BookkeepingFactCandidate]:
+    numbers: list[BookkeepingFactCandidate] = []
+    methodology: dict[tuple[str, str], list[str]] = {}
+
+    def note(series: tuple[str, str], text: str) -> None:
+        texts = methodology.setdefault(series, [])
+        if text and text not in texts:
+            texts.append(text)
+
+    for table in soup.find_all("table"):
+        for columns, rows in _statistics_blocks(table):
+            series = _statistics_series(snapshot.source_id, table, columns)
+            if series is None or series not in STATISTICS_CONTRACT_SERIES:
+                continue
+            note(series, "/".join(columns))
+            if series[1] == "network":
+                note(series, _sentence(soup, NET_SCOPE_ANCHOR))
+            for cells in rows:
+                if any(_printed_label(cell) == "中止" for cell in cells):
+                    # A cancelled 回 prints only 「中止」.  It is neither a zero nor a
+                    # structural change, so it contributes no value.
+                    continue
+                if len(cells) != len(columns):
+                    issues.append(BookkeepingParseIssue("unparsed_statistics_row", " ".join(cells)))
+                    continue
+                values, session, year = _statistics_row_values(columns, cells)
+                if not values or year is None:
+                    issues.append(BookkeepingParseIssue("unparsed_statistics_row", " ".join(cells)))
+                    continue
+                for fact_key, value_type, normalized, column in values:
+                    numbers.append(
+                        BookkeepingFactCandidate(
+                            fact_key,
+                            normalized,
+                            f"{cells[columns.index(column)]} {column}（{cells[0]}）",
+                            snapshot.source_id,
+                            snapshot.content_hash,
+                            f"bookkeeping:{series[0]}",
+                            series[1],
+                            value_type=value_type,
+                            evidence_text=" | ".join(cells),
+                            synthetic=snapshot.synthetic,
+                            exam_year=year,
+                            exam_session=session,
+                        )
+                    )
+
+    facts: list[BookkeepingFactCandidate] = []
+    for (level, mode), texts in sorted(methodology.items()):
+        for text in texts:
+            facts.append(
+                BookkeepingFactCandidate(
+                    "statistics_methodology",
+                    text,
+                    text,
+                    snapshot.source_id,
+                    snapshot.content_hash,
+                    f"bookkeeping:{level}",
+                    mode,
+                    synthetic=snapshot.synthetic,
+                    evidence_text=text,
+                )
+            )
+    return facts + numbers

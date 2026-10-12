@@ -50,7 +50,8 @@
 
 ## 6. 审核链语义
 
-- **批准**：按 `(qualification, provider, level, component, delivery_mode, payment_method, exam_year, fact_key)` 用 `IS NOT DISTINCT FROM` 匹配既有 `facts` 行（**不过滤状态**）。命中则把该行 `status` 置回 `approved` 并指向新 revision —— 这就是「批准会重新激活同维度 `superseded` 事实」；未命中则插入新行。两种情况都写 `fact_revisions` 与 `change_events`。
+- **批准**：按 `(qualification, provider, level, component, delivery_mode, payment_method, exam_session, exam_year, fact_key)` 用 `IS NOT DISTINCT FROM` 匹配既有 `facts` 行（**不过滤状态**）。命中则把该行 `status` 置回 `approved` 并指向新 revision —— 这就是「批准会重新激活同维度 `superseded` 事实」；未命中则插入新行。两种情况都写 `fact_revisions` 与 `change_events`。
+- **`exam_session`（0017 迁移，2026-10-12）**：簿记統一試験同一西历年有多个回合（173 回 2026.06.14 与 172 回 2026.02.22 都属 2026），所以回合号进入候选与正式事实的身份。列可空，既有 176 条事实一律为 `NULL`，其 candidate-id 仍由不含回合段的旧式公式逐字节复现（见 `docs/stage-log.md` 当日预检读数）。`config/data-coverage-contract.json` 的 `dimensions` **没有**加 `examSession`：它只是身份维度，不参与契约判级匹配。
 - **拒绝／延期**：只改候选状态与 `reviews`，不撤销已存在的正式事实。
 - **撤销**：`POST /internal/retractions/{id}`，前置条件是对应候选已 `rejected`、且同维度恰好命中 1 条 `object_key LIKE 'ci://%'` 的当前事实；否则整个事务回滚。命中的事实置 `superseded` 并写 `fact_retractions`。真实官方快照驱动的事实不走这条撤销路径。
 

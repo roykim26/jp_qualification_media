@@ -49,10 +49,12 @@ def test_parser_candidate_keeps_full_fact_identity_dims():
             'exam_component': 'registration',
             'delivery_mode': 'cbt',
             'payment_method': 'convenience_store',
+            'exam_session': '173',
             'synthetic': False,
         }
     )
     assert item.payment_method == 'convenience_store'
+    assert item.exam_session == '173'
     assert item.synthetic is False
 
 

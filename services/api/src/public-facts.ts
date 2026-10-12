@@ -69,7 +69,7 @@ export async function readApprovedFacts(
   if (!databaseUrl) return [];
   const result = await databasePool(databaseUrl).query(
     `
-    SELECT q.slug AS qualification_slug, c.provider_id, c.exam_level_id, c.exam_component, c.delivery_mode, c.payment_method, c.exam_year, c.fact_key,
+    SELECT q.slug AS qualification_slug, c.provider_id, c.exam_level_id, c.exam_component, c.delivery_mode, c.payment_method, c.exam_session, c.exam_year, c.fact_key,
       c.value_type, fr.normalized_value, fr.display_value, fr.status,
       c.risk_level, c.source_id, c.source_snapshot_id, c.synthetic,
       fr.verified_at, src.canonical_url AS source_url, src.allowed_domain,
@@ -106,6 +106,7 @@ export async function readApprovedFacts(
     examComponent: row.exam_component,
     deliveryMode: row.delivery_mode,
     paymentMethod: row.payment_method,
+    examSession: row.exam_session,
     examYear: row.exam_year,
     factKey: row.fact_key,
     valueType: row.value_type,

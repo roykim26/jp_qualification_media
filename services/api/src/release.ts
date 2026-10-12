@@ -75,6 +75,7 @@ export async function rollbackApprovedFact(
         AND f.exam_component IS NOT DISTINCT FROM c.exam_component
         AND f.delivery_mode IS NOT DISTINCT FROM c.delivery_mode
         AND f.payment_method IS NOT DISTINCT FROM c.payment_method
+        AND f.exam_session IS NOT DISTINCT FROM c.exam_session
         AND f.exam_year=c.exam_year AND f.fact_key=c.fact_key
       WHERE f.id=$1 AND r.status='approved' AND r.id <> $2
       ORDER BY r.verified_at DESC LIMIT 1`,

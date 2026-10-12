@@ -173,7 +173,8 @@ async function reviewCandidate(
          WHERE qualification_id=$1 AND provider_id IS NOT DISTINCT FROM $2
            AND exam_level_id IS NOT DISTINCT FROM $3 AND exam_component IS NOT DISTINCT FROM $4
            AND delivery_mode IS NOT DISTINCT FROM $5 AND payment_method IS NOT DISTINCT FROM $6
-           AND exam_year=$7 AND fact_key=$8 FOR UPDATE`,
+           AND exam_session IS NOT DISTINCT FROM $7
+           AND exam_year=$8 AND fact_key=$9 FOR UPDATE`,
         [
           row.qualification_id,
           row.provider_id,
@@ -181,6 +182,7 @@ async function reviewCandidate(
           row.exam_component,
           row.delivery_mode,
           row.payment_method,
+          row.exam_session,
           row.exam_year,
           row.fact_key,
         ],
@@ -209,8 +211,8 @@ async function reviewCandidate(
         );
       } else {
         await client.query(
-          `INSERT INTO facts (id,qualification_id,provider_id,exam_level_id,exam_component,delivery_mode,payment_method,exam_year,fact_key,current_revision_id,status)
-          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'approved')`,
+          `INSERT INTO facts (id,qualification_id,provider_id,exam_level_id,exam_component,delivery_mode,payment_method,exam_session,exam_year,fact_key,current_revision_id,status)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'approved')`,
           [
             factId,
             row.qualification_id,
@@ -219,6 +221,7 @@ async function reviewCandidate(
             row.exam_component,
             row.delivery_mode,
             row.payment_method,
+            row.exam_session,
             row.exam_year,
             row.fact_key,
             revisionId,
