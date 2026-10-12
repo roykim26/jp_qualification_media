@@ -107,6 +107,31 @@ set -a; . ./.env; set +a; PYTHONIOENCODING=utf-8 uv run --project services/colle
 
 **两条前置已于同日闭合**：`0018_bookkeeping_statistics_sources.sql` 登记七条统计来源（四条可入库序列 `class1`／`class2`／`class3`／`class23-net`，加三条 evidence-only 的父页 `candidate-data`、`class4`、`costing`，后者只为与 collector 常量对齐、避免将来给它们存证时撞同一个外键），本机 `npm run db:migrate` 应用 `0017`＋`0018`。闭合后同一条命令的重跑读数：`summary: stored=96 computed=865 skipped_approved=58 would_stage=807 blocking=0`，**退出码 0**；四个统计来源逐项从 `unregistered_source` 变为 `stored=0 computed=197/289/289/32 would_stage=197/289/289/32`，`would_stage` 合计仍是 807。**即预检已无阻塞项，真入库在代码与库层面就绪，但 `blocking=0` 只是「允许入队」的判据，不等于已获入库授权**；入队后这 807 行全是非合成 `pending_review`，门禁会硬红，逐条批准是另一次授权。
 
+### 审核工作量的分解：`--breakdown`
+
+同一条命令加 `--breakdown` 就把「这 807 条到底是什么」打印出来，供批准轮（第四次授权）前估工作量；仍是只读，聚合对象正是各来源的 `fresh` 行（已扣 `skipped_approved`），字段全部取自候选本身而非第二套算法：
+
+```
+set -a; . ./.env; set +a; PYTHONIOENCODING=utf-8 uv run --project services/collector python -m collector.precheck_bookkeeping --breakdown
+```
+
+无法识别的参数直接退 2 并打印用法（避免把拼错的 `--breakdown` 当成「跑过了但没数」）。
+
+2026-10-12 本机实跑读数（非推算，与上面的 `would_stage=807` 逐字相符）：
+
+| 维度       | 分布                                                                                                                                                                                                   |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 来源       | `class2` 289／`class3` 289／`class1` 197／`class23-net` 32                                                                                                                                             |
+| 級别／方式 | 2 級 unified 289（2002–2026，25 年，72 回合）；3 級 unified 289（同区间，72 回合）；1 級 unified 197（同区间，49 回合）；2 級 network 16（2020–2026，7 年，无回合）；3 級 network 16（同区间，无回合） |
+| 字段       | `pass_rate` 207／`passed` 207／`applicants` 193／`examinees` 193／`statistics_methodology` 7                                                                                                           |
+| 风险级     | `high` **807（全部）**                                                                                                                                                                                 |
+| 值类型     | integer 593／decimal 207／text 7                                                                                                                                                                       |
+
+两个可直接用于决策的读数：
+
+1. **审核量是 807 条全量**，没有 `low`／`medium` 子集可自动放行；`skipped_already_approved=0` 也说明这批值一条都不会被去重保护跳过。
+2. **ネット的 32 条只产数值序列之外的字段**：按已拍板口径（裸「受験者数」不映射）每条只落 `passed`＋`pass_rate`，`sessions=0` 是「ネット按期间行、无回合维度」的指纹；真正的历年数值序列是统一考试那 765 条。
+
 ## 事实维度
 
 日商簿記不得只用 `qualification + year + fact_key` 表达事实。每条候选必须同时携带：

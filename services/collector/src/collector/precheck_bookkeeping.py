@@ -9,6 +9,12 @@ exactly the candidate ids we reproduce offline, and can the database accept them
 
 It only ever SELECTs.  The CLI exits 1 when a blocking finding is present, so a
 real ingest can be gated on it.
+
+``--breakdown`` additionally prints how the rows ingest would newly stage split
+across source, level/delivery, fact key, risk level and value type.  Every row at
+``risk_level=high`` needs a human decision, so that split is the review workload
+estimate for the approval round; it is computed from the same candidates the
+writer sees, never from a second formula.
 """
 
 from __future__ import annotations
@@ -17,6 +23,7 @@ import hashlib
 import json
 import os
 import sys
+from collections import Counter
 from contextlib import closing
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -36,6 +43,8 @@ from collector.ingest_bookkeeping import (
 )
 
 SESSION_COLUMN = "exam_session"
+BREAKDOWN_FLAG = "--breakdown"
+USAGE = f"usage: python -m collector.precheck_bookkeeping [{BREAKDOWN_FLAG}]"
 
 
 @dataclass(frozen=True)
@@ -49,6 +58,65 @@ class Finding:
         return f"[{'BLOCK' if self.blocking else 'info '}] {self.code} {self.source_id}: {self.detail}"
 
 
+@dataclass(frozen=True)
+class PlannedRow:
+    """One row ingest would write: its id, the writer's dedup key, and the review-facing dimensions."""
+
+    candidate_id: str
+    dedup_key: tuple
+    fact_key: str
+    exam_level_id: str
+    delivery_mode: str
+    exam_session: str | None
+    exam_year: int
+    value_type: str
+    risk_level: str
+
+
+@dataclass
+class Breakdown:
+    """Split of the rows ingest would newly stage, so the approval workload is readable before any write."""
+
+    total: int = 0
+    by_source: Counter = field(default_factory=Counter)
+    by_level: Counter = field(default_factory=Counter)
+    by_fact_key: Counter = field(default_factory=Counter)
+    by_risk_level: Counter = field(default_factory=Counter)
+    by_value_type: Counter = field(default_factory=Counter)
+    years: dict = field(default_factory=dict)
+    sessions: dict = field(default_factory=dict)
+
+    def add(self, source_id: str, row: PlannedRow) -> None:
+        level = f"{row.exam_level_id}/{row.delivery_mode}"
+        self.total += 1
+        self.by_source[source_id] += 1
+        self.by_level[level] += 1
+        self.by_fact_key[row.fact_key] += 1
+        self.by_risk_level[row.risk_level] += 1
+        self.by_value_type[row.value_type] += 1
+        self.years.setdefault(level, set()).add(row.exam_year)
+        if row.exam_session is not None:
+            self.sessions.setdefault(level, set()).add(row.exam_session)
+
+    def _counter_section(self, label: str, counter: Counter) -> list[str]:
+        return [f"-- {label} --"] + [
+            f"  {key}: {count}" for key, count in sorted(counter.items(), key=lambda item: (-item[1], item[0]))
+        ]
+
+    def format(self) -> str:
+        lines = [f"breakdown of the {self.total} rows ingest would newly stage:"]
+        lines += self._counter_section("by source", self.by_source)
+        lines.append("-- by level/delivery (count, year span, distinct sessions) --")
+        for level, count in sorted(self.by_level.items(), key=lambda item: (-item[1], item[0])):
+            span = self.years.get(level, set())
+            years = f"years {min(span)}-{max(span)} ({len(span)} yrs)" if span else "years n/a"
+            lines.append(f"  {level}: {count}  {years}  sessions={len(self.sessions.get(level, set()))}")
+        lines += self._counter_section("by fact_key", self.by_fact_key)
+        lines += self._counter_section("by risk_level", self.by_risk_level)
+        lines += self._counter_section("by value_type", self.by_value_type)
+        return "\n".join(lines)
+
+
 @dataclass
 class Report:
     findings: list[Finding] = field(default_factory=list)
@@ -56,6 +124,7 @@ class Report:
     computed_ids: int = 0
     skipped_approved: int = 0
     would_stage: int = 0
+    breakdown: Breakdown | None = None
 
     def add(self, code: str, source_id: str, detail: str, *, blocking: bool = True) -> None:
         self.findings.append(Finding(code, source_id, detail, blocking))
@@ -72,15 +141,15 @@ class Report:
         )
 
 
-def planned_rows(snapshot_bytes: bytes, source_id: str, snapshot_hash: str) -> tuple[dict[str, tuple], list[str]]:
+def planned_rows(snapshot_bytes: bytes, source_id: str, snapshot_hash: str) -> tuple[dict[str, PlannedRow], list[str]]:
     """Recompute the rows ingest would write, with the writer's own id formula.
 
-    Keys are candidate ids, values are the dedup keys ``approved_value_keys`` uses,
+    Keys are candidate ids, values carry the dedup key ``approved_value_keys`` uses,
     so a value already approved on an earlier generation is recognised here too.
     """
     snapshot = snapshot_from_bytes(source_id, snapshot_bytes, synthetic=False)
     candidates, issues = extract_candidates(snapshot)
-    planned: dict[str, tuple] = {}
+    planned: dict[str, PlannedRow] = {}
     for candidate in candidates:
         year = DEFAULT_EXAM_YEAR if candidate.exam_year is None else candidate.exam_year
         payload = json.dumps(
@@ -94,23 +163,32 @@ def planned_rows(snapshot_bytes: bytes, source_id: str, snapshot_hash: str) -> t
             ensure_ascii=False,
         )
         digest = hashlib.sha256(payload.encode()).hexdigest()[:12]
-        planned[
-            candidate_id(
-                snapshot_hash,
-                candidate.exam_level_id,
-                candidate.delivery_mode,
-                candidate.fact_key,
-                digest,
-                candidate.exam_session,
-            )
-        ] = value_key(
-            candidate.fact_key,
+        row_id = candidate_id(
+            snapshot_hash,
             candidate.exam_level_id,
             candidate.delivery_mode,
+            candidate.fact_key,
+            digest,
             candidate.exam_session,
-            year,
-            candidate.normalized_value,
-            candidate.display_value,
+        )
+        planned[row_id] = PlannedRow(
+            candidate_id=row_id,
+            dedup_key=value_key(
+                candidate.fact_key,
+                candidate.exam_level_id,
+                candidate.delivery_mode,
+                candidate.exam_session,
+                year,
+                candidate.normalized_value,
+                candidate.display_value,
+            ),
+            fact_key=candidate.fact_key,
+            exam_level_id=candidate.exam_level_id,
+            delivery_mode=candidate.delivery_mode,
+            exam_session=candidate.exam_session,
+            exam_year=year,
+            value_type=candidate.value_type,
+            risk_level=candidate.risk_level,
         )
     return planned, [issue.code for issue in issues]
 
@@ -186,8 +264,11 @@ def check_source(cursor, report: Report, approved: set[tuple], filename: str, so
             source_id,
             f"{len(unreproduced)} of {len(stored_current)} ids stored for this generation are not reproduced, first={unreproduced[0]}",
         )
-    skipped = {row_id for row_id, key in planned.items() if key in approved}
+    skipped = {row_id for row_id, row in planned.items() if row.dedup_key in approved}
     fresh = sorted(set(planned) - skipped)
+    if report.breakdown is not None:
+        for row_id in fresh:
+            report.breakdown.add(source_id, planned[row_id])
     if fresh:
         foreign = {
             row[0]
@@ -214,8 +295,8 @@ def check_source(cursor, report: Report, approved: set[tuple], filename: str, so
     )
 
 
-def run(database_url: str) -> Report:
-    report = Report()
+def run(database_url: str, *, with_breakdown: bool = False) -> Report:
+    report = Report(breakdown=Breakdown() if with_breakdown else None)
     with closing(psycopg.connect(database_url, connect_timeout=5)) as connection:
         with connection.cursor() as cursor:
             session_column_present = (
@@ -239,14 +320,21 @@ def run(database_url: str) -> Report:
 
 
 def main(argv: list[str] | None = None) -> int:
+    args = list(sys.argv[1:] if argv is None else argv)
+    unknown = [arg for arg in args if arg != BREAKDOWN_FLAG]
+    if unknown:
+        print(f"unrecognised argument(s): {', '.join(unknown)}\n{USAGE}", file=sys.stderr)
+        return 2
     database_url = os.getenv("DATABASE_URL")
     if not database_url:
         print("DATABASE_URL is required", file=sys.stderr)
         return 2
-    report = run(database_url)
+    report = run(database_url, with_breakdown=BREAKDOWN_FLAG in args)
     for finding in report.findings:
         print(finding.format())
     print(report.summary())
+    if report.breakdown is not None:
+        print(report.breakdown.format())
     print(
         "note: every would_stage row is a non-synthetic pending_review candidate, "
         "which the release gate treats as a hard failure until it is reviewed."
