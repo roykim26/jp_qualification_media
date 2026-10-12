@@ -1,3 +1,7 @@
+from pathlib import Path
+
+import pytest
+
 from collector.bookkeeping import (
     BOOKKEEPING_SOURCES,
     BOOKLET_PHRASE,
@@ -28,6 +32,12 @@ def test_bookkeeping_source_plan_is_explicit_and_official():
         "source:bookkeeping:qa",
         "source:bookkeeping:news-51504",
         "source:bookkeeping:candidate-data",
+        "source:bookkeeping:candidate-data-class1",
+        "source:bookkeeping:candidate-data-class2",
+        "source:bookkeeping:candidate-data-class3",
+        "source:bookkeeping:candidate-data-class23-net",
+        "source:bookkeeping:candidate-data-class4",
+        "source:bookkeeping:candidate-data-costing",
     }
     assert all(item["allowed_domain"] == "www.kentei.ne.jp" for item in source_plan())
     assert all(
@@ -47,6 +57,42 @@ def test_candidate_data_source_is_registered_as_official_statistics():
 
 def test_statistics_page_yields_no_fabricated_candidates():
     snapshot = snapshot_from_html("source:bookkeeping:candidate-data", "<html><body><p>受験者データ</p></body></html>")
+    candidates, issues = extract_candidates(snapshot)
+
+    assert candidates == []
+    assert [issue.code for issue in issues] == ["structure_changed"]
+
+
+F2_STATISTICS_SOURCES = {
+    # Kept verbatim because the official site itself is inconsistent here: #2/#3
+    # carry a legacy bookkeeping_contents segment and #6 is spelled ca-date.
+    "source:bookkeeping:candidate-data-class1": "https://www.kentei.ne.jp/bookkeeping/candidate-data/data_class1",
+    "source:bookkeeping:candidate-data-class2": "https://www.kentei.ne.jp/bookkeeping/bookkeeping_contents/candidate-data/data_class2",
+    "source:bookkeeping:candidate-data-class3": "https://www.kentei.ne.jp/bookkeeping/bookkeeping_contents/candidate-data/data_class3",
+    "source:bookkeeping:candidate-data-class23-net": "https://www.kentei.ne.jp/bookkeeping/candidate-data/data_class2-3",
+    "source:bookkeeping:candidate-data-class4": "https://www.kentei.ne.jp/bookkeeping/candidate-data/data_class4",
+    "source:bookkeeping:candidate-data-costing": "https://www.kentei.ne.jp/bookkeeping/candidate-data/ca-date",
+}
+
+
+@pytest.mark.parametrize("source_id,url", sorted(F2_STATISTICS_SOURCES.items()))
+def test_history_subpage_is_registered_as_official_statistics(source_id, url):
+    assert BOOKKEEPING_SOURCES[source_id] == (url, "official_statistics")
+    assert is_registered_source_url(url)
+
+
+def test_history_subpages_write_distinct_snapshot_files():
+    # Snapshots are written under the last source_id segment with unconditional
+    # overwrite, so a slug collision would silently destroy another page's bytes.
+    slugs = [source_id.rsplit(":", 1)[-1] for source_id in BOOKKEEPING_SOURCES]
+
+    assert len(slugs) == len(set(slugs)) == 22
+    assert len({slug for slug in slugs if slug.startswith("candidate-data")}) == 7
+
+
+@pytest.mark.parametrize("source_id", sorted(F2_STATISTICS_SOURCES))
+def test_history_subpage_yields_no_fabricated_candidates(source_id):
+    snapshot = snapshot_from_html(source_id, "<html><body><p>過去のデータ</p></body></html>")
     candidates, issues = extract_candidates(snapshot)
 
     assert candidates == []

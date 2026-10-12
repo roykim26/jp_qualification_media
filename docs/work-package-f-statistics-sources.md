@@ -1,6 +1,7 @@
 # 工作包 F：历史统计（合格率类）官方来源调研
 
 调研日期：2026-10-11。范围：**纯离线**——只读仓库契约、只读查询本机开发库、只解析 `var/official-snapshots/` 里已抓好的官方快照。本轮**没有向任何外部站点发起请求**（也没用搜索引擎），所以表内 URL 的**活性与当前内容尚未验证**；验证属采集授权之后的动作。
+**2026-10-11 采集授权后的更新**：`toukei_fe.html` 与 `https://www.kentei.ne.jp/bookkeeping/candidate-data` 两条已实抓并复核（HTTP 200，读数见授权单 §10）；宅建 `https://www.retio.or.jp/toukei/toukei/` **仍未实抓**，活性未验证。两条已抓的结论相反，务必按下述两条分别看待，不要把「IPA 式目录页」的经验套到日商。
 
 ## 1. 现状读数
 
@@ -64,9 +65,10 @@
 - 统计表类：`https://www.ipa.go.jp/shiken/reports/toukei_fe.html`（統計情報（基本情報技術者試験））、`toukei_all.html`（全試験区分）、`toukei.html`（応用／高度／支援士）、`toukei_sg.html`（セキュリティマネジメント）、`reports/index.html`，引用面各 5。
 - 结果公布类（多为日程与注意事项，不承载人数表）：`goukaku/index.html`、`goukaku/happyobi.html`、`goukaku/shoukai.html`、`2025/20250420_schedule.html`、`2025/20251012_schedule.html`。
 
-两条判读要点：
+三条判读要点：
 
-- **IPA 的 `reports/` 目录是按考试区分配布的历史统计表**，`toukei_fe.html` 直接对应基本情報技術者試験。若页内即含历次受験者数／合格者数／合格率，FE 与 IT Passport 可以**一条来源覆盖多个年度序列**，是六资格里性价比最高的一条。
+- **~~若页内即含历次受験者数／合格者数／合格率~~ 该假设已被 2026-10-11 的实抓推翻**：`toukei_fe.html` 抓到了（HTTP 200、79254 字节、`d3d78fa544…`），但页内**零张 `<table>`**，正文里「合格率」「受験者数」出现 **0 次**，它是一个**附件目录页**：正文只有「統計資料／評価点分布／過去の統計資料（令和5・6・7年度）」三组链接，指向 `*_fe_toukei.pdf`、`202608_fe_01_suiihyo.xlsx`（推移表）、`…_02_kenbetsu.xlsx`（都道府県別）等 20 余个 `.pdf`／`.xlsx`／`.zip`。⇒ 五字段**不在这条 HTML 来源里**，必须再授权抓附件（Excel 优先，推移表最接近历年序列），而全仓同样**没有 xlsx 解析能力**（见 §3 第 1 项，与 PDF 同阻碍）。页内另外确认了「令和5年度以降」「受験申込時のアンケートに基づく」两句成文口径，可作 `statistics_methodology` 的候选原文。
+- **日商 `candidate-data` 相反，是六资格里目前唯一「HTML 就够」的一条**（2026-10-11 实抓：HTTP 200、58027 字节、`46fcf61fc2…`）：页内 **7 张 `<table>`**，級与実施方式直接写在 H2 段标题里（1級統一／2級統一／3級統一／2級ネット／3級ネット／簿記初級／原価計算初級），`applicants`／`examinees`／`passed`／`pass_rate` 全是页内印刷的官方值。两种粒度不可混：**統一表按「回＋西历日期」**（列头含 `実受験者数`），**ネット与初級表按「年度（4月〜次年3月）」**（列头只有 `受験者数`）。但**页面对合格率没有任何成文说明**（「合格率」7 次出现全在 `<th>`，「※／注：／ただし／集計／口径／分母」计数为 0），⇒ `statistics_methodology` 只能记列头原样描述或留缺，不得把「合格者／実受験者」当官方公式入库（本机核验该算式与印刷值逐条吻合，仅可作理解用）。更长的历年序列在同站 **6 条子页链接**（`/bookkeeping/candidate-data/data_class1`、`…/candidate-data/data_class2`、`data_class2-3`（2 与 3 级ネット共用）、`data_class3`、`data_class4`、`ca-date`）＋ 1 个 Excel（`2020～2025nendo_boki_jukensha-2.xlsx`，「全級データ」段只有一张 PNG 图，表在附件里）；**这 6 条已于 2026-10-12 按追加单 `docs/work-package-f2-bookkeeping-history-capture-authorization.md` 抓完（全部 HTTP 200）**。追加单 §8 的读数：1／2／3 級統一各一张表回溯到 **101 回(2002.6.9)**（2、3 級 72 期无缺号；1 級 49 期、缺 23 个回合号），三张表里各有一行 `155（2020.6.14）中止`；ネット那页两张表（2 級／3 級各 7 行，自 2020 年 12 月起）；初級／4 級那页是**同一张 `<table>` 内混排「期間」4 列块与「回」5 列块**（初級 2017/4 起 10 行、4 級 101〜145 回 45 行）；原価計算初級 9 行（2018/4 施行起）。**合格率的分母口径六页全数未成文**，唯一一条成文说明在ネット页（ネット起始时点＋「3方式いずれも出題範囲や問題の難易度は同じ」）。⇒ 单靠簿记一条链就足以撑起 `pass_rate` 的历史窗口，行政書士／IT Passport 仍卡在 PDF。
 - **宅建那份 10 年 PDF 是官方自己划定的窗口**（令和7年度以前の過去10年間），与 `docs/data-remediation-handoff.md` 工作包 F「首批建议确定统一历史窗口，例如最近 5 年」直接对得上；同一站点的 `/toukei/toukei/` 有 HTML 入口，优先走 HTML。
 
 ## 3. 前置条件与阻碍（按代价排序）
@@ -80,10 +82,10 @@
 
 ## 4. 建议的推进切法（供号主定夺，本轮不含任何动作）
 
-- 第一批只做 HTML、且天然带年度序列的三条：`source:fundamental-it:statistics-fe`（IPA `toukei_fe.html`）、`source:takken:statistics-overview`（retio `/toukei/toukei/`）、`source:bookkeeping:candidate-data`（日商受験者データ）。理由：一条页覆盖多年、口径成文概率高、不需要 PDF。
+- 第一批只做 HTML、且天然带年度序列的三条：`source:fundamental-it:statistics-fe`（IPA `toukei_fe.html`）、`source:takken:statistics-overview`（retio `/toukei/toukei/`）、`source:bookkeeping:candidate-data`（日商受験者データ）。理由：一条页覆盖多年、口径成文概率高、不需要 PDF。**（2026-10-11 实抓后的修正：三条里只有簿记成立。FE 是附件目录页、零表；「口径成文」在簿记页也未成立——合格率无任何成文说明。宅建未抓。⇒ 「HTML 入口＝能取到数」这个前提不能再当作批次规划的依据。）**
 - 第二批 FP 两条：`source:fp:jafp-result-data`、`source:fp:kinzai-result-fp`。维度最复杂，放第二批可先在第一批里跑通 `statistics_methodology` 的记法。
 - 行政書士与 IT Passport 留到 PDF 议题定案后再排（两家的完整历年序列都在 PDF 侧）。
-- 采集要**新写一张工作包 F 授权单**：`docs/work-package-e-live-capture-authorization.md` 已注明 2026-09-08 执行完毕，不可复用；逐条列 URL 与允许域名，并把 `source_ids` 收紧到当批范围。⇒ 已落在 `docs/work-package-f-live-capture-authorization.md`（未签署、未执行）。其中记过的两条执行前代码事实已于同日收口：簿记与基本情報的采集函数现已支持 `source_ids`（并从 `<QUAL>_CAPTURE_SOURCE_IDS` 环境变量取值），宅建统计页登记成 `capture-only:takken:statistics-overview` 走仅存证路径，因为 `snapshot_from_html()` 仍把 `source_id` 钉死在单来源常量上——重构留到入库授权轮再做。
+- 采集要**新写一张工作包 F 授权单**：`docs/work-package-e-live-capture-authorization.md` 已注明 2026-09-08 执行完毕，不可复用；逐条列 URL 与允许域名，并把 `source_ids` 收紧到当批范围。⇒ 已落在 `docs/work-package-f-live-capture-authorization.md`（**2026-10-11 已签署，FE＋簿记两条已执行，读数在其 §10**）。其中记过的两条执行前代码事实已于同日收口：簿记与基本情報的采集函数现已支持 `source_ids`（并从 `<QUAL>_CAPTURE_SOURCE_IDS` 环境变量取值），宅建统计页登记成 `capture-only:takken:statistics-overview` 走仅存证路径，因为 `snapshot_from_html()` 仍把 `source_id` 钉死在单来源常量上——重构留到入库授权轮再做。
 
 ## 5. 读数复现方式
 
