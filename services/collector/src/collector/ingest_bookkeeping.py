@@ -36,6 +36,7 @@ def value_key(
     fact_key: str,
     exam_level_id: str | None,
     delivery_mode: str | None,
+    exam_session: str | None,
     exam_year: int,
     normalized_value: object,
     display_value: str,
@@ -45,6 +46,7 @@ def value_key(
         fact_key,
         str(exam_level_id),
         str(delivery_mode),
+        str(exam_session),
         str(exam_year),
         canonical,
         display_value,
@@ -58,16 +60,36 @@ def approved_value_keys(cursor) -> set[tuple[str, ...]]:
     without this guard every unchanged fact would return as a duplicate pending row.
     """
     cursor.execute(
-        """SELECT fact_key, exam_level_id, delivery_mode, exam_year,
+        """SELECT fact_key, exam_level_id, delivery_mode, exam_session, exam_year,
                   normalized_value::text, display_value
         FROM candidate_facts
         WHERE qualification_id=%s AND status='approved' AND synthetic=false""",
         (QUALIFICATION_ID,),
     )
     return {
-        value_key(row[0], row[1], row[2], row[3], json.loads(row[4]), row[5])
+        value_key(row[0], row[1], row[2], row[3], row[4], json.loads(row[5]), row[6])
         for row in cursor.fetchall()
     }
+
+
+def candidate_id(
+    snapshot_hash: str,
+    exam_level_id: str,
+    delivery_mode: str,
+    fact_key: str,
+    value_digest: str,
+    exam_session: str | None = None,
+) -> str:
+    """Build the deterministic id, keeping the pre-session shape byte-identical.
+
+    Approved facts already stored under the session-less id must not be re-issued
+    under a new one, so only a row that actually carries a 回 gains a segment.
+    """
+    scope = f":{exam_session}" if exam_session is not None else ""
+    return (
+        f"candidate:bookkeeping:{snapshot_hash}:{exam_level_id}:{delivery_mode}"
+        f"{scope}:{fact_key}:{value_digest}"
+    )
 
 
 def ingest_snapshot(database_url: str, source_id: str, snapshot_path: str | Path, exam_year: int = 2026) -> dict[str, int | str]:
@@ -114,9 +136,10 @@ def ingest_snapshot(database_url: str, source_id: str, snapshot_path: str | Path
             approved = approved_value_keys(cursor)
             skipped = 0
             for c in candidates:
+                year = exam_year if c.exam_year is None else c.exam_year
                 key = value_key(
-                    c.fact_key, c.exam_level_id, c.delivery_mode, exam_year,
-                    c.normalized_value, c.display_value,
+                    c.fact_key, c.exam_level_id, c.delivery_mode, c.exam_session,
+                    year, c.normalized_value, c.display_value,
                 )
                 if key in approved:
                     skipped += 1
@@ -126,11 +149,14 @@ def ingest_snapshot(database_url: str, source_id: str, snapshot_path: str | Path
                     ensure_ascii=False,
                 )
                 value_digest = hashlib.sha256(payload.encode()).hexdigest()[:12]
-                candidate_id = f"candidate:bookkeeping:{snapshot.content_hash}:{c.exam_level_id}:{c.delivery_mode}:{c.fact_key}:{value_digest}"
+                row_id = candidate_id(
+                    snapshot.content_hash, c.exam_level_id, c.delivery_mode,
+                    c.fact_key, value_digest, c.exam_session,
+                )
                 cursor.execute("""INSERT INTO candidate_facts
-                    (id,qualification_id,exam_level_id,delivery_mode,exam_year,fact_key,value_type,normalized_value,display_value,evidence_text,status,risk_level,source_id,source_snapshot_id,synthetic)
-                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s,%s,'pending_review',%s,%s,%s,false) ON CONFLICT DO NOTHING""",
-                    (candidate_id, QUALIFICATION_ID, c.exam_level_id, c.delivery_mode, exam_year, c.fact_key, c.value_type,
+                    (id,qualification_id,exam_level_id,delivery_mode,exam_session,exam_year,fact_key,value_type,normalized_value,display_value,evidence_text,status,risk_level,source_id,source_snapshot_id,synthetic)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s,%s,'pending_review',%s,%s,%s,false) ON CONFLICT DO NOTHING""",
+                    (row_id, QUALIFICATION_ID, c.exam_level_id, c.delivery_mode, c.exam_session, year, c.fact_key, c.value_type,
                      json.dumps(c.normalized_value, ensure_ascii=False), c.display_value, c.evidence_text, c.risk_level, source_id, snapshot_id))
                 inserted += cursor.rowcount
     return {"source_id": source_id, "candidates": inserted, "skipped_approved": skipped, "approval": "not_run"}
@@ -149,5 +175,11 @@ if __name__ == "__main__":
         "class3-exam.html": "source:bookkeeping:class3-exam",
         "qa.html": "source:bookkeeping:qa",
         "flow-teller.html": "source:bookkeeping:flow-teller",
+        # Work package F: history series pages.  candidate-data.html is the
+        # evidence-only recent slice and has no ingestable mapping by design.
+        "candidate-data-class1.html": "source:bookkeeping:candidate-data-class1",
+        "candidate-data-class2.html": "source:bookkeeping:candidate-data-class2",
+        "candidate-data-class3.html": "source:bookkeeping:candidate-data-class3",
+        "candidate-data-class23-net.html": "source:bookkeeping:candidate-data-class23-net",
     }
     print(json.dumps([ingest_snapshot(database_url, source, SNAPSHOT_ROOT / name) for name, source in mapping.items()], ensure_ascii=False, indent=2))

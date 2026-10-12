@@ -65,6 +65,7 @@ export const candidateFactSchema = z.object({
   examComponent: z.string().nullable().optional(),
   deliveryMode: z.string().nullable().optional(),
   paymentMethod: z.string().nullable().optional(),
+  examSession: z.string().nullable().optional(),
   examYear: z.number().int().positive(),
   factKey: z.string().min(1),
   valueType: z.enum(valueType),

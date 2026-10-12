@@ -40,6 +40,7 @@ class ParsedCandidate(BaseModel):
     exam_component: str | None = None
     delivery_mode: str | None = None
     payment_method: str | None = None
+    exam_session: str | None = None
     risk_level: RiskLevel = 'high'
     status: FactStatus = 'pending_review'
     evidence_text: str | None = None
