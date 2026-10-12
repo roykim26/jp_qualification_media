@@ -67,6 +67,44 @@
 
 `exam_year` 归属（原「入库前必须确认的产品决策」）已定为：統一表取该行印刷日期的西历年，并另带 `exam_session`（回合号）；ネット／初級的「期間」行取**起始年**作 `exam_year`、`exam_session` 留空，`display_value` 始终原样保留官方期间写法。理由是 0017 之前的身份键只到 `exam_year`，而 2002–2026 的統一序列里有 **292 个 (級, 方式, 年, 字段) 键装着 2–3 条事实**（同一年最多 3 个回合），不加回合就会在批准阶段静默丢数据。
 
+## 写库前预检（只读、可复跑）
+
+`services/collector/src/collector/precheck_bookkeeping.py` 把「要不要真入库」这件事的判据固化成一条命令，跑之前不需要临时探针：
+
+```
+set -a; . ./.env; set +a; PYTHONIOENCODING=utf-8 uv run --project services/collector python -m collector.precheck_bookkeeping
+```
+
+它**只 `SELECT`**，逐条走 `INGEST_SOURCES` 的 12 个来源，回答三件事：库能不能收这批候选、磁盘字节还是不是采集报告那一代、离线重算的候选 id 与库里同一代是否逐字节相符。退出码 0＝无阻塞项，1＝有阻塞项（可直接作为真入库的前置门禁），2＝缺 `DATABASE_URL`。
+
+它复用写入侧的同一套符号（`INGEST_SOURCES`／`candidate_id()`／`value_key()`／`approved_value_keys()`／`capture_record()`／`DEFAULT_EXAM_YEAR`），所以「预检说会产 N 条」与「入库真产 N 条」之间不存在第二套算法。
+
+判据码（阻塞项全部大写标记为 `BLOCK`）：
+
+| 码                       | 阻塞 | 含义                                                                                 |
+| ------------------------ | ---- | ------------------------------------------------------------------------------------ |
+| `session_column_absent`  | 是   | `candidate_facts` 没有 `exam_session` 列，即本机未应用 0017                          |
+| `unregistered_source`    | 是   | `sources` 里没有该 `source_id`；`snapshots.source_id` 是外键，入库会在写第一行前中止 |
+| `snapshot_missing`       | 是   | 快照文件不在磁盘上                                                                   |
+| `capture_record_invalid` | 是   | `capture-report.json` 缺记录、状态非 `ok`／非 200、或缺哈希与抓取时刻                |
+| `hash_mismatch`          | 是   | 磁盘字节的 sha256 与报告记录不符（固定文件名原地覆盖过的指纹）                       |
+| `parse_failed`           | 是   | `extract_candidates` 对本页报了 issue（结构变更或无法解析的行）                      |
+| `id_drift`               | 是   | 库里声称属于**当前这一代快照**的候选 id，代码复现不出来                              |
+| `id_collision`           | 是   | 将要新入队的 id 已存在于 `candidate_facts`                                           |
+| `staged_delta`           | 否   | 该来源的读数行：`stored`／`computed`／`skipped_approved`／`would_stage`              |
+
+两条刻意的口径：
+
+- **历史代次不算漂移**。`candidate_facts` 会累积同一来源的多个已批准代次（`38c961bb…`／`5824a42e…`／`a1a9f4f0…` 等），这是既有设计。`id_drift` 只比对 `source_snapshot_id = 'snapshot:bookkeeping:' + 磁盘哈希` 那一批行；更早代次在 `staged_delta` 里以 `other generations=M` 报出，不阻塞。
+- **`would_stage` 已扣掉写入侧的跳过保护**。`ingest_bookkeeping` 对值与维度都与已批准事实相同的候选不再入队，预检按同一 `value_key` 集合先算 `skipped_approved`，因此 `would_stage` 才是真入库会新增的行数。
+
+2026-10-12 本机实跑读数（第一次跑就是它，非推算）：`summary: stored=96 computed=865 skipped_approved=58 would_stage=807 blocking=5`，退出码 1。两个阻塞项是本包的入库前置，此前没有任何文档记过：
+
+1. `session_column_absent` —— 本机库未应用 0017（`schema_migrations` 18 行 vs 迁移文件 19 个）。
+2. `unregistered_source` × 4 —— `candidate-data-class1`／`-class2`／`-class3`／`-class23-net` 四条统计来源只存在于 collector 常量里，**`sources` 表中一行都没有**。它们不像 `0015_bookkeeping_gap_sources.sql` 那批：F-2 只授了采集，没建登记迁移 ⇒ 真入库必须先补一条 `INSERT INTO sources` 迁移，否则在写第一条快照时就撞外键。
+
+其余 8 个既有来源 `would_stage=0`（值全部命中已批准跳过保护），即这条链现在重跑是幂等的。
+
 ## 事实维度
 
 日商簿記不得只用 `qualification + year + fact_key` 表达事实。每条候选必须同时携带：

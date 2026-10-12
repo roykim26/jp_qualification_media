@@ -1,5 +1,16 @@
 # 阶段记录与剩余问题
 
+## 2026-10-12（同日第二轮）：写库前预检固化为可复跑命令，并收口三态口径措辞（零抓取、零写库）
+
+- 触发：号主拆成两件事——**先把「入库／批准」的文档口径理顺**（`pending_review` 不得写成「已入库」），**再把写库前预检的判据落成可复跑脚本**而不是临时探针；并要求「先取判据读数再动手，别用记忆里的数字」。本轮全部产物是代码／文档／用例，**没有**执行 `db:migrate`、**没有**入库、**没有**抓取。
+- 新模块 `services/collector/src/collector/precheck_bookkeeping.py`：只 `SELECT`，按 `INGEST_SOURCES` 的 12 个来源逐项回答「库能不能收、磁盘字节是不是报告那一代、离线重算的 id 与库里同一代是否相符」，退出码 0／1／2（有阻塞项＝1，可直接当真入库的前置门禁）。判据码、两条刻意口径与用法见 `docs/bookkeeping-source-contract.md` 的「写库前预检」节。它复用写入侧的同一套符号（`INGEST_SOURCES`／`candidate_id()`／`value_key()`／`approved_value_keys()`／`capture_record()`），所以预检读数与真入库结果之间不存在第二套算法。
+- `ingest_bookkeeping.py` 的两处改动是为了让这个复用成立：`__main__` 里的文件名→来源映射提到模块级 `INGEST_SOURCES`，无年份候选的归属年份提成 `DEFAULT_EXAM_YEAR = 2026`（此前这两样在 `__main__` 内部，预检要么抄一份、要么 import 不到）。行为零变化。
+- **两条此前没有任何文档记过的阻塞项，是脚本第一次真跑暴露的**（读数 `stored=96 computed=865 skipped_approved=58 would_stage=807 blocking=5`，退出码 1）：① `session_column_absent`——本机 `schema_migrations` 18 行 vs 迁移文件 19 个，0017 未 apply；② `unregistered_source` ×4——四条统计来源 `candidate-data-class1/class2/class3/class23-net` 只活在 collector 常量里，`sources` 表**一行都没有**，而 `snapshots.source_id`／`candidate_facts.source_id`／`source_checks.source_id`／`source_scopes.source_id` 全是外键 ⇒ 真入库会在写第一条快照行时撞 FK。这与 `0015_bookkeeping_gap_sources.sql` 那批不同：F-2 只授了采集，登记迁移从没建过。结论：**「要不要真入库」现在有了可执行的前置清单**——补 `sources` 登记迁移、apply 0017、接受 807 条非合成 `pending_review` 让门禁硬红、批准是第四次授权。
+- 过程中修掉两个自己的判据错误（都值得记住）：① 第一版拿**全部**存量 id 比对照 ⇒ 5 个来源假报 `id_drift`（home 9/9、network 51/51、calendar-2026 18/18、class1-exam 4/5、class2-exam 5/6），根因是 `candidate_facts` 按设计累积历史代次，改为只比 `source_snapshot_id = snapshot:bookkeeping:{磁盘哈希}` 的当代行；② 第一版 `would_stage` 忽略写入侧的已批准跳过保护而虚高，补 `approved_keys()`（0017 未 apply 时按不含 `exam_session` 的旧式元组比较）后，8 个既有来源全量重跑 `would_stage=0`，与「幂等」这一事实对齐。
+- 三态口径的文档收口（号主 directive 1）：`docs/data-gate-semantics.md` 新增 §8.1 词表——采集（不连库）／候选入库（`candidate_facts` 行 `pending_review`，**公开面为零**）／批准（`facts`，公开 API 可读、计入 baseline），并定表述硬规则（写「已入库 N 条」必须同句带 `pending_review` 与「未公开」；写「批准 N 条」必须写 `facts` 计数变化）。`docs/data-local-snapshot-audit-2026-09-07.md` 里 2026-09-11 两节据此改名：「本地待审核候选入库」→「本地候选入队（第二态：44 条 `pending_review`，未公开）」，「候选逐条审核结果」→「…（第三态：批准）」，并在正文写明那 39 条 `approve`／5 条 `reject` 才是写 `facts` 的一步，**「批准 44 条入库」这一合称不成立**（分属两次授权）。簿记那节的标题同样改为「第二态与第三态各一次独立授权」。
+- 本机环境的一个新事实（不是本轮改动，但影响后续任何写库/读取判据）：PostgreSQL 与 MinIO 由 docker compose 起，容器 `jp_qualification_media-postgres-1` 本轮处于 `Exited (255) 3 hours ago`，所以第一次连库报 `ECONNREFUSED ::1:5432`——**不是凭据问题也不是网络问题**。`docker compose up -d postgres` 起回后所有读数即取得。
+- 回归读数：`pytest services/collector/tests services/parser/tests` **150 ⇒ 155 通过**（新增 `test_bookkeeping_precheck.py` 5 条，全用假游标、不连库：旧式 id 形状、`unregistered_source` 阻塞、已批准值全跳过 ⇒ 只剩 `staged_delta` 且 `would_stage=0`、历史代次只报 info 而当代漂移阻塞、`hash_mismatch` 阻塞）。TypeScript 侧本轮未改，故未跑 build／Vitest／`verify:all`（且本机未 apply 0017 时 `verify:all` 本来就跑不起来，见上一节）。`services/collector/uv.lock` 被 `uv run` 重新生成，按既有口径提交前删除；`var/` 下的临时探针已清理。
+
 ## 2026-10-12：工作包 F 的 `exam_session` 身份维度与簿记统计页入库映射（零抓取、零写库、代码就绪）
 
 - 触发：号主以「同意按你的建议执行」批准两条口径——**一 A**（新增 `exam_session` 身份维度）与**二 B＋C**（`statistics_methodology` 记列头原文一条＋ネット页 ※ 句一条），并授权合并 PR #21（squash ⇒ main `08e18f1`；本地与远端分支按规矩未删）。本轮全部产物是代码／迁移／文档／用例，**没有**执行 `db:migrate`、**没有**入库、**没有**抓取。
@@ -12,6 +23,7 @@
 - 一处新暴露的执行顺序约束：`services/api/src/public-facts.ts` 的 `readApprovedFacts` 现在 `SELECT c.exam_session`，因此**本机库必须先应用 `0017` 才能跑 API／admin**，`verify:all` 也随之只能在迁移后跑。本轮未跑 `verify:all`（它要求 `DATABASE_URL`），迁移的正确性交给 release-gate 的「空库 `db:migrate` ⇒ `ci:fixture:restore` ⇒ verify」链路验证。
 - 回归读数：`pytest services/collector/tests services/parser/tests` **139 ⇒ 150 通过**（新增 `test_bookkeeping_statistics.py` 11 条，含中止行、混排块、年号与全角百分号、裸「受験者数」、id 旧式形状、同年多回合端到端可区分；`value_key` 加参数后 1 条既有用例同步）；Vitest **81 通过**、`test:verify-gate` 7 通过、`ci:fixture:verify` 通过、`npm run build` 通过、`npm run format:check` 全绿。`npm run lint` 仍有 1 条报错，来自未跟踪的本机解释器目录 `Python/`，与本轮改动无关（CI 无该目录）。`services/collector/uv.lock` 被 `uv run` 重新生成，未提交。
 - **同日收尾的三项口径拍板（号主逐条选定，三项都是「维持现状」⇒ 零代码改动）**：① ネット／初級的裸「受験者数」**继续不映射**；② 簿記初級／4 級／原価計算初級**继续不进覆盖契约**；③ `pass_rate` **存官方印刷百分数原值**（转写不换算，百分号留在 `display_value`）。为①补做的反向证据（离线探针，用完即删，不入库）：統一页 193 行的印刷合格率 **193/193 与 `合格者数 ÷ 実受験者数` 吻合**（最大 0.055pp），与除以 `申込者数` 全不吻合；ネット页 14 行 `合格者数 ÷ 受験者数` 14/14 吻合（≤0.05pp）。即该列行为上是官方合格率的分母、字面却与統一页「受験者数 (申込者数)」同词，两个指向冲突且官方不成文——这正是号主选择继续不替它选的理由。逐页候选数复核为 **197／289／289／32＝807**，`class4`／`costing` 两页各 0 条并报 `structure_changed`。
+- 交付：分支 `wp-f-bookkeeping-statistics-mapping`（`eb033a3`，15 文件 512 增／18 删）⇒ **PR #22 squash 合并，main＝`fcba8c4`**。CI 独立佐证迁移正确性：PR 上 `release-gate` **pass 1m1s**（空库 `db:migrate` 含 0017 ⇒ `ci:fixture:restore` ⇒ verify），合并后 main push 的 `release-gate` 亦 **success**。两个 `wp-f*` 分支本地与远端**均未删除**（删分支另行请示）。**本机库仍未 apply 0017**（`schema_migrations` 18 行 vs 迁移文件 19 个，属预期差），因此 `verify:all`／API／admin 在本机暂时跑不起来（`readApprovedFacts` 查询会因缺列直接报错）；入库与逐条批准各需单独授权。
 
 ## 2026-10-11：工作包 F 第一批的采集侧代码前置（零抓取、零写库、零联网）
 
