@@ -2,7 +2,7 @@
 
 > 本文是**时点快照**，供复制进新会话接续开发用。文中所有数字都是 2026-10-12 本机实测读数，**下一轮必须先按 §6 的命令现取，别把本文的数当结论**。口径权威定义在 `docs/data-gate-semantics.md`（§8.1 是三态术语），逐资格账目在 `docs/<qualification>-source-contract.md`。
 
-工作目录＝仓库根 `E:\自建程序\jp_qualification_media`；当前在 `main`＝`fa42e90`。历史纯线性（`git rev-list --merges --count main` 为 0），main 每个 commit 标题都带 `(#NN)`＝**一律走 squash PR，不直接 push main**。
+工作目录＝仓库根 `E:\自建程序\jp_qualification_media`；本单合并进 main 后该点为 **`a193e69` 及其后一个 docs commit**（下一轮以 `git log --oneline -1` 现取为准）。历史纯线性（`git rev-list --merges --count main` 为 0），main 每个 commit 标题都带 `(#NN)`＝**一律走 squash PR，不直接 push main**。
 
 ## 1. 铁律（号主长期口径，违反即返工）
 
@@ -28,6 +28,7 @@
 | #24 | 迁移 `0018` 登记七条统计来源；本机 apply `0017`＋`0018`；预检判据改「列存在性」 | `1c38a45` |
 | #25 | `docs/stage-log.md` 补第三轮交付段与 `db:seed` 读数（纯文档）                   | `442a7e7` |
 | #26 | 预检加 `--breakdown`，把待入队候选的审核量分解固化成常驻命令                    | `fa42e90` |
+| #27 | 新文档 `docs/transition-handoff.md`（即本单）＋ README 指针（纯文档）           | `a193e69` |
 
 另外这些口径**已拍板且均为「维持现状」**，别再重开：ネット／初級的裸「受験者数」不映射任何字段；簿記初級／4 級／原価計算初級不进覆盖契约；`pass_rate` 存官方印刷百分数原值（转写不换算，`value_type='decimal'`）。
 
@@ -54,8 +55,8 @@
 
    需要号主定：是否分批（建议按来源／年度切）、走 admin `POST /internal/reviews/{id}` 逐条打还是先只批 1 級那一序列、reject 的判定标准。批准才是写 `facts`，必须附 `facts` 计数变化。鉴权口径：写只认 `x-reviewer-id` 头，`?reviewer=` 查询参数是**降级只读**（重放面，别用）。
 
-3. **补 `docs/stage-log.md` 第四轮交付段**（`--breakdown` 轮的交付读数；按本项目惯例只能随下一个 PR 提交）。
-4. **删已合并分支**（6 个：`wp-f2-bookkeeping-history-capture`、`wp-f-bookkeeping-statistics-mapping`、`wp-f-bookkeeping-precheck`、`wp-f-statistics-source-registration`、`docs-stage-log-wpf-round3-delivery`、`wp-f-precheck-breakdown`）。即使用户已授权合并，删分支也要单独问一句；squash 后 `git branch -d` 必报 `not fully merged`，先 `git diff main <branch>` 确认**输出为空**再 `-D`。
+3. **stage-log 与本单的同步欠账**：第四轮（`--breakdown`）的交付段已写入 `docs/stage-log.md`；按本项目惯例（main 每个 commit 都经 PR 进来），**本轮（纯 docs 轮）自身的交付段仍欠**，随下一个 PR 提交，届时要一并给本单 §2 的表补上那一行。
+4. **删已合并分支**（7 个：`wp-f2-bookkeeping-history-capture`、`wp-f-bookkeeping-statistics-mapping`、`wp-f-bookkeeping-precheck`、`wp-f-statistics-source-registration`、`docs-stage-log-wpf-round3-delivery`、`wp-f-precheck-breakdown`、`docs-transition-handoff`）。即使用户已授权合并，删分支也要单独问一句；squash 后 `git branch -d` 必报 `not fully merged`，先 `git diff main <branch>` 确认**输出为空**再 `-D`。
 5. **两条旧债**：宅建统计页多来源重构（`snapshot_from_html()` 仍把 id 钉在单条 `TAKKEN_SOURCE`，那条背后有已批准事实 ⇒ 这页**只能抓、不能入库**）；基本情報技術者 `toukei_fe.html` 只是附件目录页（零 `<table>`，数据全在 20 多个 PDF／xlsx 附件里），而全仓**既无 PDF 也无 xlsx 解析能力** ⇒ 要另开「附件提取」授权并先定依赖。
 
 ## 5. 两个容易踩空的产品事实
