@@ -85,6 +85,24 @@ Why：审核人 ID 放进 URL 就可被任意 `<img src=…>`、浏览器历史�
 
 抓取授权本身**不包含**入库与批准权限；一次授权只管一件事。真实官方页面抓取必须经 `SafeFetcher`（域名、超时、重试、大小、重定向策略），不得绕过。
 
+### 8.1 三态词表（文档与汇报的措辞基准）
+
+「入库」在本仓库**只指第二态**，绝不用于第三态；第三态一律写「批准」。
+
+| 术语                       | 数据库落点                                                                                   | 公开面                                                                 |
+| -------------------------- | -------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| 采集／已抓                 | 只写磁盘快照与 `capture-report.json`，**不连库**                                             | 无                                                                     |
+| 候选入库／已入队（第二态） | `candidate_facts` 行 `status='pending_review'`＋`snapshots`／`capture_runs`／`source_checks` | **无**：公开 API、页面与 `release-gate-baseline` 的 facts 计数都读不到 |
+| 批准／已生效（第三态）     | `facts`＋`fact_revisions`＋`reviews`＋`change_events`                                        | 有：公开 API 可读，计入 facts 计数                                     |
+
+表述硬规则：
+
+- 写「已入库 N 条」必须同句带上状态名 `pending_review` 与「未公开」，否则读者会把候选当成事实。
+- 写「批准 N 条」必须写 `facts` 计数的变化（如「167 → 176」），不能只写条数。
+- 第二态本身也是**写库动作**，不是读操作：非合成 `pending_review` 会让门禁 `pending_official != 0` 硬失败（见 §1、`scripts/verify-lib.mjs` 的 `requireNoOfficialPending`）。
+- 历史措辞的更正基准：`docs/data-local-snapshot-audit-2026-09-07.md` 2026-09-11 两节里的「44 条」是**第二态**（候选入队），随后的 39 条 `approve`／5 条 `reject` 才是**第三态**。把这两步合称「批准 44 条入库」或「已入库 44 条（即批准）」都不成立——它们分属两次授权。
+- 要判断某批候选此刻处于哪一态，用只读预检 `collector.precheck_bookkeeping`（见 `docs/bookkeeping-source-contract.md` 的「写库前预检」节），不要凭文档措辞推断。
+
 ## 9. baseline 与 CI 夹具维护
 
 - 更新基线：`RELEASE_BASELINE_CONFIRM=UPDATE_RELEASE_GATE_BASELINE` + `pnpm baseline:update -- --confirm=UPDATE_RELEASE_GATE_BASELINE`，双重确认，仅 localhost，仍有真实待审核候选时拒绝更新。

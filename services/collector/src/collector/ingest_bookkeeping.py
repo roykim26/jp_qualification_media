@@ -15,6 +15,30 @@ from collector.bookkeeping import extract_candidates, snapshot_from_bytes
 QUALIFICATION_ID = "qualification:bookkeeping"
 SNAPSHOT_ROOT = Path("var/official-snapshots/bookkeeping").resolve()
 
+# The pages this chain may write, as filename -> registered source id.  Kept at
+# module level so the read-only pre-ingest check can walk exactly the same set
+# the writer will.  candidate-data.html is the evidence-only recent slice and has
+# no ingestable mapping by design.
+INGEST_SOURCES = {
+    "home.html": "source:bookkeeping:home",
+    "network.html": "source:bookkeeping:network",
+    "calendar-2026.html": "source:bookkeeping:calendar-2026",
+    "class1-exam.html": "source:bookkeeping:class1-exam",
+    "class2-exam.html": "source:bookkeeping:class2-exam",
+    "class3-exam.html": "source:bookkeeping:class3-exam",
+    "qa.html": "source:bookkeeping:qa",
+    "flow-teller.html": "source:bookkeeping:flow-teller",
+    # Work package F: history series pages.
+    "candidate-data-class1.html": "source:bookkeeping:candidate-data-class1",
+    "candidate-data-class2.html": "source:bookkeeping:candidate-data-class2",
+    "candidate-data-class3.html": "source:bookkeeping:candidate-data-class3",
+    "candidate-data-class23-net.html": "source:bookkeeping:candidate-data-class23-net",
+}
+
+# Candidates that carry no printed year (rule-type facts such as a column-header
+# transcription) are filed under this year, matching every existing bookkeeping row.
+DEFAULT_EXAM_YEAR = 2026
+
 
 def capture_record(source_id: str, snapshot_path: Path) -> dict[str, object]:
     report_path = SNAPSHOT_ROOT / "capture-report.json"
@@ -92,7 +116,7 @@ def candidate_id(
     )
 
 
-def ingest_snapshot(database_url: str, source_id: str, snapshot_path: str | Path, exam_year: int = 2026) -> dict[str, int | str]:
+def ingest_snapshot(database_url: str, source_id: str, snapshot_path: str | Path, exam_year: int = DEFAULT_EXAM_YEAR) -> dict[str, int | str]:
     if os.getenv("NODE_ENV", "development") == "production" or os.getenv("BOOKKEEPING_LOCAL_WRITE") != "1":
         raise RuntimeError("bookkeeping ingest requires explicit non-production local-write authorization")
     if urlsplit(database_url).hostname not in {"localhost", "127.0.0.1"}:
@@ -166,20 +190,4 @@ if __name__ == "__main__":
     database_url = os.getenv("DATABASE_URL")
     if not database_url:
         raise SystemExit("DATABASE_URL is required")
-    mapping = {
-        "home.html": "source:bookkeeping:home",
-        "network.html": "source:bookkeeping:network",
-        "calendar-2026.html": "source:bookkeeping:calendar-2026",
-        "class1-exam.html": "source:bookkeeping:class1-exam",
-        "class2-exam.html": "source:bookkeeping:class2-exam",
-        "class3-exam.html": "source:bookkeeping:class3-exam",
-        "qa.html": "source:bookkeeping:qa",
-        "flow-teller.html": "source:bookkeeping:flow-teller",
-        # Work package F: history series pages.  candidate-data.html is the
-        # evidence-only recent slice and has no ingestable mapping by design.
-        "candidate-data-class1.html": "source:bookkeeping:candidate-data-class1",
-        "candidate-data-class2.html": "source:bookkeeping:candidate-data-class2",
-        "candidate-data-class3.html": "source:bookkeeping:candidate-data-class3",
-        "candidate-data-class23-net.html": "source:bookkeeping:candidate-data-class23-net",
-    }
-    print(json.dumps([ingest_snapshot(database_url, source, SNAPSHOT_ROOT / name) for name, source in mapping.items()], ensure_ascii=False, indent=2))
+    print(json.dumps([ingest_snapshot(database_url, source, SNAPSHOT_ROOT / name) for name, source in INGEST_SOURCES.items()], ensure_ascii=False, indent=2))
