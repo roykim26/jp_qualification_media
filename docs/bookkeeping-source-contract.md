@@ -43,7 +43,7 @@
 
 这 7 条 2026-10-11 先进了**采集侧**：`BOOKKEEPING_SOURCES` 从 15 涨到 **22**（`capture_bookkeeping.capture_registered_sources()` 接受 `source_ids`／`BOOKKEEPING_CAPTURE_SOURCE_IDS` 收紧到当批）。URL 逐字取自已抓快照正文（`docs/work-package-f-statistics-sources.md` §2、`docs/work-package-f2-bookkeeping-history-capture-authorization.md` §2）。授权口径见 `docs/work-package-f-live-capture-authorization.md` 与 `docs/work-package-f2-bookkeeping-history-capture-authorization.md`。
 
-## 统计页的入库映射（2026-10-12 落地，代码就绪、未执行入库）
+## 统计页的入库映射（2026-10-12 落地；同日按号主授权完成入库，批准仍 0 条）
 
 `_extract_statistics()`（`services/collector/src/collector/bookkeeping.py`）现在读取其中 **4 条**：`candidate-data-class1`／`-class2`／`-class3`／`-class23-net`，产出 `applicants`／`examinees`／`passed`／`pass_rate`／`statistics_methodology`。对已抓快照的实测读数：**807 条候选**（1 級 197＝49 回合×4＋1 条口径说明、2 級／3 級各 289、ネット 32＝7 期×2×2＋4 条口径说明），id 全不相同且与既有 176 条零重叠。
 
@@ -106,6 +106,10 @@ set -a; . ./.env; set +a; PYTHONIOENCODING=utf-8 uv run --project services/colle
 其余 8 个既有来源 `would_stage=0`（值全部命中已批准跳过保护），即这条链现在重跑是幂等的。
 
 **两条前置已于同日闭合**：`0018_bookkeeping_statistics_sources.sql` 登记七条统计来源（四条可入库序列 `class1`／`class2`／`class3`／`class23-net`，加三条 evidence-only 的父页 `candidate-data`、`class4`、`costing`，后者只为与 collector 常量对齐、避免将来给它们存证时撞同一个外键），本机 `npm run db:migrate` 应用 `0017`＋`0018`。闭合后同一条命令的重跑读数：`summary: stored=96 computed=865 skipped_approved=58 would_stage=807 blocking=0`，**退出码 0**；四个统计来源逐项从 `unregistered_source` 变为 `stored=0 computed=197/289/289/32 would_stage=197/289/289/32`，`would_stage` 合计仍是 807。**即预检已无阻塞项，真入库在代码与库层面就绪，但 `blocking=0` 只是「允许入队」的判据，不等于已获入库授权**；入队后这 807 行全是非合成 `pending_review`，门禁会硬红，逐条批准是另一次授权。
+
+### 入库后（2026-10-12）的同一条预检读法
+
+号主于 2026-10-12T10:36:41Z 在另一会话窗口给出「真入库 807 条」这句授权，该窗口跑 `BOOKKEEPING_LOCAL_WRITE=1 python -m collector.ingest_bookkeeping` ⇒ **EXIT=0**，逐来源 `candidates=197/289/289/32`、八条既有来源 `candidates=0`；库内插入窗 `candidate_facts.created_at` **10:38:24–10:38:40Z**。同一条只读预检随之变为 `summary: stored=903 computed=865 skipped_approved=58 would_stage=807 blocking=4`、**退出码 1**，四条阻塞全是 `id_collision`（计算出的候选 id 已在库中）⇒ **这是「这批已入队」的回执，不是新障碍，也不是重新入库授权**。⚠ 已知口径缺口：`would_stage` 只扣写入侧「与已批准事实同值则跳过」的保护，**不扣同 id 的 `pending_review` 行**，所以入队后仍报 807；要让预检区分「未入队／已入队待批」属代码改动，需单独授权。库侧现态与门禁红法见 `docs/stage-log.md` 第五轮与 `docs/transition-handoff.md` §3；要点是 **`facts` 仍 176＝批准 0 条**，公开面零变化，本机 `verify:all` 因 `official pending 807 != 0` 转红（CI 跑空库夹具，不受影响）。
 
 ### 审核工作量的分解：`--breakdown`
 
