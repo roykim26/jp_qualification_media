@@ -43,7 +43,7 @@
 
 这 7 条 2026-10-11 先进了**采集侧**：`BOOKKEEPING_SOURCES` 从 15 涨到 **22**（`capture_bookkeeping.capture_registered_sources()` 接受 `source_ids`／`BOOKKEEPING_CAPTURE_SOURCE_IDS` 收紧到当批）。URL 逐字取自已抓快照正文（`docs/work-package-f-statistics-sources.md` §2、`docs/work-package-f2-bookkeeping-history-capture-authorization.md` §2）。授权口径见 `docs/work-package-f-live-capture-authorization.md` 与 `docs/work-package-f2-bookkeeping-history-capture-authorization.md`。
 
-## 统计页的入库映射（2026-10-12 落地；同日按号主授权完成入库，批准仍 0 条）
+## 统计页的入库映射（2026-10-12 落地并按授权完成入库；2026-10-13 按授权全部批准完毕）
 
 `_extract_statistics()`（`services/collector/src/collector/bookkeeping.py`）现在读取其中 **4 条**：`candidate-data-class1`／`-class2`／`-class3`／`-class23-net`，产出 `applicants`／`examinees`／`passed`／`pass_rate`／`statistics_methodology`。对已抓快照的实测读数：**807 条候选**（1 級 197＝49 回合×4＋1 条口径说明、2 級／3 級各 289、ネット 32＝7 期×2×2＋4 条口径说明），id 全不相同且与既有 176 条零重叠。
 
@@ -109,7 +109,29 @@ set -a; . ./.env; set +a; PYTHONIOENCODING=utf-8 uv run --project services/colle
 
 ### 入库后（2026-10-12）的同一条预检读法
 
-号主于 2026-10-12T10:36:41Z 在另一会话窗口给出「真入库 807 条」这句授权，该窗口跑 `BOOKKEEPING_LOCAL_WRITE=1 python -m collector.ingest_bookkeeping` ⇒ **EXIT=0**，逐来源 `candidates=197/289/289/32`、八条既有来源 `candidates=0`；库内插入窗 `candidate_facts.created_at` **10:38:24–10:38:40Z**。同一条只读预检随之变为 `summary: stored=903 computed=865 skipped_approved=58 would_stage=807 blocking=4`、**退出码 1**，四条阻塞全是 `id_collision`（计算出的候选 id 已在库中）⇒ **这是「这批已入队」的回执，不是新障碍，也不是重新入库授权**。⚠ 已知口径缺口：`would_stage` 只扣写入侧「与已批准事实同值则跳过」的保护，**不扣同 id 的 `pending_review` 行**，所以入队后仍报 807；要让预检区分「未入队／已入队待批」属代码改动，需单独授权。库侧现态与门禁红法见 `docs/stage-log.md` 第五轮与 `docs/transition-handoff.md` §3；要点是 **`facts` 仍 176＝批准 0 条**，公开面零变化，本机 `verify:all` 因 `official pending 807 != 0` 转红（CI 跑空库夹具，不受影响）。
+号主于 2026-10-12T10:36:41Z 在另一会话窗口给出「真入库 807 条」这句授权，该窗口跑 `BOOKKEEPING_LOCAL_WRITE=1 python -m collector.ingest_bookkeeping` ⇒ **EXIT=0**，逐来源 `candidates=197/289/289/32`、八条既有来源 `candidates=0`；库内插入窗 `candidate_facts.created_at` **10:38:24–10:38:40Z**。同一条只读预检随之变为 `summary: stored=903 computed=865 skipped_approved=58 would_stage=807 blocking=4`、**退出码 1**，四条阻塞全是 `id_collision`（计算出的候选 id 已在库中）⇒ **这是「这批已入队」的回执，不是新障碍，也不是重新入库授权**。⚠ 当时记下的口径缺口：`would_stage` 只扣写入侧「与已批准事实同值则跳过」的保护，**不扣同 id 的 `pending_review` 行**，所以入队后仍报 807；要让预检区分「未入队／已入队待批」属代码改动，需单独授权。库侧现态与门禁红法见 `docs/stage-log.md` 第五轮与 `docs/transition-handoff.md` §3；要点是 **`facts` 仍 176＝批准 0 条**，公开面零变化，本机 `verify:all` 因 `official pending 807 != 0` 转红（CI 跑空库夹具，不受影响）。
+
+### 批准推进中的同一条预检读法（2026-10-12／13 五次现取，末两次为本轮实测）
+
+上面那句「入队后仍报 807」**只对仍然 pending 的行成立**，批准一旦落地就按 `value_key` 计入 `skipped_approved` 被扣掉。同一条只读命令的五次读数：
+
+| 时点                       | `skipped_approved` | `would_stage` | `blocking`          | 退出码 |
+| -------------------------- | ------------------ | ------------- | ------------------- | ------ |
+| 入队后、批准前（第五轮）   | 58                 | 807           | 4（`id_collision`） | 1      |
+| 批完ネット 28 条（第六轮） | 86                 | 779           | 4                   | 1      |
+| 再批完口径 7 条（第六轮）  | 93                 | 772           | 3                   | 1      |
+| 批完 class1 196 条         | 289                | 576           | 2                   | 1      |
+| 批完統一全 772 条          | 865                | **0**         | **0**               | **0**  |
+
+三条可直接当进度判据的读法：
+
+- **`blocking` 每降一档＝一个来源批完**。它的 `id_collision` 在该来源全部转 `approved` 后消失（4 → 3 是ネット口径批完，3 → 2 是 `class1` 批完，2 → 0 是 `class2`／`class3` 批完），所以不必查库也能从预检退出码看出还剩几条来源。
+- **`would_stage` 与库侧非合成 `pending_review` 同步下降**（807 → 772 → 576 → 0）；`stored=903`／`computed=865` 两列全程不变，因为磁盘快照没重抓、代码算出的候选集也没变。
+- **`skipped_approved=865` ＋ `would_stage=0` ＋ EXIT=0 是「这批已批完」的终态指纹**，与首次「未入队」时的 `skipped_approved=58／would_stage=807／blocking=0／EXIT=0` 形状相同但语义相反 ⇒ 读退出码必须连同这三列一起读，别单看 EXIT=0 就判「可以入队」。
+
+审核量的换算口径（估人工量时按这条，不按候选条数）：**人眼要核的是「不同 `evidence_text` 行数」**，統一表每行被拆成 `applicants`／`examinees`／`passed`／`pass_rate` 四条候选并共享同一段原文。故 807 条候选＝**210 段**不同原文（統一 193 ＝ 49 ＋ 72 ＋ 72，ネット 14，口径 3）；剩余的統一 772 条＝193 段。
+
+批准之后的账（2026-10-13 现取）：`facts` 非合成 **981**（176 → 204 → 209 → 405 → 693 → 981）、`candidate_facts` **1075 approved ＋ 13 rejected ＋ 0 pending**、`reviews` **1006**（approve 983／reject 18／requeue 5）、簿记 `approved_official` **863**、`snapshots` 仍 **44**、`sources` 仍 47。⚠ 批准数（772）与 `facts` 增量（772）本轮逐档相等，是因为**按九维身份键实测过 `pending` 与已批准事实、`pending` 内部都零同槽命中**；第六轮那批就出现过 7 条候选只产 5 条 `facts` 的同槽覆盖。同槽覆盖语义与批准链的幂等／不可回滚口径以 `docs/data-gate-semantics.md` §6 为准。
 
 ### 审核工作量的分解：`--breakdown`
 
