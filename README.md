@@ -61,6 +61,6 @@ python services/collector/src/collector/ingest_it_passport.py
 
 详见 [docs/runbook.md](docs/runbook.md)、[docs/adr/0001-stage-0-foundation.md](docs/adr/0001-stage-0-foundation.md) 和 [docs/data-contract.md](docs/data-contract.md)。
 
-阶段记录：[docs/stage1-acceptance.md](docs/stage1-acceptance.md)、[docs/stage-log.md](docs/stage-log.md)。
+阶段记录：[docs/stage1-acceptance.md](docs/stage1-acceptance.md)、[docs/stage-log.md](docs/stage-log.md)。接续开发的交接单（含铁律、待办顺序与本机实测判据命令，2026-10-12 时点）：[docs/transition-handoff.md](docs/transition-handoff.md)。
 
 逐资格来源登记与字段契约：[docs/it-passport-source-contract.md](docs/it-passport-source-contract.md)、[docs/gyoseishoshi-source-contract.md](docs/gyoseishoshi-source-contract.md)、[docs/fundamental-it-engineer-source-contract.md](docs/fundamental-it-engineer-source-contract.md)、[docs/bookkeeping-source-contract.md](docs/bookkeeping-source-contract.md)、[docs/fp-source-contract.md](docs/fp-source-contract.md)。宅建的阶段闭环与 `source:takken:retio-exam` 登记说明见 [docs/stage1-takken.md](docs/stage1-takken.md)。
