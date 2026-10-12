@@ -18,6 +18,8 @@
 
 `fieldCatalog.pass_rate` 只允许两种来源类型：`official_statistics`、`official_result_information`。本机 `sources` 现有 40 条，`source_type` 分布里**没有一条**是这两类（全是 `official_exam_*`／`official_eligibility`／`official_syllabus`／`official_faq` 一类）⇒ 这不是「登记了没批」，而是**这类来源从未登记过**。
 
+> 2026-10-12 更新：本段的「从未登记」已被 `0018_bookkeeping_statistics_sources.sql` 闭合，本机 `sources` 40 → **47**，其中 `official_statistics` **7 条**（簿记四条可入库统计序列＋三条 evidence-only 页）。`official_result_information` 仍为 0 条，其余六资格的统计来源仍未登记。下面的库侧读数是当轮调研的原始记录，保留不改。
+
 库侧（只读 `SELECT`）：`candidate_facts` 里这五个 `fact_key` 命中 **0 条**，`facts` 里 **0 条**；全库总量仍是 facts 176／candidates 281／snapshots 40／sources 40，与既有基线一致。
 
 **门禁永远不会因为 F 变红**：`scripts/verify-lib.mjs:62` 计算覆盖缺口时对 `post_event`／`optional`／`not_applicable` 直接 `continue`。所以 F 是产品覆盖欠账，不是门禁欠账——这也正是它能长期挂在待办而无人动的原因，别把它理解成「等门禁报警再说」。

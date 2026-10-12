@@ -98,12 +98,14 @@ set -a; . ./.env; set +a; PYTHONIOENCODING=utf-8 uv run --project services/colle
 - **历史代次不算漂移**。`candidate_facts` 会累积同一来源的多个已批准代次（`38c961bb…`／`5824a42e…`／`a1a9f4f0…` 等），这是既有设计。`id_drift` 只比对 `source_snapshot_id = 'snapshot:bookkeeping:' + 磁盘哈希` 那一批行；更早代次在 `staged_delta` 里以 `other generations=M` 报出，不阻塞。
 - **`would_stage` 已扣掉写入侧的跳过保护**。`ingest_bookkeeping` 对值与维度都与已批准事实相同的候选不再入队，预检按同一 `value_key` 集合先算 `skipped_approved`，因此 `would_stage` 才是真入库会新增的行数。
 
-2026-10-12 本机实跑读数（第一次跑就是它，非推算）：`summary: stored=96 computed=865 skipped_approved=58 would_stage=807 blocking=5`，退出码 1。两个阻塞项是本包的入库前置，此前没有任何文档记过：
+2026-10-12 首次本机实跑读数（非推算）：`summary: stored=96 computed=865 skipped_approved=58 would_stage=807 blocking=5`，退出码 1。两个阻塞项是本包的入库前置，此前没有任何文档记过：
 
-1. `session_column_absent` —— 本机库未应用 0017（`schema_migrations` 18 行 vs 迁移文件 19 个）。
+1. `session_column_absent` —— 本机库未应用 0017。**判据看列不看计数**：`select 1 from information_schema.columns where table_name='candidate_facts' and column_name='exam_session'` 空即未应用。不要用「`schema_migrations` 行数 vs 迁移文件数」推断——`packages/db/src/migrate.ts` 以**文件名**为主键且不校验记录，0010→0016 改名留下的孤儿记录会让两者在同一条未应用的迁移上恰好相等（本机实测：18 行＝17 个已应用文件＋1 条孤儿，0017 尚未应用）。
 2. `unregistered_source` × 4 —— `candidate-data-class1`／`-class2`／`-class3`／`-class23-net` 四条统计来源只存在于 collector 常量里，**`sources` 表中一行都没有**。它们不像 `0015_bookkeeping_gap_sources.sql` 那批：F-2 只授了采集，没建登记迁移 ⇒ 真入库必须先补一条 `INSERT INTO sources` 迁移，否则在写第一条快照时就撞外键。
 
 其余 8 个既有来源 `would_stage=0`（值全部命中已批准跳过保护），即这条链现在重跑是幂等的。
+
+**两条前置已于同日闭合**：`0018_bookkeeping_statistics_sources.sql` 登记七条统计来源（四条可入库序列 `class1`／`class2`／`class3`／`class23-net`，加三条 evidence-only 的父页 `candidate-data`、`class4`、`costing`，后者只为与 collector 常量对齐、避免将来给它们存证时撞同一个外键），本机 `npm run db:migrate` 应用 `0017`＋`0018`。闭合后同一条命令的重跑读数：`summary: stored=96 computed=865 skipped_approved=58 would_stage=807 blocking=0`，**退出码 0**；四个统计来源逐项从 `unregistered_source` 变为 `stored=0 computed=197/289/289/32 would_stage=197/289/289/32`，`would_stage` 合计仍是 807。**即预检已无阻塞项，真入库在代码与库层面就绪，但 `blocking=0` 只是「允许入队」的判据，不等于已获入库授权**；入队后这 807 行全是非合成 `pending_review`，门禁会硬红，逐条批准是另一次授权。
 
 ## 事实维度
 
