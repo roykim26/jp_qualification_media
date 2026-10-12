@@ -51,7 +51,13 @@
 ## 6. 审核链语义
 
 - **批准**：按 `(qualification, provider, level, component, delivery_mode, payment_method, exam_session, exam_year, fact_key)` 用 `IS NOT DISTINCT FROM` 匹配既有 `facts` 行（**不过滤状态**）。命中则把该行 `status` 置回 `approved` 并指向新 revision —— 这就是「批准会重新激活同维度 `superseded` 事实」；未命中则插入新行。两种情况都写 `fact_revisions` 与 `change_events`。
-- **`exam_session`（0017 迁移，2026-10-12）**：簿记統一試験同一西历年有多个回合（173 回 2026.06.14 与 172 回 2026.02.22 都属 2026），所以回合号进入候选与正式事实的身份。列可空，既有 176 条事实一律为 `NULL`，其 candidate-id 仍由不含回合段的旧式公式逐字节复现（见 `docs/stage-log.md` 当日预检读数）。`config/data-coverage-contract.json` 的 `dimensions` **没有**加 `examSession`：它只是身份维度，不参与契约判级匹配。
+- **批准链的三条机制（2026-10-12 读 `apps/admin/src/server.ts:131` 坐实，10-13 第七轮全量批准实测）**，此前任何文档都没记，估批准风险时必须按这三条：
+  1. **整条链幂等**：`reviews.id=review:{candidate}:{decision}`、`fact_revisions.id=revision:{candidate}` 与 `idempotency_key=approve:{candidate}`、`change_events.id=change:{candidate}` 全部 `ON CONFLICT DO NOTHING`，且单事务内先 `SELECT … FOR UPDATE` 锁候选 ⇒ 用 curl 或脚本重跑同一决定**无副作用**，「先 defer 后 approve」也不冲突（两条 `reviews` 行的 id 不同）。
+  2. **`approve` 没有撤销接口**：`requeue` 只接受 `status='rejected'` 的候选；`POST /internal/retractions/{id}` 的前置条件之一是当前事实的快照 `object_key LIKE 'ci://%'`，真实官方快照驱动的事实不满足 ⇒ 整事务回滚。批错了只能改库或改代码，**不能靠再发一次请求撤销**。
+  3. **同维度静默覆盖，后批者赢**：命中既有 `facts` 行时走 `UPDATE facts SET current_revision_id=$新修订`（`server.ts:205-211`），**一个槽只留一条 current 值**；被顶掉那条的 `fact_revisions`／`reviews` 记录仍完整可追溯，但不再是 current。想翻转就在另一条候选上再发一次 `approve`（幂等、不改码），**但仍然二选一**；要两条共存必须改身份维度或拆 `fact_key`，属 collector 代码＋判级面改动。⚠ 附带的名实不符：命中已有行时 `facts.id` **不随之更换**，仍等于最初插入该行的那条候选 id，因此不能拿 `facts.id` 反推「当前值来自哪条候选」——要看 `facts.current_revision_id`。
+- **批准量与 `facts` 增量不一定相等，报数前必须核槽位碰撞**：第六轮 7 条口径候选只产 5 条 `facts`（两条被同槽覆盖）；第七轮 772 条批完 `facts` 恰增 772，是先按九维键实测过「`pending` 与已批准事实同槽 0 命中、`pending` 内部同槽 0 组」才成立的。⇒ 分批批准时把「该档 `facts` 增量＝该档候选条数」当验收判据，不相等就是有覆盖，要立刻停下核对，别继续批。
+- **簿记ネット槽位的已拍板口径（2026-10-13）**：`bookkeeping:2|3`／`delivery_mode=network`／`exam_year=2026`／`fact_key=statistics_methodology` 两个槽**以页首引言为 current**（`…:statistics_methodology:98f76b0bbf3f`），列头那条（`…:1630ebd87ec8`，值 `期間/受験者数/合格者数/合格率`）保留为已批准但非 current；理由是该 `fact_key` 语义是「统计口径说明」，列头无口径信息量。不翻转、不改维度。
+- **`exam_session`（0017 迁移，2026-10-12）**：簿记統一試験同一西历年有多个回合（173 回 2026.06.14 与 172 回 2026.02.22 都属 2026），所以回合号进入候选与正式事实的身份。列可空，该轮既有 176 条事实一律为 `NULL`，其 candidate-id 仍由不含回合段的旧式公式逐字节复现（见 `docs/stage-log.md` 当日预检读数）。⚠ 「176 条」是当时点读数：2026-10-13 批完統一表后簿记非合成事实为 **863** 条、全库 **981** 条，其中統一表那 772 条**带** `exam_session`，ネット／初級行与其余来源仍为 `NULL`。`config/data-coverage-contract.json` 的 `dimensions` **没有**加 `examSession`：它只是身份维度，不参与契约判级匹配。
 - **拒绝／延期**：只改候选状态与 `reviews`，不撤销已存在的正式事实。
 - **撤销**：`POST /internal/retractions/{id}`，前置条件是对应候选已 `rejected`、且同维度恰好命中 1 条 `object_key LIKE 'ci://%'` 的当前事实；否则整个事务回滚。命中的事实置 `superseded` 并写 `fact_retractions`。真实官方快照驱动的事实不走这条撤销路径。
 
@@ -105,28 +111,32 @@ Why：审核人 ID 放进 URL 就可被任意 `<img src=…>`、浏览器历史�
 
 ## 9. baseline 与 CI 夹具维护
 
+- ⚠ **baseline 是「下限」不是「相等」**：`scripts/verify-lib.mjs:215` 判 `approved_official < expectedFacts` 为失败，API 侧同理比 `facts.length`。因此**抬高 baseline 必须与 CI 夹具同批改、同一个 PR 进 main**——只跑 `baseline:update` 不重导夹具，本机 `verify:all` 照样绿（本机有真数据），CI 必红在 `approved official 58 below regression floor 863`（夹具只有 58 条簿记）。2026-10-13 即按这条把 58 → 863 与夹具 176 → 981 一起提。
 - 更新基线：`RELEASE_BASELINE_CONFIRM=UPDATE_RELEASE_GATE_BASELINE` + `pnpm baseline:update -- --confirm=UPDATE_RELEASE_GATE_BASELINE`，双重确认，仅 localhost，仍有真实待审核候选时拒绝更新。
-- 重导夹具：`CI_FIXTURE_EXPORT_CONFIRM=EXPORT_SANITIZED_CI_FIXTURE` + `pnpm ci:fixture:export -- --confirm=...`，然后 `pnpm ci:fixture:verify` 与 `pnpm release:check`。
-- 夹具现状：`fixtures/ci/approved-facts.sql` = 176 facts / 176 candidate_facts / 176 fact_revisions / 25 snapshots。**重导后必须同步改 `scripts/verify-ci-fixture.mjs` 第 9–12 行这四个硬编码断言**，否则会出现 `ERR_ASSERTION actual:176 expected:167` 这类失败。
+- 重导夹具：`CI_FIXTURE_EXPORT_CONFIRM=EXPORT_SANITIZED_CI_FIXTURE` + `pnpm ci:fixture:export -- --confirm=...`（同样在非合成 `pending_review` 未清零时**直接拒绝**：`official candidates pending review: …`），然后 `pnpm ci:fixture:verify` 与 `pnpm release:check`。
+- 夹具现状（2026-10-13 重导后现取）：`fixtures/ci/approved-facts.sql` = **981 facts / 981 candidate_facts / 981 fact_revisions / 29 snapshots**，逐资格 16／15／2／10／863／75，文件 437,867 → 2,163,170 字节。**重导后必须同步改 `scripts/verify-ci-fixture.mjs` 第 9–12 行的四个硬编码断言**，否则得到 `ERR_ASSERTION actual:981 expected:176` 这类失败。
+- 夹具在 CI 空库落地的判据：CI 走 `db:migrate` + `db:seed` 再 `ci:fixture:restore`，所以夹具引用的每条 `source_id` 都必须由迁移登记。本机复刻库需要新建数据库（`CREATE DATABASE`），该动作属基础设施变更、不在批准轮授权面内 ⇒ 用静态比对替代：本轮夹具引用的 **23 条 `source_id` 全部命中迁移登记的 51 条**，缺失 0。
 - 夹具禁止出现的本地痕迹（同文件断言）：`local-reviewer`、`AppData`、`var/official-snapshots`、`E:\`、`C:\`、`INSERT INTO reviews`。
 - 事实数量基线禁止手工随意修改；改动必须能对应到「已审核完成的事实增减」。
 
-## 10. 回归命令与最近读数（2026-10-10 本机实跑）
+## 10. 回归命令与最近读数（2026-10-13 本机实跑，批准轮收尾时现取）
 
-改 TypeScript 必须先 build 再 verify —— `scripts/verify-all.mjs` 跑的是 `dist/` 编译产物。
+改 TypeScript 必须先 build 再 verify —— `scripts/verify-all.mjs` 跑的是 `dist/` 编译产物。本会话 Git Bash **没有 `pnpm`**，`pnpm <script>` 一律等价换成 `npm run <script>`。
 
-| 命令                                                                                | 读数                                                                                                                                                                                                                                |
-| ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pnpm build`（本机直调 `node_modules\.bin\tsc.cmd -p tsconfig.json`）               | 通过                                                                                                                                                                                                                                |
-| `pnpm test`（`vitest run tests --pool=threads --poolOptions.threads.singleThread`） | 81/81，10 个文件                                                                                                                                                                                                                    |
-| `pnpm test:python`（`pytest services/collector/tests services/parser/tests`）       | 115 passed（2026-10-09 为 89；行政書士 `capture_record` +3；FP 对齐 +8；报告合并抽为共享模块并推广到四条链 +5，其中 FP 的 2 条用例移入 `test_capture_report.py`；推广到基本情報与宅建 +4；`ParsedCandidate` 补齐为共享候选契约 +6） |
-| `node --test scripts/verify-lib.test.mjs`                                           | 7/7                                                                                                                                                                                                                                 |
-| `pnpm verify:all`                                                                   | `status=passed`、`qualifications=6`、`passed=6`、`failed=0`，各资格 `coverageGaps=[]`、`pending_official=0`                                                                                                                         |
-| `pnpm lint`（`eslint .`）                                                           | 干净                                                                                                                                                                                                                                |
+| 命令                                                                               | 读数                                                                                                                                                                                                                                                                                                           |
+| ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm run build`（`tsc -p tsconfig.json`）                                          | 通过                                                                                                                                                                                                                                                                                                           |
+| `npm test`（`vitest run tests --pool=threads --poolOptions.threads.singleThread`） | 81/81，10 个文件                                                                                                                                                                                                                                                                                               |
+| `npm run test:python`（`pytest services/collector/tests services/parser/tests`）   | **158 passed**（基线数每轮都会变，报数前必现取；两目录必须同传）                                                                                                                                                                                                                                               |
+| `node --test scripts/verify-lib.test.mjs`                                          | 7/7                                                                                                                                                                                                                                                                                                            |
+| `npm run verify:all`                                                               | `status=passed`、`qualifications=6`、`passed=6`、`failed=0`，各资格 `coverageGaps=[]`、`pending_official=0`；簿记 `approved_official=863`、`api.facts=863`                                                                                                                                                     |
+| `npm run ci:fixture:verify`                                                        | `Sanitized CI fixture structure verified.`（EXIT=0，四个计数已随重导改为 981/981/981/29）                                                                                                                                                                                                                      |
+| `npm run format:check`                                                             | 通过（EXIT=0）                                                                                                                                                                                                                                                                                                 |
+| `npm run lint`（`eslint .`）                                                       | ⚠ **本机 EXIT=1，但不是代码问题**：两条 parsing error 全来自根目录未跟踪的 `Python/pythoncore-3.15-*.deleteme/Lib/profiling/sampling/_flamegraph_assets/flamegraph.js`。`Python/` 按铁律既不提交也不删；CI 的 checkout 无此目录故照常绿。改动文件单测口径：`npx eslint scripts/verify-ci-fixture.mjs` EXIT=0。 |
 
-正式事实总数 **176**：takken 16、gyoseishoshi 15、it-passport 2、fundamental-it-engineer 10、bookkeeping 58、fp 75。覆盖缺口 **18 → 0**。
+正式事实总数 **981**：takken 16、gyoseishoshi 15、it-passport 2、fundamental-it-engineer 10、bookkeeping **863**、fp 75（2026-10-13 統一表 772 条批准落地后的现取值；176 是 10-12 的旧时点数）。覆盖缺口 **0**。
 
-推荐在改动 baseline 或夹具后跑一次 CI 复刻：新建一次性临时库 → migrate → seed → `node scripts/restore-ci-db-fixture.mjs` → `verify-all.mjs` → `node scripts/verify-ci-fixture.mjs`；删临时库需项目所有者明示授权，且先确认 `pg_stat_activity` 连接数为 0。
+推荐在改动 baseline 或夹具后跑一次 CI 复刻：新建一次性临时库 → migrate → seed → `node scripts/restore-ci-db-fixture.mjs` → `verify-all.mjs` → `node scripts/verify-ci-fixture.mjs`；删临时库需项目所有者明示授权，且先确认 `pg_stat_activity` 连接数为 0。⚠ 本会话实测 `docker compose exec -T postgres psql -c "CREATE DATABASE …"` 会被自动模式按「基础设施变更」拦下，故 2026-10-13 改用静态判据替代：核对夹具引用的 `source_id` 全集是否都由迁移登记（本轮 23 条全部命中，缺失 0），CI 的 `db:migrate` 后外键必成立。
 
 ## 11. 尚未闭合的口径问题
 
