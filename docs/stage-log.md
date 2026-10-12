@@ -1,5 +1,14 @@
 # 阶段记录与剩余问题
 
+## 2026-10-13（同日第九轮）：批准链的批后独立复核落账＋交接单欠账补齐，并纠正交接单里一条写错的列名口径（零抓取／零入库／零批准／零迁移／零写库）
+
+- 触发：号主点「1」＝合并 PR #31 后按交接单 §4 待办 5 补文档欠账。查 `gh pr view 31 --json state` ⇒ **已 MERGED**（`mergeCommit=727ffb9`、`mergedAt=2026-10-12T23:36:52Z`、`release-gate` **pass 50s**，run `38322932381`）⇒ 另一窗口已合完，本轮只剩欠账本体。轮前现取：main＝origin/main＝`727ffb9`，`git rev-list --merges --count main` **0**，`git ls-remote --heads origin | wc -l` **1**（本地只剩 `main`），工作区只剩 `?? Python/`。
+- **批后独立复核落账**（第八轮之后、本段之前在本会话做的，此前无人记账）：对 2026-10-13 批准的統一表 **772 条**做逐字段转写核对＝**193 段不同 `evidence_text` × 5 项检查**（`applicants`／`examinees`／`passed`／`pass_rate`／`exam_year` 对磁盘快照的印刷原值），结论 **零问题**；脚本 `var/audit-approved-unified.mjs` 用完已删。这条与第七轮那条「批前体检」不是同一件事：批前查的是不变量（`applicants ≥ examinees ≥ passed`、`pass_rate` 自洽），本轮查的是**库里值与官方印刷值是否逐字一致**。
+- 复核脚本自己的三个坑（都不是数据问题，记下来省一轮）：① `normalized_value` 是 jsonb，`::text` 取出来带引号（`"16663"`）⇒ 会假报 776 条不一致，要交给驱动解析；② `display_value` 带千分位与「名」（`16,663名`）⇒ 裸 `includes("16663")` 必漏，要先抽数字串；③ **平成年号**：回合括号 `124（Ｈ22.2.28）` 里的两位年要按平成换算（Ｈ22＝**2010**），按 20xx 直读会把库里正确的 `exam_year=2010` 误判成 2022——第一版就是这样误报了 4 条。
+- 文档侧改动：`docs/transition-handoff.md` 文头 main SHA `32c4b84` → `727ffb9`；§2 交付表补 `#31` 行；§3 末段记「第九轮逐字复跑，全部未动」；§4 待办 5 改成「已闭合，但**每轮必欠一次**」。⚠ **纠正一条写错的口径**：原文写「`candidate_facts` 与 `facts` 的状态列叫 `status`、合成标记叫 `synthetic`」，实测 **`facts` 表没有 `synthetic` 列**（`select count(*) from facts where synthetic=false` ⇒ `column "synthetic" does not exist`）⇒ 数「非合成现行事实」必须走 `facts f → fact_revisions fr(fr.id=f.current_revision_id) → candidate_facts c → snapshots s / sources src` 且 `f/fr/c` 三个 `status` 全 `approved` 加 `c.synthetic=false`，判据 SQL 坐标 `scripts/verify-lib.mjs:154-177`；另记 `reviews.decision` 是 text 而非枚举。`README.md` 交接单指针的时点同批。
+- 本轮现取复跑（纯文档，零写库）：`facts` approved 非合成 **981**（簿记 863＋其余五格 16／15／2／10／75）、`candidate_facts` **1075 approved ＋ 13 rejected ＋ 0 pending_review**、`reviews` **1006**（approve 983／reject 18／requeue 5）、`snapshots` **44**（全部非合成）、`sources` 47（`qualification_id` NULL 0）、`schema_migrations` 20、`source_scopes` 0、`candidate_facts.exam_session` 列存在。预检 `stored=903 computed=865 skipped_approved=865 would_stage=0 blocking=0` **EXIT=0**。`npm run verify:all` ⇒ `"status": "passed"`、**6 passed／0 failed**、EXIT=0（簿记 `approved_official 863`、`api.facts 863`、五个公开页 200、`coverageGaps: []`）。`npm run format:check` EXIT=0、pytest **158 passed**。库侧一个字节没动。
+- 下一步（各需单独授权）：① 把 863 条统一表历史统计接到公开面与判级面——属产品决策先议；⚠ 取证一条：`statistics_methodology` 在展示层**零消费点**，`apps/web/src/render.ts` 的 `pass-rate` 页 `factKeyPrefixes` 只有 `pass_rate`／`passing_standard`／`pass_mark`／`applicants`／`examinees`／`passed`；② 宅建统计页多来源重构（`snapshot_from_html()` 的快照 id 钉在单条 `TAKKEN_SOURCE` 上，那页只能抓不能入库）；③ 基本情報 `toukei_fe.html` 是附件目录页，要「附件提取」授权并先定 PDF／xlsx 依赖。
+
 ## 2026-10-13（同日第八轮）：#30 合并读数落账，删掉 10 条已合并分支（交接单原记 9 条，漏计一条），补齐交接单 SHA 与待办（零抓取／零入库／零批准／零写库）
 
 - 触发：号主点「执行候选第一项」，一次授权含两件事＝**文档同步到 `32c4b84` 时点走 PR**＋**删已合并分支**。轮前现取：main＝origin/main＝`32c4b84`，`git rev-list --merges --count main` **0**，工作区只剩 `?? Python/`。
