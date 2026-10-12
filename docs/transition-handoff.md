@@ -2,9 +2,9 @@
 
 > 本文是**时点快照**，供复制进新会话接续开发用。文中所有数字都是 2026-10-13 本机实测读数，**下一轮必须先按 §6 的命令现取，别把本文的数当结论**。口径权威定义在 `docs/data-gate-semantics.md`（§6 是批准链机制、§8.1 是三态术语、§9 是 baseline 与夹具维护），簿记账目在 `docs/bookkeeping-source-contract.md`。
 
-工作目录＝仓库根 `E:\自建程序\jp_qualification_media`；写本单时 main＝origin/main＝**`203d06e`**（PR #29 合并点），本单自己的合并会把它顶掉 ⇒ 下一轮以 `git log --oneline -1` 现取为准。历史纯线性（`git rev-list --merges --count main` 为 0），main 每个 commit 标题都带 `(#NN)`＝**一律走 squash PR，不直接 push main**。
+工作目录＝仓库根 `E:\自建程序\jp_qualification_media`；写本单时 main＝origin/main＝**`32c4b84`**（PR #30 合并点＝批准轮收口，baseline 与 CI 夹具同批改到 981 口径），本单自己的合并会把它顶掉 ⇒ 下一轮以 `git log --oneline -1` 现取为准。历史纯线性（`git rev-list --merges --count main` 为 0），main 每个 commit 标题都带 `(#NN)`＝**一律走 squash PR，不直接 push main**。仓库当前**只剩 main 一条分支**（本地＋远端，2026-10-13 清理完毕），所以下一轮直接开新分支即可，不必先挑残留分支。
 
-**批准链已走完，别再找批准任务**：簿记 807 条候选的三次独立授权（采集／入库／批准）已全部由号主行使完毕，2026-10-13 批完最后 772 条 ⇒ 非合成 `pending_review` **0**、`facts` **176 → 981**、门禁自行恢复 **6/6**。剩余待办见 §4，都属新范畴（删分支、宅建多来源、FE 附件提取、把 863 条统一表数据接到公开面呈现）。
+**批准链已走完，别再找批准任务**：簿记 807 条候选的三次独立授权（采集／入库／批准）已全部由号主行使完毕，2026-10-13 批完最后 772 条 ⇒ 非合成 `pending_review` **0**、`facts` **176 → 981**、门禁自行恢复 **6/6**。剩余待办见 §4，都属新范畴（宅建多来源、FE 附件提取、把 863 条统一表数据接到公开面呈现、批准链的机制债）。
 
 ## 1. 铁律（号主长期口径，违反即返工）
 
@@ -33,6 +33,7 @@
 | #27 | 新文档 `docs/transition-handoff.md`（即本单）＋ README 指针（纯文档）           | `a193e69` |
 | #28 | `docs/stage-log.md` 补第四轮交付段＋本单就地同步（纯文档）                      | `eac1584` |
 | #29 | `docs/stage-log.md` 补第五轮（807 条入库＋门禁转红）＋本单同步（纯文档）        | `203d06e` |
+| #30 | 批准轮收口：baseline 58→863＋CI 夹具 176→981 同批＋四份文档交付段               | `32c4b84` |
 
 批准链的三次授权落点（都已在库里，不要重跑）：抓取 2026-10-12 早（磁盘 7 页，`var/official-snapshots/`）；入库 2026-10-12T10:38Z 另一窗口 `ingest_bookkeeping` EXIT=0 产 807 条候选；批准分两段——2026-10-12 批 **35 条**（ネット数值 28 ＋ 口径 7 只产 5 条 `facts`）⇒ `facts` 176 → 209，2026-10-13 按級分三档批完 **772 条**（196／288／288）⇒ 209 → **981**。`reject` 全程 0 条。
 
@@ -54,12 +55,13 @@
 
 ## 4. 待办（按建议顺序，每件都要单独授权）
 
-1. **删已合并分支**（9 个：`wp-f2-bookkeeping-history-capture`、`wp-f-bookkeeping-statistics-mapping`、`wp-f-bookkeeping-precheck`、`wp-f-statistics-source-registration`、`docs-stage-log-wpf-round3-delivery`、`wp-f-precheck-breakdown`、`docs-transition-handoff`、`docs-wpf-round4-delivery`，加 2026-10-13 本轮那条）。即使用户已授权合并，删分支也要单独问一句；squash 后 `git branch -d` 必报 `not fully merged`，先 `git diff main <branch>` 确认**输出为空**再 `-D`。
-2. **文档欠账**：本单的 main SHA 与 §2 表在本单合并后即过时（惯例是下一轮补）；`docs/stage-log.md` 第七轮的交付段（PR 号与合并后 SHA）同样留给下一轮登记。
-3. **宅建统计页多来源重构**：`snapshot_from_html()` 仍把快照 id 钉在单条 `TAKKEN_SOURCE`，而那条背后有已批准事实 ⇒ 这页**只能抓、不能入库**。要动的是 collector 代码＋可能的迁移，属新授权。
-4. **基本情報技術者附件提取**：`toukei_fe.html` 只是附件目录页（零 `<table>`，数据全在 20 多个 PDF／xlsx 里），而全仓**既无 PDF 也无 xlsx 解析能力** ⇒ 要另开「附件提取」授权并先定依赖。
-5. **把 863 条统一表数据接到公开面**：现在它们已是可判级的现行事实（`approved_official` 863、`coverageGaps: []`），但页面呈现与判级面（`config/data-coverage-contract.json`）都还没为历年序列设计 ⇒ 属产品决策，先议再动。
-6. **批准链的遗留机制债（不急，但要知道）**：`approve` 无撤销接口（`docs/data-gate-semantics.md` §6 第 2 条），同槽覆盖会让 `facts.id` 与实际 current 候选名实不符（第 3 条）。要补「撤销真实快照事实」的能力属改代码＋改鉴权面，另需授权。
+**已闭合（2026-10-13 第八轮）**：删已合并分支＝实际 **10 条**（本单旧版记的 9 条漏了 `docs-wpf-round5-ingest-record`＝PR #29 的分支），本地＋远端全删，`git ls-remote --heads origin | wc -l` 现为 **1**。⚠ squash 合并的仓库里 `git branch -d` 必报 `not fully merged`、`git rev-list --count main <branch>` **恒为 1**（这不是「未合并」的证据），可用判据是三条一起过：`gh pr list --state merged --head <branch>` 拿到 `mergeCommit`＋`headRefOid` → 核 `headRefOid` 与本地／远端 tip 三者相等 → `git diff --diff-filter=A --name-only main <branch>` 计数 0。细节在 `docs/stage-log.md` 第八轮。
+
+1. **宅建统计页多来源重构**：`snapshot_from_html()` 仍把快照 id 钉在单条 `TAKKEN_SOURCE`，而那条背后有已批准事实 ⇒ 这页**只能抓、不能入库**。要动的是 collector 代码＋可能的迁移，属新授权。
+2. **基本情報技術者附件提取**：`toukei_fe.html` 只是附件目录页（零 `<table>`，数据全在 20 多个 PDF／xlsx 里），而全仓**既无 PDF 也无 xlsx 解析能力** ⇒ 要另开「附件提取」授权并先定依赖。
+3. **把 863 条统一表数据接到公开面**：现在它们已是可判级的现行事实（`approved_official` 863、`coverageGaps: []`），但页面呈现与判级面（`config/data-coverage-contract.json`）都还没为历年序列设计 ⇒ 属产品决策，先议再动。
+4. **批准链的遗留机制债（不急，但要知道）**：`approve` 无撤销接口（`docs/data-gate-semantics.md` §6 第 2 条），同槽覆盖会让 `facts.id` 与实际 current 候选名实不符（第 3 条）。要补「撤销真实快照事实」的能力属改代码＋改鉴权面，另需授权。
+5. **文档欠账**：本单的 main SHA 与 §2 表在本单合并后即过时（惯例是下一轮补）。
 
 ## 5. 三条容易踩空的产品事实
 
