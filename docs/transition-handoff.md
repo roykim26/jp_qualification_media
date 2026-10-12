@@ -2,7 +2,7 @@
 
 > 本文是**时点快照**，供复制进新会话接续开发用。文中所有数字都是 2026-10-13 本机实测读数，**下一轮必须先按 §6 的命令现取，别把本文的数当结论**。口径权威定义在 `docs/data-gate-semantics.md`（§6 是批准链机制、§8.1 是三态术语、§9 是 baseline 与夹具维护），簿记账目在 `docs/bookkeeping-source-contract.md`。
 
-工作目录＝仓库根 `E:\自建程序\jp_qualification_media`；写本单时 main＝origin/main＝**`32c4b84`**（PR #30 合并点＝批准轮收口，baseline 与 CI 夹具同批改到 981 口径），本单自己的合并会把它顶掉 ⇒ 下一轮以 `git log --oneline -1` 现取为准。历史纯线性（`git rev-list --merges --count main` 为 0），main 每个 commit 标题都带 `(#NN)`＝**一律走 squash PR，不直接 push main**。仓库当前**只剩 main 一条分支**（本地＋远端，2026-10-13 清理完毕），所以下一轮直接开新分支即可，不必先挑残留分支。
+工作目录＝仓库根 `E:\自建程序\jp_qualification_media`；第九轮同步本行时 main＝origin/main＝**`727ffb9`**（PR #31 合并点＝第八轮纯文档：#30 的 CI 实测读数落账＋删 10 条已合并分支），本单自己的合并会把它顶掉 ⇒ 下一轮以 `git log --oneline -1` 现取为准。历史纯线性（`git rev-list --merges --count main` 为 0），main 每个 commit 标题都带 `(#NN)`＝**一律走 squash PR，不直接 push main**。仓库在第八轮清理后**只剩 main 一条分支**（本地＋远端，`git ls-remote --heads origin | wc -l` = 1），本轮工作分支 `docs-handoff-round9-sync` 是清理后新增的第一条 ⇒ 下一轮直接开新分支即可，不必先挑残留分支；要删这条仍另需一句话。
 
 **批准链已走完，别再找批准任务**：簿记 807 条候选的三次独立授权（采集／入库／批准）已全部由号主行使完毕，2026-10-13 批完最后 772 条 ⇒ 非合成 `pending_review` **0**、`facts` **176 → 981**、门禁自行恢复 **6/6**。剩余待办见 §4，都属新范畴（宅建多来源、FE 附件提取、把 863 条统一表数据接到公开面呈现、批准链的机制债）。
 
@@ -34,6 +34,7 @@
 | #28 | `docs/stage-log.md` 补第四轮交付段＋本单就地同步（纯文档）                      | `eac1584` |
 | #29 | `docs/stage-log.md` 补第五轮（807 条入库＋门禁转红）＋本单同步（纯文档）        | `203d06e` |
 | #30 | 批准轮收口：baseline 58→863＋CI 夹具 176→981 同批＋四份文档交付段               | `32c4b84` |
+| #31 | 第八轮纯文档：#30 的 CI 实测读数落账＋删 10 条已合并分支的三重判据与末态        | `727ffb9` |
 
 批准链的三次授权落点（都已在库里，不要重跑）：抓取 2026-10-12 早（磁盘 7 页，`var/official-snapshots/`）；入库 2026-10-12T10:38Z 另一窗口 `ingest_bookkeeping` EXIT=0 产 807 条候选；批准分两段——2026-10-12 批 **35 条**（ネット数值 28 ＋ 口径 7 只产 5 条 `facts`）⇒ `facts` 176 → 209，2026-10-13 按級分三档批完 **772 条**（196／288／288）⇒ 209 → **981**。`reject` 全程 0 条。
 
@@ -45,13 +46,13 @@
 
 `schema_migrations` 20、`sources` 47（`qualification_id` NULL 0）、`facts` 非合成 approved **981**、`candidate_facts` **1075 approved ＋ 13 rejected ＋ 0 pending_review**、`reviews` **1006**（approve 983／reject 18／requeue 5）、`snapshots` **44**、`source_scopes` 0。磁盘快照**没有重抓**，`snapshots` 44 是入队时登记的快照行。
 
-门禁与预检都是绿态：`npm run verify:all` ⇒ `status=passed`、**6 passed／0 failed**、EXIT=0，簿记 `approved_official` **863**、`api.facts` **863**、五个公开页 200、`coverageGaps: []`，其余五格 16／15／2／10／75。只读预检 ⇒ `summary: stored=903 computed=865 skipped_approved=865 would_stage=0 blocking=0`、**EXIT=0**。⚠ 读预检别只看退出码：`blocking=0／EXIT=0` 在「未入队」与「已批完」两种终态上形状相同，要靠 `skipped_approved` 与 `would_stage` 两列区分（五次读数表在 `docs/bookkeeping-source-contract.md`）。
+门禁与预检都是绿态：`npm run verify:all` ⇒ `status=passed`、**6 passed／0 failed**、EXIT=0，簿记 `approved_official` **863**、`api.facts` **863**、五个公开页 200、`coverageGaps: []`，其余五格 16／15／2／10／75。只读预检 ⇒ `summary: stored=903 computed=865 skipped_approved=865 would_stage=0 blocking=0`、**EXIT=0**。⚠ 读预检别只看退出码：`blocking=0／EXIT=0` 在「未入队」与「已批完」两种终态上形状相同，要靠 `skipped_approved` 与 `would_stage` 两列区分（五次读数表在 `docs/bookkeeping-source-contract.md`）。第九轮（2026-10-13，纯文档轮）把本节全部数字复跑了一遍 ⇒ 库侧计数、`verify:all` 6/6、预检 `would_stage=0 blocking=0`、pytest **158 passed** 逐字未动。
 
 `config/release-gate-baseline.json` 与 CI 夹具**已同批刷到 981 口径**：bookkeeping `expectedFacts` 58 → **863**（其余五格不变），`fixtures/ci/approved-facts.sql` 176/176/176/25 → **981/981/981/29**（`scripts/verify-ci-fixture.mjs` 第 9–12 行四个断言同步改）。⚠ 两者必须同批：baseline 是**回归下限**（`scripts/verify-lib.mjs:215` 判 `approved_official < expectedFacts`），只刷 baseline 不重导夹具 ⇒ 本机照绿而 CI 必红在 `approved official 58 below regression floor 863`。
 
 ⚠ 连库报 `ECONNREFUSED ::1:5432 / 127.0.0.1:5432` 多半是 **docker compose 的 postgres 容器没在跑**（容器名 `jp_qualification_media-postgres-1`，`postgres:16-alpine`），`docker compose up -d postgres` 即恢复；Windows 服务里没有 postgres，`psql` 也不在 PATH（查库用 `node` ＋ `pg` 的 `Client`，连接串走 `.env`）。
 
-⚠ 查库列名：`candidate_facts` 与 `facts` 的状态列叫 **`status`**、合成标记叫 **`synthetic`**（写成 `review_status`／`is_synthetic` 会得到 `column ... does not exist`，而不是「0 条」）。来源列叫 **`source_id`**（写成 `source_key` 同样报错）。⚠ 判退出码：`npm run verify:all 2>&1 | tail -30` 之后再取 `$?` 拿到的是 **`tail`** 的退出码 ⇒ 先重定向到文件再 `echo $?`，或用 `${PIPESTATUS[0]}`。⚠ 本机 **没有 `pnpm`**，README 里那串 `pnpm …` 等价换成 `npm run …`。
+⚠ 查库列名：状态列叫 **`status`**、来源列叫 **`source_id`**（写成 `review_status`／`source_key` 会得到 `column ... does not exist`，而不是「0 条」）。⚠ **`synthetic` 只在 `candidate_facts` 与 `snapshots` 上存在，`facts` 表没有这一列**（2026-10-13 实测：`select count(*) from facts where synthetic=false` ⇒ `column "synthetic" does not exist`）⇒ 数「非合成现行事实」必须照 `scripts/verify-lib.mjs:154-177` 的链取：`facts f → fact_revisions fr（fr.id=f.current_revision_id）→ candidate_facts c → snapshots s / sources src`，条件是 `f.status`／`fr.status`／`c.status` 三者全 `approved` 且 `c.synthetic=false`（本轮实测合计 981＝簿记 863＋其余五格 16／15／2／10／75，与 §3 逐格相符）。`reviews` 的决定列叫 **`decision`**（text，非枚举），按它分组即得 approve 983／reject 18／requeue 5。⚠ 判退出码：`npm run verify:all 2>&1 | tail -30` 之后再取 `$?` 拿到的是 **`tail`** 的退出码 ⇒ 先重定向到文件再 `echo $?`，或用 `${PIPESTATUS[0]}`。⚠ 本机 **没有 `pnpm`**，README 里那串 `pnpm …` 等价换成 `npm run …`。
 
 ## 4. 待办（按建议顺序，每件都要单独授权）
 
@@ -61,7 +62,7 @@
 2. **基本情報技術者附件提取**：`toukei_fe.html` 只是附件目录页（零 `<table>`，数据全在 20 多个 PDF／xlsx 里），而全仓**既无 PDF 也无 xlsx 解析能力** ⇒ 要另开「附件提取」授权并先定依赖。
 3. **把 863 条统一表数据接到公开面**：现在它们已是可判级的现行事实（`approved_official` 863、`coverageGaps: []`），但页面呈现与判级面（`config/data-coverage-contract.json`）都还没为历年序列设计 ⇒ 属产品决策，先议再动。
 4. **批准链的遗留机制债（不急，但要知道）**：`approve` 无撤销接口（`docs/data-gate-semantics.md` §6 第 2 条），同槽覆盖会让 `facts.id` 与实际 current 候选名实不符（第 3 条）。要补「撤销真实快照事实」的能力属改代码＋改鉴权面，另需授权。
-5. **文档欠账**：本单的 main SHA 与 §2 表在本单合并后即过时（惯例是下一轮补）。
+5. **文档欠账**：**已闭合（2026-10-13 第九轮）**＝本单文头 main SHA、§2 交付表补 `#31`、§3 列名口径纠正与 README 指针同步到 `727ffb9`。⚠ 但这是**每轮必欠一次**的结构：本单合并后这些数立刻又过时一轮，惯例仍是下一轮开 PR 时顺手补，不需要单独立项。
 
 ## 5. 三条容易踩空的产品事实
 
