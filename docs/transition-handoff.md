@@ -1,8 +1,8 @@
-# 交接单：簿記批准轮已收口（2026-10-13 时点；非合成 `pending_review` 归 0、门禁 6/6）
+# 交接单：簿記批准轮已收口＋历年统计接上公开面（2026-10-13 时点；非合成 `pending_review` 归 0、门禁 6/6）
 
 > 本文是**时点快照**，供复制进新会话接续开发用。文中所有数字都是 2026-10-13 本机实测读数，**下一轮必须先按 §6 的命令现取，别把本文的数当结论**。口径权威定义在 `docs/data-gate-semantics.md`（§6 是批准链机制、§8.1 是三态术语、§9 是 baseline 与夹具维护），簿记账目在 `docs/bookkeeping-source-contract.md`。
 
-工作目录＝仓库根 `E:\自建程序\jp_qualification_media`；第十轮同步本行时 main＝origin/main＝**`5f0635a`**（PR #32 合并点＝第九轮纯文档：批后独立复核落账＋本单欠账补齐），本单自己的合并会把它顶掉 ⇒ 下一轮以 `git log --oneline -1` 现取为准。历史纯线性（`git rev-list --merges --count main` 为 0），main 每个 commit 标题都带 `(#NN)`＝**一律走 squash PR，不直接 push main**。仓库在第八轮清理后只剩 main 一条分支，此后 #31／#32 各留下一条已合并分支未删 ⇒ 下一轮直接开新分支即可，要删旧分支仍另需一句话（判据见 §4 第八轮那条）。
+工作目录＝仓库根 `E:\自建程序\jp_qualification_media`；第十二轮同步本行时 main＝origin/main＝**`432021d`**（PR #34 合并点＝第十一轮：簿記 pass-rate 页接历年统计表 G-1＋G-2 最小方案），本单自己的合并会把它顶掉 ⇒ 下一轮以 `git log --oneline -1` 现取为准。历史纯线性（`git rev-list --merges --count main` 为 0），main 每个 commit 标题都带 `(#NN)`＝**一律走 squash PR，不直接 push main**。仓库 ref 现状（第十二轮现取）＝本地只剩 `main`、`git ls-remote --heads origin | wc -l` 为 **1**；#31／#32／#33 留下的三条已合并分支已分两轮删净（判据见 §4 首段），下一轮直接开新分支即可，要删旧分支仍另需一句话。
 
 **批准链已走完，别再找批准任务**：簿记 807 条候选的三次独立授权（采集／入库／批准）已全部由号主行使完毕，2026-10-13 批完最后 772 条 ⇒ 非合成 `pending_review` **0**、`facts` **176 → 981**、门禁自行恢复 **6/6**；同日第十一轮已把 **863 条统一表历史统计接成公开面的历年表**（G-1／G-2 落地，见 §4 待办 3 闭合段）。剩余待办见 §4，都属新范畴（宅建多来源、FE 附件提取、批准链的机制债、G 的两条延伸）。
 
@@ -36,6 +36,8 @@
 | #30 | 批准轮收口：baseline 58→863＋CI 夹具 176→981 同批＋四份文档交付段                        | `32c4b84` |
 | #31 | 第八轮纯文档：#30 的 CI 实测读数落账＋删 10 条已合并分支的三重判据与末态                 | `727ffb9` |
 | #32 | 第九轮纯文档：批后独立复核与三个取证坑落账＋本单欠账补齐＋纠正 `facts` 无 `synthetic` 列 | `5f0635a` |
+| #33 | 第十轮纯文档：工作包 G 方案稿（805 条历年统计接公开面的实测与三块拆法）＋本单欠账补齐    | `0d91f1c` |
+| #34 | 第十一轮代码＋文档：簿記 pass-rate 页接 5 张历年表（G-1）＋更新流事件类型最小方案（G-2） | `432021d` |
 
 批准链的三次授权落点（都已在库里，不要重跑）：抓取 2026-10-12 早（磁盘 7 页，`var/official-snapshots/`）；入库 2026-10-12T10:38Z 另一窗口 `ingest_bookkeeping` EXIT=0 产 807 条候选；批准分两段——2026-10-12 批 **35 条**（ネット数值 28 ＋ 口径 7 只产 5 条 `facts`）⇒ `facts` 176 → 209，2026-10-13 按級分三档批完 **772 条**（196／288／288）⇒ 209 → **981**。`reject` 全程 0 条。
 
@@ -45,9 +47,11 @@
 
 ## 3. 本机库与配置现态（2026-10-13 实测，每轮请重取）
 
-`schema_migrations` 20、`sources` 47（`qualification_id` NULL 0）、`facts` 非合成 approved **981**、`candidate_facts` **1075 approved ＋ 13 rejected ＋ 0 pending_review**、`reviews` **1006**（approve 983／reject 18／requeue 5）、`snapshots` **44**、`source_scopes` 0。磁盘快照**没有重抓**，`snapshots` 44 是入队时登记的快照行。
+`schema_migrations` 20、`sources` 47（`qualification_id` NULL 0）、`facts` 非合成 approved **981**、`candidate_facts` **1075 approved ＋ 13 rejected ＋ 0 pending_review**、`reviews` **1006**（approve 983／reject 18／requeue 5）、`snapshots` **44**、`source_scopes` 0、`change_events` **983**（`schedule_change` 945／`application_deadline` 17／`application_open` 11／`result_date` 8／`exam_date` 2——G-2 只改新写入的映射，故 945 那条分布仍是批准轮打脏的旧值）。磁盘快照**没有重抓**，`snapshots` 44 是入队时登记的快照行。
 
-门禁与预检都是绿态：`npm run verify:all` ⇒ `status=passed`、**6 passed／0 failed**、EXIT=0，簿记 `approved_official` **863**、`api.facts` **863**、五个公开页 200、`coverageGaps: []`，其余五格 16／15／2／10／75。只读预检 ⇒ `summary: stored=903 computed=865 skipped_approved=865 would_stage=0 blocking=0`、**EXIT=0**。⚠ 读预检别只看退出码：`blocking=0／EXIT=0` 在「未入队」与「已批完」两种终态上形状相同，要靠 `skipped_approved` 与 `would_stage` 两列区分（五次读数表在 `docs/bookkeeping-source-contract.md`）。第九轮（2026-10-13，纯文档轮）把本节全部数字复跑了一遍 ⇒ 库侧计数、`verify:all` 6/6、预检 `would_stage=0 blocking=0`、pytest **158 passed** 逐字未动。
+门禁与预检都是绿态：`npm run verify:all` ⇒ `status=passed`、**6 passed／0 failed**、EXIT=0，簿记 `approved_official` **863**、`api.facts` **863**、五个公开页 200、`coverageGaps: []`，其余五格 16／15／2／10／75。只读预检 ⇒ `summary: stored=903 computed=865 skipped_approved=865 would_stage=0 blocking=0`、**EXIT=0**。⚠ 读预检别只看退出码：`blocking=0／EXIT=0` 在「未入队」与「已批完」两种终态上形状相同，要靠 `skipped_approved` 与 `would_stage` 两列区分（五次读数表在 `docs/bookkeeping-source-contract.md`）。第十一轮（改代码轮）与第十二轮（本单补齐轮）各把本节数字复跑了一遍 ⇒ 库侧计数、`verify:all` 6/6、预检 `would_stage=0 blocking=0`、pytest **158 passed** 逐字未动。
+
+`change_events` 全库 **983** 条的分布＝`schedule_change` **945**／`application_deadline` 17／`application_open` 11／`result_date` 8／`exam_date` 2。⚠ 这是 G-2 最小方案的**遗留面**：`updateEventTypeForFact()` 只管新写入的事件，那 945 条历史行按号主拍板**未回填**（回填＝迁移＋写库双授权），所以在 `/updates/` 看到旧卡标「日程の変更」不是回归。
 
 `config/release-gate-baseline.json` 与 CI 夹具**已同批刷到 981 口径**：bookkeeping `expectedFacts` 58 → **863**（其余五格不变），`fixtures/ci/approved-facts.sql` 176/176/176/25 → **981/981/981/29**（`scripts/verify-ci-fixture.mjs` 第 9–12 行四个断言同步改）。⚠ 两者必须同批：baseline 是**回归下限**（`scripts/verify-lib.mjs:215` 判 `approved_official < expectedFacts`），只刷 baseline 不重导夹具 ⇒ 本机照绿而 CI 必红在 `approved official 58 below regression floor 863`。
 
@@ -57,13 +61,13 @@
 
 ## 4. 待办（按建议顺序，每件都要单独授权）
 
-**已闭合（2026-10-13 第八轮）**：删已合并分支＝实际 **10 条**（本单旧版记的 9 条漏了 `docs-wpf-round5-ingest-record`＝PR #29 的分支），本地＋远端全删，`git ls-remote --heads origin | wc -l` 现为 **1**。⚠ squash 合并的仓库里 `git branch -d` 必报 `not fully merged`、`git rev-list --count main <branch>` **恒为 1**（这不是「未合并」的证据），可用判据是三条一起过：`gh pr list --state merged --head <branch>` 拿到 `mergeCommit`＋`headRefOid` → 核 `headRefOid` 与本地／远端 tip 三者相等 → `git diff --diff-filter=A --name-only main <branch>` 计数 0。细节在 `docs/stage-log.md` 第八轮。
+**已闭合（2026-10-13 第八轮＋第十二轮两批）**：第八轮删 **10 条**（本单旧版记的 9 条漏了 `docs-wpf-round5-ingest-record`＝PR #29 的分支）；第十二轮再删 **#32／#33 的两条**＝`docs-handoff-round9-sync`（`headRefOid` `7ccad39`，mergeCommit `5f0635a`）与 `docs-work-package-g-proposal`（`ad89513`，mergeCommit `0d91f1c`）⇒ 末态本地只剩 `main`、`git ls-remote --heads origin | wc -l` 回到 **1**（第十二轮现取）。⚠ squash 合并的仓库里 `git branch -d` 必报 `not fully merged`、`git rev-list --count main <branch>` **恒为 1**（这不是「未合并」的证据），可用判据是三条一起过：`gh pr list --state merged --head <branch>` 拿到 `mergeCommit`＋`headRefOid` → 核 `headRefOid` 与本地／远端 tip 三者相等 → `git diff --diff-filter=A --name-only main <branch>` 计数 0。细节在 `docs/stage-log.md` 第八轮与第十二轮。
 
 1. **宅建统计页多来源重构**：`snapshot_from_html()` 仍把快照 id 钉在单条 `TAKKEN_SOURCE`，而那条背后有已批准事实 ⇒ 这页**只能抓、不能入库**。要动的是 collector 代码＋可能的迁移，属新授权。
 2. **基本情報技術者附件提取**：`toukei_fe.html` 只是附件目录页（零 `<table>`，数据全在 20 多个 PDF／xlsx 里），而全仓**既无 PDF 也无 xlsx 解析能力** ⇒ 要另开「附件提取」授权并先定依赖。
 3. **把 805 条历年统计接到「能用」的程度**：**已闭合（2026-10-13 同日第十一轮＝G-1＋G-2 落地，号主对 G 稿 §5 四问全部拍板选推荐项）**。结果＝簿記 pass-rate 页 **802 卡／1,075,312 B → 26 卡／123,550 B ＋ 5 张历年表 207 行**，概览 863 → **82 卡**，年份链接改指 `/shikaku/<slug>/pass-rate/?year=<年>`（`?year=2010` 实测 **32 卡**＝库侧逐键读数），`exam_session` 以「173回」列可见，`statistics_methodology` 改成表上「集計口径：」注记；G-2 走最小方案＝映射与文案改完（`updateEventTypeForFact()`，22 键），**历史 945 条 `schedule_change` 未回填**；G-3 按拍板**判级面零改动**，历年统计仍不进门禁。改动 7 个代码／测试文件 589 增／38 删，零写库、零迁移，baseline 与 CI 夹具未动。执行读数与实现差异在 `docs/work-package-g-history-presentation.md` §7，踩坑在 `docs/stage-log.md` 第十一轮。⚠ 未闭合的两条延伸（各需单独授权）＝G-2 完整方案（`ALTER TYPE` 迁移＋回填 945 条＝写库）、`?year=` 进 sitemap。
 4. **批准链的遗留机制债（不急，但要知道）**：`approve` 无撤销接口（`docs/data-gate-semantics.md` §6 第 2 条），同槽覆盖会让 `facts.id` 与实际 current 候选名实不符（第 3 条）。要补「撤销真实快照事实」的能力属改代码＋改鉴权面，另需授权。
-5. **文档欠账**：**已闭合（2026-10-13 第十轮）**＝本单文头 main SHA → `5f0635a`、§2 交付表补 `#32`、待办 3 改指工作包 G 方案稿、README 指针与 G 稿入口同批；**第十一轮**已把待办 3 改成闭合段＋README 的 G 稿描述改成「方案稿＋执行记录」。⚠ 仍是**每轮必欠一次**的结构：本单文头现停在 `5f0635a`，§2 交付表**未含 #33（第十轮 G 方案稿）与第十一轮的 PR** ⇒ 下一轮开 PR 时顺手补文头 SHA 与这两行，不需要单独立项。
+5. **文档欠账**：**已闭合（2026-10-13 第十二轮）**＝本单文头 main SHA → `432021d`、§2 交付表补 `#33`／`#34` 两行、§3 加 `change_events` 分布与「945 条未回填」的读法、§4 首段两批删分支的实数、待办 3 的 G 闭合段与 §5 两条产品事实、§9 与工作包 G 稿的「§7 执行记录」指针、README 时点同批。⚠ 仍是**每轮必欠一次**的结构：本单合并后文头 SHA 与 §2 表立刻又过时一轮，惯例仍是下一轮开 PR 时顺手补，不需要单独立项。
 
 ## 5. 容易踩空的产品事实
 
