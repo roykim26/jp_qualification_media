@@ -557,3 +557,189 @@ describe('shared qualification page rendering', () => {
     expect(gyoseishoshi.field).toBe('law');
   });
 });
+
+describe('bookkeeping history statistics tables', () => {
+  const bookkeeping = launchQualifications.find(
+    (item) => item.slug === 'bookkeeping',
+  )!;
+  const statistics = {
+    qualificationSlug: 'bookkeeping' as const,
+    providerId: null,
+    examComponent: null,
+    paymentMethod: null,
+    status: 'approved' as const,
+    riskLevel: 'low' as const,
+    sourceId: 'source:bookkeeping:statistics',
+    sourceSnapshotId: 'snapshot:bookkeeping:statistics',
+    synthetic: false,
+    verifiedAt: '2026-10-13T00:00:00.000Z',
+    officialVerifiedAt: '2026-10-13T00:00:00.000Z',
+  };
+  const unifiedCells = (
+    examYear: number,
+    examSession: string,
+    values: [string, string, string, string],
+  ) =>
+    ['applicants', 'examinees', 'passed', 'pass_rate'].map(
+      (factKey, index) => ({
+        ...statistics,
+        examLevelId: 'bookkeeping:1',
+        deliveryMode: 'unified',
+        examSession,
+        examYear,
+        factKey,
+        valueType: 'text' as const,
+        normalizedValue: values[index],
+        displayValue: `${values[index]} ${factKey}（${examSession}（${examYear}.6.14））`,
+      }),
+    );
+  const view = {
+    qualification: bookkeeping,
+    status: 'verified' as const,
+    officialVerifiedAt: '2026-10-13T00:00:00.000Z',
+    facts: [
+      ...unifiedCells(2026, '173', [
+        '11,959名',
+        '10,195名',
+        '3,864名',
+        '37.9%',
+      ]),
+      ...unifiedCells(2025, '172', [
+        '12,446名',
+        '10,470名',
+        '3,215名',
+        '30.7%',
+      ]),
+      {
+        ...statistics,
+        examLevelId: 'bookkeeping:2',
+        deliveryMode: 'network',
+        examSession: null,
+        examYear: 2026,
+        factKey: 'passed',
+        valueType: 'text' as const,
+        normalizedValue: '1,234名',
+        displayValue: '1,234名 合格者数（2026年4月～2026年6月）',
+      },
+      {
+        ...statistics,
+        examLevelId: 'bookkeeping:2',
+        deliveryMode: 'network',
+        examSession: null,
+        examYear: 2026,
+        factKey: 'pass_rate',
+        valueType: 'text' as const,
+        normalizedValue: '31.9%',
+        displayValue: '31.9% 合格率（2026年4月～2026年6月）',
+      },
+      {
+        ...statistics,
+        examLevelId: 'bookkeeping:1',
+        deliveryMode: 'unified',
+        examSession: null,
+        examYear: 2026,
+        factKey: 'statistics_methodology',
+        valueType: 'text' as const,
+        normalizedValue: '回ごとの公表値',
+        displayValue: '回ごとの公表値',
+      },
+      {
+        ...statistics,
+        examLevelId: 'bookkeeping:1',
+        deliveryMode: 'unified',
+        examSession: null,
+        examYear: 2026,
+        factKey: 'passing_standard',
+        valueType: 'text' as const,
+        normalizedValue: '70点以上',
+        displayValue: '70点以上',
+      },
+      {
+        ...statistics,
+        examLevelId: 'bookkeeping:1',
+        deliveryMode: 'unified',
+        examSession: null,
+        examYear: 2026,
+        factKey: 'fee',
+        valueType: 'text' as const,
+        normalizedValue: '4,800円',
+        displayValue: '4,800円',
+      },
+    ],
+  };
+
+  it('carries every past year in the table and excludes past years from cards', () => {
+    const html = renderQualificationSectionPage(view, 'pass-rate');
+    expect(html).toContain('1級・統一試験');
+    expect(html).toContain('2級・ネット試験');
+    expect(html).toContain('<td>173回</td>');
+    expect(html).toContain('<td>2026年4月～2026年6月</td>');
+    expect(html).toContain(
+      '<tr class="history-row--current" aria-current="true"><th scope="row">2026年</th>',
+    );
+    expect(html).toContain('<td>11,959名</td>');
+    expect(html).not.toContain('<td>11,959名 applicants');
+    expect(html).toContain('<td class="history-cell--empty">—</td>');
+    expect(html).toContain('<th scope="col">受験者数</th>');
+    expect(html).toContain('集計口径：回ごとの公表値');
+    expect(html).toContain('>2025年</th>');
+    expect(
+      (html.match(/class="compare-table history-table"/g) ?? []).length,
+    ).toBe(2);
+    expect((html.match(/<article class="card fact"/g) ?? []).length).toBe(7);
+  });
+
+  it('points the year navigation at the statistics table of that year', () => {
+    const html = renderQualificationSectionPage(view, 'pass-rate');
+    expect(html).toContain('/shikaku/bookkeeping/pass-rate/?year=2025');
+    expect(html).not.toContain('/shikaku/bookkeeping/2025/');
+
+    const previous = renderQualificationSectionPage(view, 'pass-rate', 2025);
+    expect(previous).toContain(
+      '<tr class="history-row--current" aria-current="true"><th scope="row">2025年</th>',
+    );
+    expect(previous).toContain(
+      'href="/shikaku/bookkeeping/pass-rate/?year=2025" aria-current="page"',
+    );
+    expect((previous.match(/<article class="card fact"/g) ?? []).length).toBe(
+      4,
+    );
+    expect(previous).not.toContain('data-fact-key="passing_standard"');
+    expect(previous).toContain('data-fact-key="applicants"');
+    expect(previous).toContain('適用年度: 2025年');
+    expect(previous).not.toContain('適用年度: 2026年');
+  });
+
+  it('keeps methodology out of the card list and links it from the overview', () => {
+    const overview = renderQualificationSectionPage(view, 'overview');
+    expect(overview).toContain('/shikaku/bookkeeping/pass-rate/');
+    expect(overview).toContain('4,800円');
+    expect(overview).toContain('11,959名');
+    expect(overview).not.toContain('data-fact-key="statistics_methodology"');
+    expect((overview.match(/<article class="card fact"/g) ?? []).length).toBe(
+      8,
+    );
+    expect(overview).not.toContain('30.7%');
+  });
+
+  it('links a statistics update to the year table instead of the schedule page', () => {
+    const html = renderUpdatesPage([
+      {
+        id: 'change:bookkeeping:pass-rate:172',
+        eventType: 'system_change',
+        eventLabel: '制度・方式の変更',
+        qualification: bookkeeping,
+        factKey: 'pass_rate',
+        factLabel: '合格率',
+        examYear: 2025,
+        previousValue: null,
+        newValue: '30.7% 合格率',
+        affectedPages: ['qualification:bookkeeping'],
+        createdAt: '2026-10-13T00:00:00.000Z',
+        verifiedAt: '2026-10-13T00:00:00.000Z',
+      },
+    ]);
+    expect(html).toContain('/shikaku/bookkeeping/pass-rate/?year=2025');
+    expect(html).not.toContain('/shikaku/bookkeeping/2025/');
+  });
+});

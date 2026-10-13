@@ -123,6 +123,14 @@ export const webStyles = String.raw`
 .compare-table tbody th { width: 180px; color: var(--color-ink); background: var(--color-bg-subtle); }
 .compare-table td p { margin-bottom: var(--space-2); font-weight: 600; overflow-wrap: anywhere; }
 .compare-empty { color: var(--color-muted); font-size: 14px; }
+.history-table-block + .history-table-block { margin-top: var(--space-8); }
+.history-table-block h3 { margin-bottom: var(--space-2); font-size: 19px; }
+.history-table__note { margin-bottom: var(--space-3); color: var(--color-muted); font-size: 13px; overflow-wrap: anywhere; }
+.history-table { min-width: 620px; font-variant-numeric: tabular-nums; }
+.history-table th, .history-table td { min-width: 92px; padding: var(--space-3); }
+.history-table tbody th { width: 82px; }
+.history-cell--empty { color: var(--color-muted); text-align: center; }
+.history-scope-note { margin-bottom: var(--space-5); color: var(--color-text-secondary); font-size: 14px; }
 .updates-list { display: grid; gap: var(--space-5); }
 .update-card { padding: var(--space-5); border: 1px solid var(--color-border); border-left: 4px solid var(--color-review); border-radius: var(--radius-card); background: var(--color-surface); }
 .update-card__header { display: flex; flex-wrap: wrap; gap: var(--space-4); align-items: start; justify-content: space-between; margin-bottom: var(--space-4); }
@@ -275,6 +283,9 @@ export const webStyles = String.raw`
 .schedule-event time { font-size: 20px; }
 .compare-choice:has(input:checked) { border-color: var(--color-primary); background: var(--color-primary-soft); }
 .compare-table thead th { color: var(--color-ink); }
+.history-table tbody tr:nth-child(even) th, .history-table tbody tr:nth-child(even) td { background: var(--color-bg-subtle); }
+.history-table tbody tr.history-row--current th, .history-table tbody tr.history-row--current td { background: var(--color-info-bg); }
+.history-table tbody tr.history-row--current th { box-shadow: inset 3px 0 0 var(--color-primary); }
 .update-card { border-left-color: var(--color-primary); }
 
 @media (max-width: 1023px) {
@@ -307,6 +318,9 @@ export const webStyles = String.raw`
   .detail-sidebar { grid-row: auto; }
   .detail-main { grid-row: auto; }
   .detail-hero__years { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-5); }
+  .history-table { min-width: 520px; }
+  .history-table th, .history-table td { min-width: 74px; padding: var(--space-2); font-size: 13px; }
+  .history-table tbody th { width: 68px; }
   .detail-sidebar .sidebar-panel:first-child, .detail-sidebar .sidebar-panel:nth-child(2) { display: none; }
 }
 `;

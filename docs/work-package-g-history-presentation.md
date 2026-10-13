@@ -1,7 +1,7 @@
-# 工作包 G（提案稿）：把 805 条簿记历年统计接到「能用」的程度（2026-10-13 时点，只读调研，零代码改动／零写库／零判级面改动）
+# 工作包 G：把 805 条簿记历年统计接到「能用」的程度（2026-10-13 方案稿 → **同日第十一轮已执行 G-1＋G-2**，执行读数见 §7）
 
-> 本文是**方案稿**，不是执行记录。目的：把「863 条簿记事实已批准，但公开面看起来仍像只有 2026 一年」这件事拆成可拍板的三块，每块标清改动面、代码坐标、验收判据与风险。号主拍板后才按块开工，**每块各需单独授权**。
-> 文中所有数字都是 2026-10-13 本机现取（取证命令见 §6），不是推算，也不是上一轮的缓存值。
+> 本文前半（§1–§5）是**方案稿**，后半 §7 是**执行记录**。目的：把「863 条簿记事实已批准，但公开面看起来仍像只有 2026 一年」这件事拆成可拍板的三块，每块标清改动面、代码坐标、验收判据与风险。
+> §1–§6 的数字是 2026-10-13 第十轮的本机现取（**改动前**基线，取证命令见 §6）；§7 的数字是同日晚些时候 G-1／G-2 落地后的现取（**改动后**），逐条对照。执行细节与踩坑在 `docs/stage-log.md` 第十一轮。
 
 ## 1. 结论先说
 
@@ -51,7 +51,7 @@
 
 ## 3. 三块可独立授权的方案
 
-### G-1 呈现层：给历年统计一条年度序列轴（建议先做）
+### G-1 呈现层：给历年统计一条年度序列轴（**已于同日第十一轮执行**，读数见 §7）
 
 改动面＝**只有 `apps/web/src/render.ts` ＋ 对应 CSS**；零 DB 写、零迁移、零判级面。
 
@@ -59,11 +59,11 @@
 2. 表内每行把 `examSession`（如 `173（2026.6.14）`）显示出来 ⇒ 解决「同年两回合不可区分」。
 3. 现有卡片列表改成只保留**当年**（`examYear === coverageYear`）＋「その他の年度は表へ」的说明，避免概览/pass-rate 各挂 800 张卡。概览页同理：`facts.length` 863 → 只列当年＋一条「历年は合格率ページ」。
 4. `statistics_methodology` 加进 `pass-rate` 的 `factKeyPrefixes`，并把它渲染成表格上方的口径注记（而不是又一张卡）⇒ 号主已拍板「ネット槽以页首引言为 current」，那条引言正好是该表的分母口径说明。
-5. 年度导航：把年份链接的落点从 `/<年>/`（annual 日程）改成 `pass-rate?year=<年>`，或者在 annual 段的 prefixes 里加统计字段——**两种都要号主选**，因为后者会让年度页同时出现日程与统计，属 IA 决策。
+5. 年度导航：把年份链接的落点从 `/<年>/`（annual 日程）改成 `pass-rate?year=<年>`，或者在 annual 段的 prefixes 里加统计字段——**两种要号主选**，因为后者会让年度页同时出现日程与统计，属 IA 决策。⇒ 拍板＝**改链接目标**，年度日程页继续只管日程（见 §5）。
 
 验收判据（全部可复跑）：pass-rate 页 HTML 字节数显著下降、`grep -c 'article class="card fact"'` 从 802 降到百级以内、页面出现「回」标识、`npm run verify:all` 仍 **6 passed／0 failed／EXIT=0**、`vitest`／`typecheck`／`build` 全绿、五个公开页仍 200。风险＝E2E 与 `verify:all` 里对页面的断言可能要跟着改（它只断言 200 与事实数，见 `scripts/verify-lib.mjs:244-266`）。
 
-### G-2 更新流：修事件类型误标（建议第二做，但有一条硬约束）
+### G-2 更新流：修事件类型误标（**同日第十一轮按最小方案执行完毕**，完整方案未做）
 
 - 最小方案（**零迁移**）＝只改 `eventTypeForFact()` 的映射：把统计类（`pass_rate`／`applicants`／`examinees`／`passed`／`statistics_methodology`）与 `fee`／`eligibility`／`question_format` 等映射到**现有**枚举成员 `system_change`（制度・方式），或统计类继续 `schedule_change` 但在 `packages/schema/src/updates.ts` 的 `updateFactLabelPrefixes` 里补「合格率データ」类标签，让卡片文案正确而类型不动。**只改代码不改库 ⇒ 历史 945 条误标不会自动纠正**。
 - 完整方案（**要迁移＋要写库**）＝给 `event_type` 枚举加 `statistics_update`（`ALTER TYPE`＝迁移，且 `packages/db/src/schema.ts:38` 与 `packages/schema/src/index.ts:42` 两处同步），再回填历史行的 `event_type`（`UPDATE change_events`＝写库）。这条属号主铁律里的「写库／迁移」，要单独一句话。
@@ -71,7 +71,7 @@
 
 验收判据：`select event_type, count(*) from change_events group by 1` 的分布符合所选方案；`/updates/` 上合格率卡片不再标「日程の変更」。
 
-### G-3 判级面：把历年覆盖纳入门禁（**本轮不建议动**，附实测红点清单）
+### G-3 判级面：把历年覆盖纳入门禁（**同日第十一轮按拍板维持不动**，附实测红点清单）
 
 现状：`config/data-coverage-contract.json` 簿记第 6 条 requirement 是
 `{fields:[applicants, examinees, passed, pass_rate, statistics_methodology], requiredLevel:'post_event', dimensions:{examLevelId:[1,2,3], deliveryMode:[unified,network,group]}}`，
@@ -99,12 +99,12 @@
 2. **G-2 的最小方案紧跟**（几行代码，止住更新流的错误文案；要不要加枚举＋回填另开一轮，那是迁移与写库）。
 3. **G-3 单独一轮**，且要先定「判级面到底要不要管历年」——不管就维持现状（数据公开但不进门禁），要管就得接受先把 network/group/methodology 三处口径拆干净。
 
-## 5. 需要号主拍板的四件事（拍板前不动任何代码）
+## 5. 需要号主拍板的四件事（**2026-10-13 同日第十一轮已全部拍板，四项均选推荐项**）
 
-1. G-1 里年度导航落点的两种改法：改链接目标（`pass-rate?year=`）还是给 `annual` 段加统计字段？
-2. 概览页与 pass-rate 页是否允许「只列当年＋表格承载历年」这种减卡片的口径（会影响现有 100＋ 张卡片的呈现与 SEO 文本量）。
-3. G-2 走最小方案（不改枚举、不回填历史）还是完整方案（迁移＋回填 945 行＝写库）。
-4. G-3 做不做：维持「历年统计不进门禁」，还是拆字段后让门禁开始检查当年统计齐全度（注意它仍然只管当年）。
+1. G-1 里年度导航落点的两种改法：改链接目标（`pass-rate?year=`）还是给 `annual` 段加统计字段？⇒ **拍板＝pass-rate 页内加表**，年份链接改指 `/shikaku/<slug>/pass-rate/?year=<年>`，年度日程页继续只管日程。
+2. 概览页与 pass-rate 页是否允许「只列当年＋表格承载历年」这种减卡片的口径（会影响现有 100＋ 张卡片的呈现与 SEO 文本量）。⇒ **拍板＝只列当年＋表格承载历年**。
+3. G-2 走最小方案（不改枚举、不回填历史）还是完整方案（迁移＋回填 945 行＝写库）。⇒ **拍板＝最小方案，只改映射与文案**，`event_type` 枚举不动、历史 945 条不回填。
+4. G-3 做不做：维持「历年统计不进门禁」，还是拆字段后让门禁开始检查当年统计齐全度（注意它仍然只管当年）。⇒ **拍板＝维持 `post_event` 不动**，`config/data-coverage-contract.json` 零改动。
 
 ## 6. 取证命令（本轮实跑，可复跑）
 
@@ -121,4 +121,41 @@ curl -s http://127.0.0.1:3091/updates/
 - 卡片数＝`grep -o 'article class="card fact"' <文件> | wc -l`；分组计数＝`grep -o '<h2 id="fact-group-pass-rate-[0-9]*">'` 后的 `meta ... 件`。
 - 库侧统计分布与 `change_events` 分布按惯例写成 `var/*.mjs` 再 `node var/x.mjs`（一行式命令通体不带单引号与反引号；`facts` 表没有 `synthetic` 列，非合成要走 `facts → fact_revisions → candidate_facts → snapshots/sources` 链，见 `docs/transition-handoff.md` §3）。
 - 本轮用完的临时脚本与 HTML 转储都在 gitignored 的 `var/`，收尾即删；起过的 api／web 进程按 `netstat -ano | grep 127.0.0.1:3091` 取 PID 后 `taskkill //PID <pid> //F //T` 停掉。
-- 本稿进 main 需要号主授权 commit／push／squash merge；`docs/transition-handoff.md` §4 待办 3 要改成指向本稿。
+- 本稿与 §7 执行记录进 main 需要号主授权 commit／push／squash merge；`docs/transition-handoff.md` §4 待办 3 已在第十一轮标为闭合。
+
+## 7. 执行记录（同日第十一轮：G-1 呈现层＋G-2 最小方案落地）
+
+改动面＝**7 个代码／测试文件、589 增／38 删**（`git diff --numstat` 现取）＝`apps/web/src/render.ts` 274／27、`apps/web/src/server.ts` 9／2（解析 `pass-rate/?year=`）、`apps/web/src/styles.ts` 14／0、`packages/schema/src/updates.ts` 62／0、`apps/admin/src/server.ts` 2／9、`tests/web-render.test.ts` 186／0，加新文件 `tests/update-event-classification.test.ts`（42 行）。**零抓取、零入库、零批准、零迁移、零写库、零判级面改动**：`facts` 仍 **981**、非合成 `pending_review` 仍 **0**、`change_events` 仍 **983**、`snapshots` 仍 44；`config/release-gate-baseline.json` 与 `fixtures/ci/approved-facts.sql` 未动（`approved_official` 未变，无需重导）。
+
+改前（§2.2 的基线）→ 改后（本机 api 4191＋web 3091 起 `dist` 现取）：
+
+| 对象                                   | 改前                                                         | 改后                                                                                                      |
+| -------------------------------------- | ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------- |
+| `/shikaku/bookkeeping/pass-rate/`      | 802 卡／1,075,312 B                                          | **26 卡／123,550 B** ＋ **5 张表／207 行**（页内 meta「207 回・5 表」）                                   |
+| `/shikaku/bookkeeping/`（概览）        | 863 卡／1,150,946 B                                          | **82 卡／161,600 B**                                                                                      |
+| `pass-rate/?year=2010`                 | 该形态不存在（点 2010 得 0 件）                              | **32 卡**，与库侧逐键读数一致（四个数值键各 8 条＝1 級 2＋2 級 3＋3 級 3）                                |
+| `/shikaku/bookkeeping/2026/`（年度頁） | 15 卡                                                        | **15 卡未动**                                                                                             |
+| `/shikaku/bookkeeping/2010/`           | 0 卡                                                         | **0 卡未动**（年度页语义仍只管日程）                                                                      |
+| 其余五格 pass-rate／概览               | it-passport 54,765／fp 64,402／takken 54,212／FE 概览 64,414 | **逐格字节数不变** ⇒ 减卡片只发生在簿記的 overview＋pass-rate 两段                                        |
+| 回合标识                               | 「回」字 0 次                                                | 表内「173回」列；ネット行显示 `display_value` 末尾括注期间（如「2026年4月～2026年6月」），无回合号        |
+| `statistics_methodology`               | 混在 863 张卡里，pass-rate 段零消费点                        | 移出卡列表，做成表上「集計口径：」注记（統一表按級三条＋ネット两条页首引言）                              |
+| `/updates/` 标签                       | 首页 100 张卡清一色「日程の変更」                            | **新写的事件按 22 键映射出正确标签**；⚠ 历史 **945** 条 `schedule_change` 按拍板**未回填** ⇒ 旧卡文案不变 |
+
+实现与稿的差异（都记下来，便于回溯为什么页面长这样）：
+
+1. 表头是**六列**＝年度／回・期間／申込者数／受験者数／合格者数／合格率，比稿里「回／年月／…」少一列（年与回合合并成一列）。列名走 `historyColumnLabels` 短标签，不用 `factLabel('examinees')` 的「受験者数・受検者数」（后者会在表头占宽）。
+2. 表格**只复用 `.compare-table-wrap`／`.compare-table` 的样式**，**未复用 `renderSourceModule` 的逐格出处展开**⇒ 出处仍在下方当年卡片里，表的注记取 `statistics_methodology` 的 `display_value`。
+3. 「只列当年」的实际口径比稿里严：**pass-rate 带显式 `?year=` 时该页所有卡都按年过滤**（`cardYearScoped`），不只统计四键。第一版只约束统计键，导致 `passing_standard`（`exam_year=2026`）串进 2010 页、读数 34≠库里 32；加约束后才对齐。
+4. 段判定与年参数解耦：`annual` 只看**路由段**是不是四位年（`annualYear`），`?year=` 只影响 pass-rate 的当年口径 ⇒ 否则 `pass-rate/?year=2010` 会被误判成日程页。
+5. G-2 的映射从 admin 私有函数**提到 `packages/schema/src/updates.ts` 并导出为 `updateEventTypeForFact()`**，admin 写入点改为 import 同一份，避免两处口径分叉；`event_type` 枚举与 SQL 强转 `$3::event_type` 均未动。
+6. `verify-lib.mjs:244-266` 对页面只断言 200 与事实数，G-1 的减卡片**没有触发门禁断言改动**。
+
+回归读数（全部本机现取，退出码先重定向再 `echo $?`）：`vitest` **89 passed**（11 文件）、`typecheck` **0**、`build` **0**、`format:check` **0**、`test:verify-gate` **0**、`ci:fixture:verify` **0**、`npm run verify:all` **`"status": "passed"`／6 passed：0 failed／EXIT=0**（簿记 `approved_official` **863**、`api.facts` 863、`pending_official` 0、`coverageGaps: []`）、pytest **158 passed**；`lint` **EXIT=1** 仅根目录未跟踪 `Python/…flamegraph.js` 两条既有噪声。
+
+三条已修的实现坑（复跑者会遇到同样的）：① `section` 判定复用 `year` ⇒ `?year=` 误判 annual；② 「只列当年」漏非统计键 ⇒ 页面卡数与库侧不符；③ `.history-row--current th` 特异性（0,1,1）压不过 `.history-table tbody tr:nth-child(even) th`（0,2,3）⇒ 当前行高亮要写成同级选择器并放在斑马纹之后。另：模板插值里再嵌二级模板会让 `render.ts` 出 TS 解析级联报错（`,` expected），拆成 `renderHistoryRow`／`renderHistoryTable`／`compareHistoryRows` 即归零。
+
+后续判据：
+
+- 历史 945 条彻底纠正＝「完整方案」＝`ALTER TYPE` 迁移＋`UPDATE change_events` 回填，属迁移＋写库**双授权**，另开一轮。
+- `?year=` 形态目前**未进 sitemap**；要收录属呈现层改动，零写库，另议。
+- G-3 维持现状 ⇒ 历年统计仍不进门禁（`verify-lib.mjs:60-66` 跳 `post_event`），这条产品覆盖债**不会因为本轮而消失**。
