@@ -262,10 +262,17 @@ const server = createServer(async (req, res) => {
     if (routeMatch) {
       const slug = routeMatch[1];
       const routePart = routeMatch[2];
-      const year = /^\d{4}$/.test(routePart ?? '')
+      const annualYear = /^\d{4}$/.test(routePart ?? '')
         ? Number(routePart)
         : undefined;
-      const section: QualificationSection = year
+      const requestedYear =
+        routePart === 'pass-rate' ? url.searchParams.get('year') : null;
+      const year =
+        annualYear ??
+        (/^\d{4}$/.test(requestedYear ?? '')
+          ? Number(requestedYear)
+          : undefined);
+      const section: QualificationSection = annualYear
         ? 'annual'
         : routePart === 'application'
           ? 'application'

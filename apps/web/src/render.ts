@@ -126,14 +126,19 @@ const factLabelPrefixes: readonly [string, string][] = [
 const dimensionLabels: Record<string, string> = {
   academic: '学科',
   cbt: 'CBT',
+  'bookkeeping:1': '1級',
+  'bookkeeping:2': '2級',
+  'bookkeeping:3': '3級',
   'fp:1': '1級',
   'fp:2': '2級',
   'fp:3': '3級',
+  group: '団体試験',
   jafp: '日本FP協会',
   kinzai: '金融財政事情研究会',
   network: 'ネット試験',
   paper: '筆記試験',
   practical: '実技',
+  unified: '統一試験',
 };
 
 const eventTone: Record<PublicCalendarEvent['type'], string> = {
@@ -549,6 +554,178 @@ function renderFactGroups(
     .join('');
 }
 
+const historyNumericKeys: readonly string[] = [
+  'applicants',
+  'examinees',
+  'passed',
+  'pass_rate',
+];
+
+const deliveryRank: Record<string, number> = {
+  unified: 0,
+  group: 1,
+  network: 2,
+};
+
+function isHistoryFactKey(factKey: string): boolean {
+  return (
+    historyNumericKeys.includes(factKey) || factKey === 'statistics_methodology'
+  );
+}
+
+function historyGroupKey(fact: PublicFact): string {
+  return `${fact.examLevelId ?? '-'}|${fact.deliveryMode ?? '-'}`;
+}
+
+function levelRank(groupId: string): number {
+  const match = groupId.match(/(\d+)$/);
+  return match ? Number(match[1]) : 99;
+}
+
+const historyColumnLabels: Record<string, string> = {
+  applicants: '申込者数',
+  examinees: '受験者数',
+  passed: '合格者数',
+  pass_rate: '合格率',
+};
+
+function compareHistoryGroup(left: string, right: string): number {
+  const [, leftMode] = left.split('|');
+  const [, rightMode] = right.split('|');
+  return (
+    levelRank(left) - levelRank(right) ||
+    (deliveryRank[leftMode] ?? 9) - (deliveryRank[rightMode] ?? 9) ||
+    left.localeCompare(right)
+  );
+}
+
+/**
+ * `display_value` keeps the official cell text verbatim (value, then the printed
+ * column header, then the session or period in parentheses), so the table takes
+ * the leading value token instead of recomputing anything.
+ */
+function officialValueToken(displayValue: string): string {
+  const token = displayValue.split(' ')[0];
+  return token && token !== displayValue ? token : displayValue;
+}
+
+function officialScopeText(displayValue: string): string {
+  const match = displayValue.match(/[（(]([^（）()]*)[)）]\s*$/);
+  return match?.[1] ?? '';
+}
+
+function sessionLabel(fact: PublicFact): string {
+  if (fact.examSession)
+    return fact.examSession.includes('回')
+      ? fact.examSession
+      : `${fact.examSession}回`;
+  return officialScopeText(fact.displayValue) || '—';
+}
+
+type HistoryRow = {
+  year: number;
+  session: string;
+  cells: Map<string, PublicFact>;
+};
+
+function compareHistoryRows(left: HistoryRow, right: HistoryRow): number {
+  return (
+    right.year - left.year ||
+    right.session.localeCompare(left.session, undefined, { numeric: true })
+  );
+}
+
+function renderHistoryRow(row: HistoryRow, currentYear: number): string {
+  const cells = historyNumericKeys.map((key) => {
+    const fact = row.cells.get(key);
+    if (!fact) return '<td class="history-cell--empty">—</td>';
+    return `<td>${escapeHtml(officialValueToken(fact.displayValue))}</td>`;
+  });
+  const attrs =
+    row.year === currentYear
+      ? ' class="history-row--current" aria-current="true"'
+      : '';
+  return `<tr${attrs}><th scope="row">${row.year}年</th><td>${escapeHtml(row.session)}</td>${cells.join('')}</tr>`;
+}
+
+function renderHistoryTable(
+  groupKey: string,
+  rows: Map<string, HistoryRow>,
+  note: string | undefined,
+  groupIndex: number,
+  currentYear: number,
+): string {
+  const [levelId, modeId] = groupKey.split('|');
+  const title = [
+    levelId === '-' ? '' : dimensionLabel(levelId),
+    modeId === '-' ? '' : dimensionLabel(modeId),
+  ]
+    .filter(Boolean)
+    .join('・');
+  const headingId = `history-table-${groupIndex}`;
+  const head = [
+    '年度',
+    '回・期間',
+    ...historyNumericKeys.map(
+      (key) => historyColumnLabels[key] ?? factLabel(key),
+    ),
+  ]
+    .map((label) => `<th scope="col">${escapeHtml(label)}</th>`)
+    .join('');
+  const body = [...rows.values()]
+    .sort(compareHistoryRows)
+    .map((row) => renderHistoryRow(row, currentYear))
+    .join('');
+  const noteHtml = note
+    ? `<p class="history-table__note">集計口径：${escapeHtml(note)}</p>`
+    : '';
+  return `<div class="history-table-block"><h3 id="${headingId}">${escapeHtml(title || '公式統計')}</h3>${noteHtml}<div class="compare-table-wrap"><table class="compare-table history-table" aria-labelledby="${headingId}"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div></div>`;
+}
+
+function renderHistoryTables(facts: PublicFact[], currentYear: number): string {
+  const numeric = facts.filter((fact) =>
+    historyNumericKeys.includes(fact.factKey),
+  );
+  if (!numeric.length) return '';
+  const notes = new Map<string, string>();
+  for (const fact of facts)
+    if (fact.factKey === 'statistics_methodology')
+      notes.set(historyGroupKey(fact), fact.displayValue);
+
+  const groups = new Map<string, Map<string, HistoryRow>>();
+  for (const fact of numeric) {
+    const groupKey = historyGroupKey(fact);
+    const rows = groups.get(groupKey) ?? new Map<string, HistoryRow>();
+    const rowKey = `${fact.examYear}|${fact.examSession ?? ''}`;
+    const row = rows.get(rowKey) ?? {
+      year: fact.examYear,
+      session: sessionLabel(fact),
+      cells: new Map<string, PublicFact>(),
+    };
+    row.cells.set(fact.factKey, fact);
+    rows.set(rowKey, row);
+    groups.set(groupKey, rows);
+  }
+
+  const tables = [...groups.entries()]
+    .sort(([left], [right]) => compareHistoryGroup(left, right))
+    .map(([groupKey, rows], groupIndex) =>
+      renderHistoryTable(
+        groupKey,
+        rows,
+        notes.get(groupKey),
+        groupIndex,
+        currentYear,
+      ),
+    )
+    .join('');
+  const rowCount = [...groups.values()].reduce(
+    (total, rows) => total + rows.size,
+    0,
+  );
+  return `<section class="history-tables page-section" aria-labelledby="history-tables-heading"><div class="section-heading"><div><p class="eyebrow">年度別の公式統計</p><h2 id="history-tables-heading">受験者数・合格者数・合格率の年次推移</h2><p>公式が公表した表の値を、回（実施回）ごとに並べたものです。空欄「—」は公式表にその列がない期間で、値の補完はしていません。</p></div><p class="meta">${rowCount} 回・${groups.size} 表</p></div>${tables}</section>`;
+}
+
 function renderVerificationHistory(facts: PublicFact[]): string {
   const entries = [
     ...new Set(
@@ -577,6 +754,46 @@ export function renderQualificationPage(view: PublicQualificationView): string {
   return renderQualificationSectionPage(view, 'overview');
 }
 
+/**
+ * Year tables carry every past year, so the card lists on the overview and
+ * pass-rate pages stay limited to the selected year's official facts.
+ */
+function isListedCardFact(
+  fact: PublicFact,
+  section: QualificationSection,
+  year: number,
+): boolean {
+  if (section !== 'overview' && section !== 'pass-rate') return true;
+  if (fact.factKey === 'statistics_methodology') return false;
+  return !historyNumericKeys.includes(fact.factKey) || fact.examYear === year;
+}
+
+function yearLinkHref(
+  slug: string,
+  section: QualificationSection,
+  year: number,
+  hasHistoryStats: boolean,
+): string {
+  return section !== 'annual' && hasHistoryStats
+    ? `/shikaku/${slug}/pass-rate/?year=${year}`
+    : `/shikaku/${slug}/${year}/`;
+}
+
+function isCurrentYearLink(
+  section: QualificationSection,
+  availableYear: number,
+  year: number | undefined,
+  navigationYear: number,
+  hasHistoryStats: boolean,
+): boolean {
+  if (section === 'annual') return availableYear === year;
+  return (
+    section === 'pass-rate' &&
+    hasHistoryStats &&
+    availableYear === navigationYear
+  );
+}
+
 export function renderQualificationSectionPage(
   view: PublicQualificationView,
   section: QualificationSection,
@@ -584,36 +801,6 @@ export function renderQualificationSectionPage(
 ): string {
   const { qualification } = view;
   const sectionMeta = section === 'overview' ? null : sectionConfig[section];
-  const factsForPage = sectionMeta
-    ? view.facts.filter(
-        (fact) =>
-          (section !== 'annual' || fact.examYear === year) &&
-          sectionMeta.factKeyPrefixes.some((prefix) =>
-            fact.factKey.startsWith(prefix),
-          ),
-      )
-    : view.facts;
-  const sortedFacts = [...factsForPage].sort(
-    (left, right) =>
-      factPriority(left.factKey) - factPriority(right.factKey) ||
-      left.factKey.localeCompare(right.factKey),
-  );
-  const facts = sortedFacts.length
-    ? renderFactGroups(sortedFacts, section)
-    : renderFeedbackState({
-        kind: 'empty',
-        title: sectionMeta
-          ? `${sectionMeta.title}：${missingMessage(view, sectionMeta.factKeyPrefixes)}`
-          : missingMessage(view, []),
-        body:
-          sectionMeta?.intro ??
-          `${qualification.officialNameJa}の動的情報は、公式発表を確認し、必要な審査を完了した後に掲載します。未確認の日付や費用は表示しません。`,
-        actions: renderButtonLink({
-          href: '#official-sources',
-          label: '公式ソースを確認',
-          variant: 'secondary',
-        }),
-      });
   const availableYears = [
     ...new Set(
       view.facts
@@ -622,6 +809,50 @@ export function renderQualificationSectionPage(
     ),
   ].sort((left, right) => right - left);
   const navigationYear = year ?? Math.max(...availableYears, 2026);
+  const historyTables =
+    section === 'pass-rate'
+      ? renderHistoryTables(view.facts, navigationYear)
+      : '';
+  const cardYearScoped =
+    section === 'annual' || (section === 'pass-rate' && year !== undefined);
+  const factsForPage = sectionMeta
+    ? view.facts.filter(
+        (fact) =>
+          (!cardYearScoped || fact.examYear === year) &&
+          isListedCardFact(fact, section, navigationYear) &&
+          sectionMeta.factKeyPrefixes.some((prefix) =>
+            fact.factKey.startsWith(prefix),
+          ),
+      )
+    : view.facts.filter((fact) =>
+        isListedCardFact(fact, section, navigationYear),
+      );
+  const sortedFacts = [...factsForPage].sort(
+    (left, right) =>
+      factPriority(left.factKey) - factPriority(right.factKey) ||
+      left.factKey.localeCompare(right.factKey),
+  );
+  const facts = sortedFacts.length
+    ? renderFactGroups(sortedFacts, section)
+    : historyTables
+      ? ''
+      : renderFeedbackState({
+          kind: 'empty',
+          title: sectionMeta
+            ? `${sectionMeta.title}：${missingMessage(view, sectionMeta.factKeyPrefixes)}`
+            : missingMessage(view, []),
+          body:
+            sectionMeta?.intro ??
+            `${qualification.officialNameJa}の動的情報は、公式発表を確認し、必要な審査を完了した後に掲載します。未確認の日付や費用は表示しません。`,
+          actions: renderButtonLink({
+            href: '#official-sources',
+            label: '公式ソースを確認',
+            variant: 'secondary',
+          }),
+        });
+  const hasHistoryStats = view.facts.some((fact) =>
+    historyNumericKeys.includes(fact.factKey),
+  );
   const pageTitle =
     section === 'annual' && year ? `${year}年試験日程` : sectionMeta?.title;
   const status = renderBadge(
@@ -631,7 +862,14 @@ export function renderQualificationSectionPage(
   const yearLinks = (availableYears.length ? availableYears : [navigationYear])
     .map(
       (availableYear) =>
-        `<a class="year-link" href="/shikaku/${escapeHtml(qualification.slug)}/${availableYear}/"${section === 'annual' && availableYear === year ? ' aria-current="page"' : ''}>${availableYear}年</a>`,
+        `<a class="year-link" href="${escapeHtml(
+          yearLinkHref(
+            qualification.slug,
+            section,
+            availableYear,
+            hasHistoryStats,
+          ),
+        )}"${isCurrentYearLink(section, availableYear, year, navigationYear, hasHistoryStats) ? ' aria-current="page"' : ''}>${availableYear}年</a>`,
     )
     .join('');
   const relatedLinks = [
@@ -671,6 +909,12 @@ export function renderQualificationSectionPage(
     section === 'pass-rate'
       ? `<aside class="alert alert--info interpretation-note"><div><h2 class="alert__title">数値の見方</h2><p>過去の合格率は集団の実績であり、個人の合格可能性を示すものではありません。年度、級、実施区分と統計の母数をあわせて確認してください。</p></div></aside>`
       : '';
+  const scopeNote =
+    section === 'pass-rate' && historyTables
+      ? `<p class="history-scope-note">上の表が級・実施区分ごとの歴年（公式公表の回合別）、下のカードは ${navigationYear} 年に公式確認した情報です。表の空欄「—」は公式表にその列がない期間で、値の補完はしていません。</p>`
+      : section === 'overview' && hasHistoryStats
+        ? `<p class="history-scope-note">このページのカードは ${navigationYear} 年の公式確認済み情報です。歴年の受験者数・合格者数・合格率は <a href="/shikaku/${escapeHtml(qualification.slug)}/pass-rate/">合格率ページの表</a> に掲載しています。</p>`
+        : '';
   const annualIcs =
     section === 'annual' &&
     year &&
@@ -679,7 +923,7 @@ export function renderQualificationSectionPage(
     )
       ? `<div class="page-hero__actions">${renderButtonLink({ href: `/ics/${qualification.slug}/${year}.ics`, label: `${year}年のICSをダウンロード`, variant: 'secondary', icon: 'calendar' })}</div>`
       : '';
-  const body = `<div class="container"><header class="page-hero detail-hero"><div class="tag-row"><span class="tag">${escapeHtml(fieldLabel(qualification.field))}</span><span class="tag">${escapeHtml(categoryLabel(qualification.category))}</span></div><h1>${escapeHtml(qualification.officialNameJa)}</h1>${pageTitle ? `<p class="detail-hero__section">${escapeHtml(pageTitle)}</p>` : ''}<p>${qualification.aliasesJa.map(escapeHtml).join(' / ') || '公式情報を整理して掲載します。'}</p>${sectionMeta ? `<p class="detail-hero__intro">${escapeHtml(sectionMeta.intro)}</p>` : ''}<div class="page-hero__meta">${status}<span class="meta">公式情報確認日: ${escapeHtml(formatVerifiedAt(view.officialVerifiedAt))}</span></div><nav class="detail-hero__years" aria-label="年度を選ぶ">${yearLinks}</nav>${annualIcs}</header><div class="detail-layout"><div class="detail-main">${interpretationNote}${facts}${renderVerificationHistory(sortedFacts)}${renderSourceModule(qualification.slug)}</div>${sidebar}</div></div>`;
+  const body = `<div class="container"><header class="page-hero detail-hero"><div class="tag-row"><span class="tag">${escapeHtml(fieldLabel(qualification.field))}</span><span class="tag">${escapeHtml(categoryLabel(qualification.category))}</span></div><h1>${escapeHtml(qualification.officialNameJa)}</h1>${pageTitle ? `<p class="detail-hero__section">${escapeHtml(pageTitle)}</p>` : ''}<p>${qualification.aliasesJa.map(escapeHtml).join(' / ') || '公式情報を整理して掲載します。'}</p>${sectionMeta ? `<p class="detail-hero__intro">${escapeHtml(sectionMeta.intro)}</p>` : ''}<div class="page-hero__meta">${status}<span class="meta">公式情報確認日: ${escapeHtml(formatVerifiedAt(view.officialVerifiedAt))}</span></div><nav class="detail-hero__years" aria-label="年度を選ぶ">${yearLinks}</nav>${annualIcs}</header><div class="detail-layout"><div class="detail-main">${interpretationNote}${historyTables}${scopeNote}${facts}${renderVerificationHistory(sortedFacts)}${renderSourceModule(qualification.slug)}</div>${sidebar}</div></div>`;
   const canonicalPath =
     section === 'overview'
       ? `/shikaku/${qualification.slug}/`
@@ -971,7 +1215,10 @@ export function renderUpdatesPage(
       const source = event.sourceUrl
         ? `<a href="${escapeHtml(event.sourceUrl)}" target="_blank" rel="noreferrer">公式ソース</a>`
         : '<span>公式ソース未指定</span>';
-      return `<article class="update-card"><div class="update-card__header"><div><p class="eyebrow">${escapeHtml(event.eventLabel)}</p><h2><a href="/shikaku/${escapeHtml(event.qualification.slug)}/${event.examYear}/">${escapeHtml(event.qualification.officialNameJa)} · ${escapeHtml(event.factLabel)}</a></h2></div><time datetime="${escapeHtml(event.createdAt)}">${escapeHtml(formatVerifiedAt(event.createdAt))}</time></div>${diff}<div class="tag-row">${affectedPages}</div><p class="meta">${event.examYear}年 / 公式確認: ${escapeHtml(formatVerifiedAt(event.verifiedAt))} / ${source}</p></article>`;
+      const targetHref = isHistoryFactKey(event.factKey)
+        ? `/shikaku/${event.qualification.slug}/pass-rate/?year=${event.examYear}`
+        : `/shikaku/${event.qualification.slug}/${event.examYear}/`;
+      return `<article class="update-card"><div class="update-card__header"><div><p class="eyebrow">${escapeHtml(event.eventLabel)}</p><h2><a href="${escapeHtml(targetHref)}">${escapeHtml(event.qualification.officialNameJa)} · ${escapeHtml(event.factLabel)}</a></h2></div><time datetime="${escapeHtml(event.createdAt)}">${escapeHtml(formatVerifiedAt(event.createdAt))}</time></div>${diff}<div class="tag-row">${affectedPages}</div><p class="meta">${event.examYear}年 / 公式確認: ${escapeHtml(formatVerifiedAt(event.verifiedAt))} / ${source}</p></article>`;
     })
     .join('');
   const body = `<div class="container"><header class="page-heading"><p class="eyebrow">公式事実の変更・訂正</p><h1>更新情報</h1><p>承認済みの公式事実に変更や訂正があった場合に、変更前後の値、対象資格、影響ページ、公式ソースを記録します。単なるページ確認やデザイン変更は掲載しません。</p></header><section class="page-section" aria-labelledby="updates-heading"><div class="section-heading"><div><p class="eyebrow">変更ログ</p><h2 id="updates-heading">公式情報の変更・訂正</h2></div><p class="meta">${events.length}件</p></div>${events.length ? `<div class="updates-list">${cards}</div>` : renderFeedbackState({ kind: 'empty', title: '公開できる更新情報はまだありません', body: '公式事実の変更・訂正が承認されるとここに表示します。ページ確認だけでは更新情報を作成しません。', actions: renderButtonLink({ href: '/shikaku/', label: '資格一覧を見る', variant: 'secondary' }) })}</section></div>`;

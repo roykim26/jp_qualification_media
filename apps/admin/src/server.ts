@@ -4,6 +4,7 @@ import {
   type ServerResponse,
 } from 'node:http';
 import { Pool } from 'pg';
+import { updateEventTypeForFact } from '../../../packages/schema/src/updates.js';
 import {
   escapeHtml as escapeHtmlText,
   uiStyles,
@@ -236,7 +237,7 @@ async function reviewCandidate(
         [
           `change:${id}`,
           factId,
-          eventTypeForFact(row.fact_key),
+          updateEventTypeForFact(row.fact_key),
           previous.rowCount ? previous.rows[0].current_revision_id : null,
           revisionId,
           JSON.stringify([row.qualification_id]),
@@ -327,14 +328,6 @@ async function retractCiCurrentFact(
     client.release();
     await pool.end();
   }
-}
-
-function eventTypeForFact(factKey: string): string {
-  if (factKey.includes('deadline')) return 'application_deadline';
-  if (factKey.includes('application_open')) return 'application_open';
-  if (factKey === 'exam_date') return 'exam_date';
-  if (factKey === 'result_date') return 'result_date';
-  return 'schedule_change';
 }
 
 const server = createServer(async (req, res) => {
