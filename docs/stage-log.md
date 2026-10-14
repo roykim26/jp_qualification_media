@@ -1,5 +1,13 @@
 # 阶段记录与剩余问题
 
+## 2026-10-14（第十五轮）：纯文档轮——交接单文头 SHA／§2 交付表／§4 首段三处过时点补齐＋README 时点同批，把第十四轮按惯例欠下的账落账（零抓取／零入库／零批准／零迁移／零写库／零代码改动）
+
+- 触发：号主在接续交接（第十四轮收口时点）后点「纯文档轮」＝第十五轮一次补齐交接单 §2 列出的三处过时（文头 main SHA、§2 交付表缺 #37 行、§4 首段仍写「本地＋远端各 2 条＝#36 分支未删」）＋ README 时点；commit／push／PR 各另行给一句话。轮前现取：main＝origin/main＝`930bbc1`（PR #37 合并点），`git rev-list --merges --count main` **0**，工作区只剩 `?? Python/`，`git branch -vv` 只剩 `* main`，`git ls-remote --heads origin | wc -l` **1**（#36 分支 `db-round13-statistics-event-type` 已按 §4 首段三重判据删净，`git remote prune origin` 另清掉 #36 合并时远端已删的陈旧 `origin/docs-handoff-round12-sync`）。
+- 文档改动＝**3 个文件、纯文档**：`docs/transition-handoff.md`（文头 main SHA `9bf7ec8` → `930bbc1`＝#37 合并点、ref 现状由「本地＋远端各 2 条＝#36 分支未删」回到「只剩 `main`／远端 1 条＋prune 记录」、§2 交付表补 **#37** 行（4 文件 58 增／42 删）、§4 首段末句分支末态改成第十五轮现取的「只剩 main／`ls-remote`=1／`merges`=0」、待办 5 补第十五轮闭合并把「本轮」正名为第十四轮／本轮＝3 个文件）；`docs/stage-log.md`（本段）；`README.md`（交接单指针 main SHA `9bf7ec8` → `930bbc1`，时点仍 2026-10-14）。
+- 库侧与门禁：本轮**无代码／无写库改动**，交接单 §3 数字沿第十四轮本机复跑读数未重取（`facts` 非合成 approved 981、非合成 `pending_review` 0、`verify:all` 6/6、`change_events` 983 分布、pytest 158 passed 等）；本轮只在 §3 之外登记 git ref 事实（`930bbc1`／`ls-remote`=1／`merges`=0），均为本机现取。
+- 收尾：`Python/` 依铁律不提交也不删；本轮无 `uv.lock`／无 `var/` 临时件产生（未跑写库或抓取）。postgres 容器保持在已启动态。
+- 下一步（各需单独授权）：① 本轮 3 个文件落成 PR（新分支→`git add --` 逐路径→commit→push→`gh pr create --body-file var/pr-body.md`→squash merge→回读 main，合并后由下一轮补交接单文头 SHA 与 §2 交付表）；② `/updates/` 的 `LIMIT 100` 折叠（回填后首页 100 张卡全被统一表统计批占满，纯呈现层、零写库）；③ `?year=` 进 sitemap 或给历年表补 E2E 断言，或宅建统计页多来源重构（collector 代码＋可能迁移）／基本情報 FE 附件提取（要先定 PDF／xlsx 依赖）。
+
 ## 2026-10-14（第十四轮）：#36 交付链闭合＋本单欠账补齐——交接单时点推到 2026-10-14／main `9bf7ec8`，库侧与门禁全套本机复跑（含 docker postgres 停摆 12 小时的恢复实测），G 稿 §8 补交付段（零抓取／零入库／零批准／零迁移／零写库／零代码改动）
 
 - 触发：号主逐件给三句授权＝① commit 第十三轮的 11 个文件、② push 分支＋开 PR、③ squash 合并 #36＋回读 main，合并后点「1」＝本轮补第十三轮按惯例欠下的账。轮前现取：main＝origin/main＝`19e9db9`，工作区正好 11 个文件（9 个已跟踪修改＋2 个未跟踪迁移）加 `?? Python/`，`git rev-list --merges --count main` **0**。
