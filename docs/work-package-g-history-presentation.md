@@ -1,7 +1,7 @@
-# 工作包 G：把 805 条簿记历年统计接到「能用」的程度（2026-10-13 方案稿 → **同日第十一轮已执行 G-1＋G-2**，执行读数见 §7）
+# 工作包 G：把 805 条簿记历年统计接到「能用」的程度（2026-10-13 方案稿 → **同日第十一轮执行 G-1＋G-2 最小方案（§7）、第十三轮补做 G-2 完整方案（§8）**）
 
-> 本文前半（§1–§5）是**方案稿**，后半 §7 是**执行记录**。目的：把「863 条簿记事实已批准，但公开面看起来仍像只有 2026 一年」这件事拆成可拍板的三块，每块标清改动面、代码坐标、验收判据与风险。
-> §1–§6 的数字是 2026-10-13 第十轮的本机现取（**改动前**基线，取证命令见 §6）；§7 的数字是同日晚些时候 G-1／G-2 落地后的现取（**改动后**），逐条对照。执行细节与踩坑在 `docs/stage-log.md` 第十一轮。
+> 本文前半（§1–§5）是**方案稿**，§7／§8 是两段**执行记录**。目的：把「863 条簿记事实已批准，但公开面看起来仍像只有 2026 一年」这件事拆成可拍板的三块，每块标清改动面、代码坐标、验收判据与风险。
+> §1–§6 的数字是 2026-10-13 第十轮的本机现取（**改动前**基线，取证命令见 §6）；§7 是同日晚些时候 G-1／G-2 最小方案落地后的现取，§8 是第十三轮 G-2 完整方案（枚举加成员＋回填历史）的现取，逐条对照。执行细节与踩坑在 `docs/stage-log.md` 第十一轮与第十三轮。
 
 ## 1. 结论先说
 
@@ -63,7 +63,7 @@
 
 验收判据（全部可复跑）：pass-rate 页 HTML 字节数显著下降、`grep -c 'article class="card fact"'` 从 802 降到百级以内、页面出现「回」标识、`npm run verify:all` 仍 **6 passed／0 failed／EXIT=0**、`vitest`／`typecheck`／`build` 全绿、五个公开页仍 200。风险＝E2E 与 `verify:all` 里对页面的断言可能要跟着改（它只断言 200 与事实数，见 `scripts/verify-lib.mjs:244-266`）。
 
-### G-2 更新流：修事件类型误标（**同日第十一轮按最小方案执行完毕**，完整方案未做）
+### G-2 更新流：修事件类型误标（**第十一轮按最小方案执行，同日第十三轮补做完整方案**，读数见 §8）
 
 - 最小方案（**零迁移**）＝只改 `eventTypeForFact()` 的映射：把统计类（`pass_rate`／`applicants`／`examinees`／`passed`／`statistics_methodology`）与 `fee`／`eligibility`／`question_format` 等映射到**现有**枚举成员 `system_change`（制度・方式），或统计类继续 `schedule_change` 但在 `packages/schema/src/updates.ts` 的 `updateFactLabelPrefixes` 里补「合格率データ」类标签，让卡片文案正确而类型不动。**只改代码不改库 ⇒ 历史 945 条误标不会自动纠正**。
 - 完整方案（**要迁移＋要写库**）＝给 `event_type` 枚举加 `statistics_update`（`ALTER TYPE`＝迁移，且 `packages/db/src/schema.ts:38` 与 `packages/schema/src/index.ts:42` 两处同步），再回填历史行的 `event_type`（`UPDATE change_events`＝写库）。这条属号主铁律里的「写库／迁移」，要单独一句话。
@@ -129,17 +129,17 @@ curl -s http://127.0.0.1:3091/updates/
 
 改前（§2.2 的基线）→ 改后（本机 api 4191＋web 3091 起 `dist` 现取）：
 
-| 对象                                   | 改前                                                         | 改后                                                                                                      |
-| -------------------------------------- | ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------- |
-| `/shikaku/bookkeeping/pass-rate/`      | 802 卡／1,075,312 B                                          | **26 卡／123,550 B** ＋ **5 张表／207 行**（页内 meta「207 回・5 表」）                                   |
-| `/shikaku/bookkeeping/`（概览）        | 863 卡／1,150,946 B                                          | **82 卡／161,600 B**                                                                                      |
-| `pass-rate/?year=2010`                 | 该形态不存在（点 2010 得 0 件）                              | **32 卡**，与库侧逐键读数一致（四个数值键各 8 条＝1 級 2＋2 級 3＋3 級 3）                                |
-| `/shikaku/bookkeeping/2026/`（年度頁） | 15 卡                                                        | **15 卡未动**                                                                                             |
-| `/shikaku/bookkeeping/2010/`           | 0 卡                                                         | **0 卡未动**（年度页语义仍只管日程）                                                                      |
-| 其余五格 pass-rate／概览               | it-passport 54,765／fp 64,402／takken 54,212／FE 概览 64,414 | **逐格字节数不变** ⇒ 减卡片只发生在簿記的 overview＋pass-rate 两段                                        |
-| 回合标识                               | 「回」字 0 次                                                | 表内「173回」列；ネット行显示 `display_value` 末尾括注期间（如「2026年4月～2026年6月」），无回合号        |
-| `statistics_methodology`               | 混在 863 张卡里，pass-rate 段零消费点                        | 移出卡列表，做成表上「集計口径：」注记（統一表按級三条＋ネット两条页首引言）                              |
-| `/updates/` 标签                       | 首页 100 张卡清一色「日程の変更」                            | **新写的事件按 22 键映射出正确标签**；⚠ 历史 **945** 条 `schedule_change` 按拍板**未回填** ⇒ 旧卡文案不变 |
+| 对象                                   | 改前                                                         | 改后                                                                                                                                                                  |
+| -------------------------------------- | ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/shikaku/bookkeeping/pass-rate/`      | 802 卡／1,075,312 B                                          | **26 卡／123,550 B** ＋ **5 张表／207 行**（页内 meta「207 回・5 表」）                                                                                               |
+| `/shikaku/bookkeeping/`（概览）        | 863 卡／1,150,946 B                                          | **82 卡／161,600 B**                                                                                                                                                  |
+| `pass-rate/?year=2010`                 | 该形态不存在（点 2010 得 0 件）                              | **32 卡**，与库侧逐键读数一致（四个数值键各 8 条＝1 級 2＋2 級 3＋3 級 3）                                                                                            |
+| `/shikaku/bookkeeping/2026/`（年度頁） | 15 卡                                                        | **15 卡未动**                                                                                                                                                         |
+| `/shikaku/bookkeeping/2010/`           | 0 卡                                                         | **0 卡未动**（年度页语义仍只管日程）                                                                                                                                  |
+| 其余五格 pass-rate／概览               | it-passport 54,765／fp 64,402／takken 54,212／FE 概览 64,414 | **逐格字节数不变** ⇒ 减卡片只发生在簿記的 overview＋pass-rate 两段                                                                                                    |
+| 回合标识                               | 「回」字 0 次                                                | 表内「173回」列；ネット行显示 `display_value` 末尾括注期间（如「2026年4月～2026年6月」），无回合号                                                                    |
+| `statistics_methodology`               | 混在 863 张卡里，pass-rate 段零消费点                        | 移出卡列表，做成表上「集計口径：」注记（統一表按級三条＋ネット两条页首引言）                                                                                          |
+| `/updates/` 标签                       | 首页 100 张卡清一色「日程の変更」                            | **新写的事件按 22 键映射出正确标签**；⚠ 第十一轮按拍板走最小方案，历史 **945** 条 `schedule_change` **当时未回填**（⇒ 旧卡文案不变）；同日第十三轮补做完整方案，见 §8 |
 
 实现与稿的差异（都记下来，便于回溯为什么页面长这样）：
 
@@ -147,7 +147,7 @@ curl -s http://127.0.0.1:3091/updates/
 2. 表格**只复用 `.compare-table-wrap`／`.compare-table` 的样式**，**未复用 `renderSourceModule` 的逐格出处展开**⇒ 出处仍在下方当年卡片里，表的注记取 `statistics_methodology` 的 `display_value`。
 3. 「只列当年」的实际口径比稿里严：**pass-rate 带显式 `?year=` 时该页所有卡都按年过滤**（`cardYearScoped`），不只统计四键。第一版只约束统计键，导致 `passing_standard`（`exam_year=2026`）串进 2010 页、读数 34≠库里 32；加约束后才对齐。
 4. 段判定与年参数解耦：`annual` 只看**路由段**是不是四位年（`annualYear`），`?year=` 只影响 pass-rate 的当年口径 ⇒ 否则 `pass-rate/?year=2010` 会被误判成日程页。
-5. G-2 的映射从 admin 私有函数**提到 `packages/schema/src/updates.ts` 并导出为 `updateEventTypeForFact()`**，admin 写入点改为 import 同一份，避免两处口径分叉；`event_type` 枚举与 SQL 强转 `$3::event_type` 均未动。
+5. G-2 的映射从 admin 私有函数**提到 `packages/schema/src/updates.ts` 并导出为 `updateEventTypeForFact()`**，admin 写入点改为 import 同一份，避免两处口径分叉；第十一轮当时 `event_type` 枚举与 SQL 强转 `$3::event_type` 均未动（枚举加成员是同日第十三轮做的，见 §8）。
 6. `verify-lib.mjs:244-266` 对页面只断言 200 与事实数，G-1 的减卡片**没有触发门禁断言改动**。
 
 回归读数（全部本机现取，退出码先重定向再 `echo $?`）：`vitest` **89 passed**（11 文件）、`typecheck` **0**、`build` **0**、`format:check` **0**、`test:verify-gate` **0**、`ci:fixture:verify` **0**、`npm run verify:all` **`"status": "passed"`／6 passed：0 failed／EXIT=0**（簿记 `approved_official` **863**、`api.facts` 863、`pending_official` 0、`coverageGaps: []`）、pytest **158 passed**；`lint` **EXIT=1** 仅根目录未跟踪 `Python/…flamegraph.js` 两条既有噪声。
@@ -156,6 +156,42 @@ curl -s http://127.0.0.1:3091/updates/
 
 后续判据：
 
-- 历史 945 条彻底纠正＝「完整方案」＝`ALTER TYPE` 迁移＋`UPDATE change_events` 回填，属迁移＋写库**双授权**，另开一轮。
+- ~~历史 945 条彻底纠正＝「完整方案」＝`ALTER TYPE` 迁移＋`UPDATE change_events` 回填，属迁移＋写库**双授权**，另开一轮。~~ **已闭合（同日第十三轮，号主给到迁移＋写库双授权），读数见 §8。**
 - `?year=` 形态目前**未进 sitemap**；要收录属呈现层改动，零写库，另议。
 - G-3 维持现状 ⇒ 历年统计仍不进门禁（`verify-lib.mjs:60-66` 跳 `post_event`），这条产品覆盖债**不会因为本轮而消失**。
+
+## 8. 执行记录（同日第十三轮：G-2 完整方案＝迁移加成员＋回填历史）
+
+号主授权原文＝「同意授权给 `event_type` 加 `statistics_update`（`ALTER TYPE`＝迁移）＋回填历史 945 条（＝写库）」，两件一次给足。
+
+回填前的只读影响面（`var/r13-precheck.mjs`／`var/r13-matrix.mjs`／`var/r13-sqlcheck.mjs`，三条可复跑判据；三个脚本随本轮收尾删除，方法已抄进交接单 §6 的「动 `event_type` 口径前的只读判据」）：
+
+| 判据                                        | 读数                                                                                                                                                                                                                  |
+| ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `change_events` 行数／能联到 `facts` 的行数 | 983／983（孤儿 **0**）                                                                                                                                                                                                |
+| 回填前分布                                  | `schedule_change` **945**／`application_deadline` 17／`application_open` 11／`result_date` 8／`exam_date` 2，其余成员 **0**                                                                                           |
+| 按新映射的目标分布                          | `statistics_update` **807**／`system_change` **88**／`schedule_change` **24**／`application_deadline` 17／`fee_change` 15／`eligibility_change` 11／`application_open` 11／`result_date` 8／`exam_date` 2（合计 983） |
+| 实际改写／不变                              | **921／62**                                                                                                                                                                                                           |
+| 命中 `statistics_update` 的 `fact_key`      | `pass_rate` 207／`passed` 207／`applicants` 193／`examinees` 193／`statistics_methodology` 7                                                                                                                          |
+| 仍留在 `schedule_change` 的                 | `exam_schedule` 13／`exam_dates` 9／`result_date_rule` 2                                                                                                                                                              |
+
+**「回填 945 条」的实质是重分类而不是改名**：945 条里 807 条进新成员，114 条（`system_change` 88＋`fee_change` 15＋`eligibility_change` 11）进**已有**成员，24 条本就属日程、维持原值。
+
+迁移落点与拆分理由：
+
+1. `packages/db/migrations/0019_event_type_statistics_update.sql` **只**含 `ALTER TYPE public.event_type ADD VALUE IF NOT EXISTS 'statistics_update';`。`packages/db/src/migrate.ts` 逐文件单事务（`BEGIN`→SQL→`INSERT INTO schema_migrations`→`COMMIT`），而 Postgres 不允许在**同一事务内使用**刚新增的枚举值 ⇒ 新增与回填必须分文件。
+2. `0020_change_event_type_backfill.sql` 是一条带 CASE 的全表 `UPDATE … FROM facts`，分支与 `updateEventTypeForFact()` **逐条同序**（deadline／application_open／exam_date／result_date／fee＋payment_／eligibility／统计五键／考试内容 12 前缀／schedule 兜底）。含下划线的前缀写成 LIKE 的 `\_`（本机实测 `payment_fee` 命中、`paymentxfee` 不命中），以免与 JS 的 `startsWith` 分叉。
+3. 执行前把迁移里的 CASE 原文抽出来改写成 SELECT 做只读试算，与 JS 映射**逐行比对：983 行不一致 0**；回填后再跑一遍＝**需改写 0／不变 983**（幂等）。
+4. 新成员按 `enumsortorder` 落在**末位**（第 9 个），`packages/db/src/schema.ts` 的 `pgEnum` 与 `packages/schema/src/index.ts` 的 `eventType` 同步加在末位。
+
+代码与文案：`updateEventTypeForFact()` 的统计五键改返 `statistics_update`，`updateEventLabels` 加 `statistics_update: '統計データの変更'`，文件里「closed enum」注释改为说明新成员与分支顺序；`tests/update-event-classification.test.ts` 把统计键与考试内容键拆成两条 `it`，`tests/web-render.test.ts` 那条 pass-rate 卡的 `eventType`／`eventLabel` 同步。**未动**＝`services/api/src/release.ts:92`（回滚仍硬编码 `schedule_change`）、admin 的 `$3::event_type` 强转、`config/data-coverage-contract.json`。
+
+公开面实测（`dev:api` 4100＋`WEB_PORT=3091`，`var/r13-updates.mjs`）：`GET /api/v1/updates` 上限 100 条**全部** `statistics_update`／「統計データの変更」；`/updates/` 200／**118,227 B／100 卡**，「日程の変更」0 次、「制度・方式の変更」0 次，出现的 1 次「公式情報の変更」是区块标题不是兜底标签；统计卡链接仍指 `/shikaku/bookkeeping/pass-rate/?year=2026`。
+
+为什么不需要刷 baseline 与 CI 夹具：`fixtures/ci/approved-facts.sql`（2,070,472 B）的 INSERT 只有 `facts` 981／`fact_revisions` 981／`candidate_facts` 981／`snapshots` 29 四张表，**不含 `change_events`、不含 `event_type`、不含 `CREATE TYPE`**；CI 顺序是 `db:migrate` → `ci:fixture:restore`，所以 0019/0020 在空库上执行、0020 命中 0 行。库侧终态现取：`facts` 981、非合成 `pending_review` 0、`snapshots` 44、`schema_migrations` **22**（迁移文件 **21** 个）、`change_events` 983。
+
+回归读数：`npm run test`（vitest）**90 passed**（11 文件）、`typecheck`／`build`／`format:check`／`test:verify-gate`／`ci:fixture:verify` 全 **0**、`npm run verify:all` **`"status": "passed"`／6：0／EXIT=0**、pytest **158 passed**；`lint` 仍 **EXIT=1**（根目录未跟踪 `Python/…flamegraph.js` 两条既有噪声）。
+
+三条本轮坑（复跑者会遇到同样的）：① 自检要跑 `npm run test` 而不是 `npx vitest run`——后者会扫到 `scripts/*.test.mjs`（node:test 文件）报「No test suite found」；② 4100 若被残留进程占着，`tests/public-api.test.ts` 会抛 `EADDRINUSE` 的 Unhandled Rejection 让整轮退出码 1，`netstat -ano` 的 PID 在**第 5 列**；③ 本机 Bash 里 `taskkill //PID` 会被判成 UNC 路径要求确认，改用 `powershell -NoProfile -Command "Stop-Process -Id <pid> -Force"`。
+
+仍开放的延伸（各需单独授权）：`/updates/` 的 `LIMIT 100` 折叠（§G-2 第 3 条，本轮 100 张卡全被统计批占满，正好复现了稿里的担忧）、`?year=` 进 sitemap、G-3 判级面（按拍板维持不动）。
