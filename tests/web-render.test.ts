@@ -726,8 +726,8 @@ describe('bookkeeping history statistics tables', () => {
     const html = renderUpdatesPage([
       {
         id: 'change:bookkeeping:pass-rate:172',
-        eventType: 'system_change',
-        eventLabel: '制度・方式の変更',
+        eventType: 'statistics_update',
+        eventLabel: '統計データの変更',
         qualification: bookkeeping,
         factKey: 'pass_rate',
         factLabel: '合格率',

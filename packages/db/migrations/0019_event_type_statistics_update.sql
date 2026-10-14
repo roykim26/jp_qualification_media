@@ -1,0 +1,11 @@
+-- Work package G-2 full option, authorized 2026-10-13: the history statistics series
+-- (applicants / examinees / passed / pass_rate / statistics_methodology) is a different
+-- kind of change from a schedule move, and since round 11 the presentation layer shows
+-- it as per-year tables, so /updates/ needs its own event type instead of reusing
+-- system_change.
+--
+-- This file carries only the ALTER TYPE.  packages/db/src/migrate.ts runs every
+-- migration file in its own BEGIN/COMMIT, and Postgres forbids *using* a newly added
+-- enum value in the same transaction that adds it, so the backfill lives in
+-- 0020_change_event_type_backfill.sql.
+ALTER TYPE public.event_type ADD VALUE IF NOT EXISTS 'statistics_update';

@@ -44,6 +44,9 @@ export const eventType = pgEnum('event_type', [
   'eligibility_change',
   'schedule_change',
   'system_change',
+  // Added by 0019_event_type_statistics_update.sql, so it stays last to match the
+  // enum labels Postgres stores.
+  'statistics_update',
 ]);
 
 export const qualifications = pgTable('qualifications', {

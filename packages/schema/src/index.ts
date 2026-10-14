@@ -47,6 +47,7 @@ export const eventType = [
   'eligibility_change',
   'schedule_change',
   'system_change',
+  'statistics_update',
 ] as const;
 
 export const qualificationSchema = z.object({

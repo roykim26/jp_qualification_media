@@ -2,7 +2,7 @@
 
 > 本文是**时点快照**，供复制进新会话接续开发用。文中所有数字都是 2026-10-13 本机实测读数，**下一轮必须先按 §6 的命令现取，别把本文的数当结论**。口径权威定义在 `docs/data-gate-semantics.md`（§6 是批准链机制、§8.1 是三态术语、§9 是 baseline 与夹具维护），簿记账目在 `docs/bookkeeping-source-contract.md`。
 
-工作目录＝仓库根 `E:\自建程序\jp_qualification_media`；第十二轮同步本行时 main＝origin/main＝**`432021d`**（PR #34 合并点＝第十一轮：簿記 pass-rate 页接历年统计表 G-1＋G-2 最小方案），本单自己的合并会把它顶掉 ⇒ 下一轮以 `git log --oneline -1` 现取为准。历史纯线性（`git rev-list --merges --count main` 为 0），main 每个 commit 标题都带 `(#NN)`＝**一律走 squash PR，不直接 push main**。仓库 ref 现状（第十二轮现取）＝本地只剩 `main`、`git ls-remote --heads origin | wc -l` 为 **1**；#31／#32／#33 留下的三条已合并分支已分两轮删净（判据见 §4 首段），下一轮直接开新分支即可，要删旧分支仍另需一句话。
+工作目录＝仓库根 `E:\自建程序\jp_qualification_media`；第十三轮同步本行时 main＝origin/main＝**`19e9db9`**（PR #35 合并点＝第十二轮：#34 的 CI 读数落账＋删 #32／#33 遗留分支＋本单欠账补齐），本单自己的合并会把它顶掉 ⇒ 下一轮以 `git log --oneline -1` 现取为准。历史纯线性（`git rev-list --merges --count main` 为 0），main 每个 commit 标题都带 `(#NN)`＝**一律走 squash PR，不直接 push main**。仓库 ref 现状（第十二轮现取）＝本地只剩 `main`、`git ls-remote --heads origin | wc -l` 为 **1**；#31／#32／#33 留下的三条已合并分支已分两轮删净（判据见 §4 首段），下一轮直接开新分支即可，要删旧分支仍另需一句话。
 
 **批准链已走完，别再找批准任务**：簿记 807 条候选的三次独立授权（采集／入库／批准）已全部由号主行使完毕，2026-10-13 批完最后 772 条 ⇒ 非合成 `pending_review` **0**、`facts` **176 → 981**、门禁自行恢复 **6/6**；同日第十一轮已把 **863 条统一表历史统计接成公开面的历年表**（G-1／G-2 落地，见 §4 待办 3 闭合段）。剩余待办见 §4，都属新范畴（宅建多来源、FE 附件提取、批准链的机制债、G 的两条延伸）。
 
@@ -38,6 +38,7 @@
 | #32 | 第九轮纯文档：批后独立复核与三个取证坑落账＋本单欠账补齐＋纠正 `facts` 无 `synthetic` 列 | `5f0635a` |
 | #33 | 第十轮纯文档：工作包 G 方案稿（805 条历年统计接公开面的实测与三块拆法）＋本单欠账补齐    | `0d91f1c` |
 | #34 | 第十一轮代码＋文档：簿記 pass-rate 页接 5 张历年表（G-1）＋更新流事件类型最小方案（G-2） | `432021d` |
+| #35 | 第十二轮纯文档：#34 的 CI 读数落账＋按三重判据删 #32／#33 两条遗留分支＋本单欠账补齐     | `19e9db9` |
 
 批准链的三次授权落点（都已在库里，不要重跑）：抓取 2026-10-12 早（磁盘 7 页，`var/official-snapshots/`）；入库 2026-10-12T10:38Z 另一窗口 `ingest_bookkeeping` EXIT=0 产 807 条候选；批准分两段——2026-10-12 批 **35 条**（ネット数值 28 ＋ 口径 7 只产 5 条 `facts`）⇒ `facts` 176 → 209，2026-10-13 按級分三档批完 **772 条**（196／288／288）⇒ 209 → **981**。`reject` 全程 0 条。
 
@@ -47,11 +48,11 @@
 
 ## 3. 本机库与配置现态（2026-10-13 实测，每轮请重取）
 
-`schema_migrations` 20、`sources` 47（`qualification_id` NULL 0）、`facts` 非合成 approved **981**、`candidate_facts` **1075 approved ＋ 13 rejected ＋ 0 pending_review**、`reviews` **1006**（approve 983／reject 18／requeue 5）、`snapshots` **44**、`source_scopes` 0、`change_events` **983**（`schedule_change` 945／`application_deadline` 17／`application_open` 11／`result_date` 8／`exam_date` 2——G-2 只改新写入的映射，故 945 那条分布仍是批准轮打脏的旧值）。磁盘快照**没有重抓**，`snapshots` 44 是入队时登记的快照行。
+`schema_migrations` **22**（迁移文件 **21** 个；行数≠文件数，见下文判据）、`sources` 47（`qualification_id` NULL 0）、`facts` 非合成 approved **981**、`candidate_facts` **1075 approved ＋ 13 rejected ＋ 0 pending_review**、`reviews` **1006**（approve 983／reject 18／requeue 5）、`snapshots` **44**、`source_scopes` 0、`change_events` **983**（**第十三轮回填后**＝`statistics_update` 807／`system_change` 88／`schedule_change` 24／`application_deadline` 17／`fee_change` 15／`eligibility_change` 11／`application_open` 11／`result_date` 8／`exam_date` 2）。磁盘快照**没有重抓**，`snapshots` 44 是入队时登记的快照行。
 
-门禁与预检都是绿态：`npm run verify:all` ⇒ `status=passed`、**6 passed／0 failed**、EXIT=0，簿记 `approved_official` **863**、`api.facts` **863**、五个公开页 200、`coverageGaps: []`，其余五格 16／15／2／10／75。只读预检 ⇒ `summary: stored=903 computed=865 skipped_approved=865 would_stage=0 blocking=0`、**EXIT=0**。⚠ 读预检别只看退出码：`blocking=0／EXIT=0` 在「未入队」与「已批完」两种终态上形状相同，要靠 `skipped_approved` 与 `would_stage` 两列区分（五次读数表在 `docs/bookkeeping-source-contract.md`）。第十一轮（改代码轮）与第十二轮（本单补齐轮）各把本节数字复跑了一遍 ⇒ 库侧计数、`verify:all` 6/6、预检 `would_stage=0 blocking=0`、pytest **158 passed** 逐字未动。
+门禁与预检都是绿态：`npm run verify:all` ⇒ `status=passed`、**6 passed／0 failed**、EXIT=0，簿记 `approved_official` **863**、`api.facts` **863**、五个公开页 200、`coverageGaps: []`，其余五格 16／15／2／10／75。只读预检 ⇒ `summary: stored=903 computed=865 skipped_approved=865 would_stage=0 blocking=0`、**EXIT=0**。⚠ 读预检别只看退出码：`blocking=0／EXIT=0` 在「未入队」与「已批完」两种终态上形状相同，要靠 `skipped_approved` 与 `would_stage` 两列区分（五次读数表在 `docs/bookkeeping-source-contract.md`）。第十一轮（改代码轮）、第十二轮（本单补齐轮）与第十三轮（迁移＋回填轮）各把本节数字复跑了一遍 ⇒ 除 `change_events` 的 `event_type` **分布**（第十三轮按拍板回填）与 `schema_migrations` 行数（20 → **22**）之外，库侧计数、`verify:all` 6/6、预检 `would_stage=0 blocking=0`、pytest **158 passed** 逐字未动。⚠ 本机自检命令是 **`npm run test`**（＝`vitest run tests --pool=threads --poolOptions.threads.singleThread`），不要图快跑 `npx vitest run`：后者会连 `scripts/*.test.mjs`（node:test 文件）一起扫，报两个「No test suite found」的 FAIL；另外跑测试前确认 **4100 没被残留进程占着**，否则 `tests/public-api.test.ts` 抛 `EADDRINUSE` 让整轮退出码 1。
 
-`change_events` 全库 **983** 条的分布＝`schedule_change` **945**／`application_deadline` 17／`application_open` 11／`result_date` 8／`exam_date` 2。⚠ 这是 G-2 最小方案的**遗留面**：`updateEventTypeForFact()` 只管新写入的事件，那 945 条历史行按号主拍板**未回填**（回填＝迁移＋写库双授权），所以在 `/updates/` 看到旧卡标「日程の変更」不是回归。
+`change_events` 的 `event_type` **已在第十三轮按新映射回填完毕**（迁移 `0019_event_type_statistics_update`＝`ALTER TYPE` 加成员 `statistics_update`，迁移 `0020_change_event_type_backfill`＝一条与 `updateEventTypeForFact()` 同序的 CASE 全表 `UPDATE`；实际改写 **921** 行／不变 62 行，回填后复算改写 0 ⇒ 幂等）。⇒ 现在在 `/updates/` 上看到的是「統計データの変更」，**旧的「日程の変更」误标已不存在**；`event_type` 枚举现有 **9** 个成员、`statistics_update` 按 `enumsortorder` 在**末位**。⚠ 两条硬约束留给下一轮：① `packages/db/src/migrate.ts` 是**逐文件单事务**，Postgres 不允许在同一事务内**使用**刚 `ADD VALUE` 的新枚举值 ⇒ 加成员与用它的 `UPDATE` 必须分两个迁移文件；② 回填是**重分类不是改名**（945 条 `schedule_change` 里 807 条进 `statistics_update`、114 条进 `system_change`／`fee_change`／`eligibility_change`、24 条本就属日程），要再动口径必须照 §6 的先只读试算（把迁移里的 CASE 抽出来改写成 SELECT 与 JS 映射逐行比对）。⚠ 判级面与 baseline **未动**，`fixtures/ci/approved-facts.sql` **不含 `change_events`**（只有 facts／fact_revisions／candidate_facts／snapshots 四张表），CI 又是先 `db:migrate` 后 `ci:fixture:restore` ⇒ 这两个迁移在 CI 上命中 0 行，夹具与 baseline **不需要重导**。仍开放＝`/updates/` 的 `LIMIT 100`（回填后首页 100 张卡全被统计批占满，正是 G 稿点名的折叠问题）与 `services/api/src/release.ts:92` 回滚路径仍硬编码 `schedule_change`。
 
 `config/release-gate-baseline.json` 与 CI 夹具**已同批刷到 981 口径**：bookkeeping `expectedFacts` 58 → **863**（其余五格不变），`fixtures/ci/approved-facts.sql` 176/176/176/25 → **981/981/981/29**（`scripts/verify-ci-fixture.mjs` 第 9–12 行四个断言同步改）。⚠ 两者必须同批：baseline 是**回归下限**（`scripts/verify-lib.mjs:215` 判 `approved_official < expectedFacts`），只刷 baseline 不重导夹具 ⇒ 本机照绿而 CI 必红在 `approved official 58 below regression floor 863`。
 
@@ -65,15 +66,15 @@
 
 1. **宅建统计页多来源重构**：`snapshot_from_html()` 仍把快照 id 钉在单条 `TAKKEN_SOURCE`，而那条背后有已批准事实 ⇒ 这页**只能抓、不能入库**。要动的是 collector 代码＋可能的迁移，属新授权。
 2. **基本情報技術者附件提取**：`toukei_fe.html` 只是附件目录页（零 `<table>`，数据全在 20 多个 PDF／xlsx 里），而全仓**既无 PDF 也无 xlsx 解析能力** ⇒ 要另开「附件提取」授权并先定依赖。
-3. **把 805 条历年统计接到「能用」的程度**：**已闭合（2026-10-13 同日第十一轮＝G-1＋G-2 落地，号主对 G 稿 §5 四问全部拍板选推荐项）**。结果＝簿記 pass-rate 页 **802 卡／1,075,312 B → 26 卡／123,550 B ＋ 5 张历年表 207 行**，概览 863 → **82 卡**，年份链接改指 `/shikaku/<slug>/pass-rate/?year=<年>`（`?year=2010` 实测 **32 卡**＝库侧逐键读数），`exam_session` 以「173回」列可见，`statistics_methodology` 改成表上「集計口径：」注记；G-2 走最小方案＝映射与文案改完（`updateEventTypeForFact()`，22 键），**历史 945 条 `schedule_change` 未回填**；G-3 按拍板**判级面零改动**，历年统计仍不进门禁。改动 7 个代码／测试文件 589 增／38 删，零写库、零迁移，baseline 与 CI 夹具未动。执行读数与实现差异在 `docs/work-package-g-history-presentation.md` §7，踩坑在 `docs/stage-log.md` 第十一轮。⚠ 未闭合的两条延伸（各需单独授权）＝G-2 完整方案（`ALTER TYPE` 迁移＋回填 945 条＝写库）、`?year=` 进 sitemap。
+3. **把 805 条历年统计接到「能用」的程度**：**已闭合（2026-10-13 同日第十一轮＝G-1＋G-2 落地，号主对 G 稿 §5 四问全部拍板选推荐项）**。结果＝簿記 pass-rate 页 **802 卡／1,075,312 B → 26 卡／123,550 B ＋ 5 张历年表 207 行**，概览 863 → **82 卡**，年份链接改指 `/shikaku/<slug>/pass-rate/?year=<年>`（`?year=2010` 实测 **32 卡**＝库侧逐键读数），`exam_session` 以「173回」列可见，`statistics_methodology` 改成表上「集計口径：」注记；G-2 走最小方案＝映射与文案改完（`updateEventTypeForFact()`，22 键），**当时**历史 945 条 `schedule_change` 未回填（第十三轮已补做，见本节末）；G-3 按拍板**判级面零改动**，历年统计仍不进门禁。改动 7 个代码／测试文件 589 增／38 删，零写库、零迁移，baseline 与 CI 夹具未动。执行读数与实现差异在 `docs/work-package-g-history-presentation.md` §7，踩坑在 `docs/stage-log.md` 第十一轮。⚠ **未闭合的延伸（需单独授权）**＝`?year=` 进 sitemap；G-2 完整方案**已闭合（2026-10-13 同日第十三轮＝号主给迁移＋写库双授权）**＝`event_type` 加 `statistics_update`（迁移 0019）＋按映射回填历史（迁移 0020，改写 921 条），读数与两条硬约束见 §3 末段与 `docs/work-package-g-history-presentation.md` §8。
 4. **批准链的遗留机制债（不急，但要知道）**：`approve` 无撤销接口（`docs/data-gate-semantics.md` §6 第 2 条），同槽覆盖会让 `facts.id` 与实际 current 候选名实不符（第 3 条）。要补「撤销真实快照事实」的能力属改代码＋改鉴权面，另需授权。
-5. **文档欠账**：**已闭合（2026-10-13 第十二轮）**＝本单文头 main SHA → `432021d`、§2 交付表补 `#33`／`#34` 两行、§3 加 `change_events` 分布与「945 条未回填」的读法、§4 首段两批删分支的实数、待办 3 的 G 闭合段与 §5 两条产品事实、§9 与工作包 G 稿的「§7 执行记录」指针、README 时点同批。⚠ 仍是**每轮必欠一次**的结构：本单合并后文头 SHA 与 §2 表立刻又过时一轮，惯例仍是下一轮开 PR 时顺手补，不需要单独立项。
+5. **文档欠账**：**已闭合（2026-10-13 第十二轮，同日第十三轮再补一次）**＝本单文头 main SHA → `432021d`、§2 交付表补 `#33`／`#34` 两行、§3 加 `change_events` 分布与「945 条未回填」的读法、§4 首段两批删分支的实数、待办 3 的 G 闭合段与 §5 两条产品事实、§9 与工作包 G 稿的「§7 执行记录」指针、README 时点同批。**第十三轮再补**＝文头 main SHA → `19e9db9`（#35 合并点）、§2 交付表补 `#35` 行、§3 与 §5 的「945 条未回填」改成回填后的实测分布＋两条迁移硬约束、§3 末段加 `npm run test` 与 4100 残留进程两条自检坑、待办 3 标 G-2 完整方案闭合、G 稿新增 §8、README 指针同批。⚠ 仍是**每轮必欠一次**的结构：本单合并后文头 SHA 与 §2 表立刻又过时一轮，惯例仍是下一轮开 PR 时顺手补，不需要单独立项。
 
 ## 5. 容易踩空的产品事实
 
 - **F 永远不会把门禁跑红**：`scripts/verify-lib.mjs` 跳过 `requiredLevel ∈ {post_event, optional, not_applicable}` 的 requirement，历史统计类正属此类 ⇒ 这是产品覆盖债，不会自己浮出水面，只能靠人记着。⚠ 第十一轮把统计接成历年表**没有改变这一条**（判级面按拍板零改动），公开面能看≠门禁会管。
 - **簿記历年统计的公开面口径（2026-10-13 第十一轮起）**：历年数值走 `pass-rate` 页的 **5 张表／207 行**，卡片**只列当年**；年份链接指 `pass-rate/?year=<年>` 而不是年度日程页，且 **`?year=` 时该页所有卡都按年过滤**（含 `passing_standard` 等非统计键）；`statistics_methodology` 不是卡片而是表上「集計口径：」注记；`/shikaku/<slug>/<年>/` 年度页**继续只管日程**（2010 仍是 0 卡）。改统计呈现时若只看年度页会以为没生效。
-- **更新流的事件类型标签只对新写入生效**：`updateEventTypeForFact()`（`packages/schema/src/updates.ts`）是 admin 批准写入点的唯一映射，历史 **945** 条 `change_events` 仍是 `schedule_change`（按拍板未回填）⇒ 在 `/updates/` 上看到旧卡文案不对属设计内，不是回归。
+- **`/updates/` 的标签口径第十三轮起是「映射＋库」两份要对齐**：`updateEventTypeForFact()`（`packages/schema/src/updates.ts`）是 admin 批准写入点的唯一映射，历史 983 条 `change_events` 已按同一份 CASE 回填（迁移 0020）⇒ 改映射就是**同时改两处**：代码里的分支顺序＋迁移里的 CASE。判据＝`var/r13-sqlcheck.mjs` 那种「把迁移里的 CASE 抽出来改写成 SELECT、与 JS 逐行比对」的只读试算，不一致必须为 0 才能写库。
 - **审核量的换算按「不同 `evidence_text` 段数」而不是候选条数**：統一表每行拆 4 条候选共享一段原文，807 条候选实际只有 210 段（統一 193 ＋ ネット 14 ＋ 口径 3）。估人工时照这条。
 - **本机批准不会自动进 CI 夹具**：夹具要 `ci:fixture:export` 重导＋四个硬编码计数同步（§3 末段）。重导与 `baseline:update` 都有双重确认开关，且**都拒绝在非合成 pending 未清零时执行**，所以顺序永远是：批完 → `verify:all` 6/6 → `baseline:update` → `ci:fixture:export` → `ci:fixture:verify`。
 - **公开面的卡片数不再等于事实数**（与上一条同批次生效）：核对「库里某年有哪些统计事实」不能再数卡片，要看 pass-rate 的表或按 §6 的库侧脚本现取。基准读数＝pass-rate **26 卡＋5 表 207 行／123,550 B**、概览 **82 卡／161,600 B**、`pass-rate/?year=2010` **32 卡**，而 `/shikaku/bookkeeping/2010/`（日程页）**仍 0 卡**、`/2026/` 仍 15 卡。
@@ -86,12 +87,15 @@ set -a; . ./.env; set +a
 PYTHONIOENCODING=utf-8 uv run --project services/collector python -m collector.precheck_bookkeeping --breakdown
 PYTHONIOENCODING=utf-8 uv run --project services/collector python -m pytest services/collector/tests services/parser/tests -q
 npm run format:check
+npm run test
 npm run verify:all
 npm run ci:fixture:verify
 ```
 
 - 预检只 `SELECT`；退出码 0＝无阻塞项、1＝有阻塞项、2＝缺 `DATABASE_URL` 或参数不认识。
 - 库侧计数（`facts`／`pending_review`／`reviews`／`snapshots`）把 SQL 写成 `var/` 下的脚本再 `node var/x.mjs` 跑，别拼一行式内联 SQL（一行式命令通体不要带单引号与反引号）。本轮用的四条判据语句已归档进 `docs/stage-log.md` 第七轮与 `docs/bookkeeping-source-contract.md`。
+- **动 `event_type` 口径前的只读判据**（第十三轮立下的，脚本 `var/r13-precheck.mjs`／`var/r13-matrix.mjs`／`var/r13-sqlcheck.mjs` 已按铁律删除，方法要复用就照下面三步重写）：① 分布对照 `select event_type::text, count(*) from change_events group by 1 order by 2 desc`；② 影响面＝把目标映射跑成「库里实际值 → 新值」的转移矩阵（`change_events ce join facts f on f.id=ce.fact_id`，全部 983 行都能联到，孤儿 0）；③ **一致性**＝从迁移文件里读出 CASE 原文、剥掉 `--` 注释后改写成 SELECT 并**去掉 `::event_type` 强转**（新成员未 apply 时强转必报错），与 `updateEventTypeForFact()` 逐行比对，**不一致必须为 0** 才允许写库。本机实测：983 行逐行一致／改写 921／不变 62，回填后复算改写 0（幂等）。
+- 自检命令是 **`npm run test`**，不是 `npx vitest run`：后者会扫 `scripts/*.test.mjs`（node:test 文件）报「No test suite found」的 FAIL；跑测试前还要确认 **4100 没被残留进程占着**（`netstat -ano` 的 PID 在**第 5 列**；本机 Bash 里 `taskkill //PID` 会被判成 UNC 路径要求确认，改 `powershell -NoProfile -Command "Stop-Process -Id <pid> -Force"`），否则 `tests/public-api.test.ts` 抛 `EADDRINUSE` 让整轮退出码 1。
 - baseline 与夹具的两个双重确认命令（都要 localhost，都拒绝非合成 pending 未清零）：
 
 ```
@@ -130,12 +134,12 @@ curl -s -o /dev/null -w "HTTP=%{http_code}\n" -H "x-reviewer-id: local-data-revi
 
 ## 9. 该读的权威文档
 
-| 文档                                                                                                                     | 管什么                                                                                                                                                                     |
-| ------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `docs/data-gate-semantics.md`                                                                                            | 门禁／判级／溯源／三级授权／鉴权总口径；§6 批准链三条机制；§8.1 三态术语；§9 baseline 与夹具；§10 回归读数                                                                 |
-| `docs/bookkeeping-source-contract.md`                                                                                    | 簿记来源登记、统计页入库映射、写库前预检码表、`--breakdown` 与批准推进的五次读数表                                                                                         |
-| `docs/work-package-g-history-presentation.md`                                                                            | 待办 3 的方案稿**＋§7 执行记录**：805 条历年统计的公开面实测、G-1／G-2／G-3 三块改动面与判据、判级面改 `required` 的 24 个缺口清单，第十一轮的改前／改后读数与五条实现差异 |
-| `docs/work-package-f-statistics-sources.md`                                                                              | 历史统计来源只读调研（27 条候选 URL、为何第一批只能做 3 个 HTML 来源）                                                                                                     |
-| `docs/work-package-f-live-capture-authorization.md`／`docs/work-package-f2-bookkeeping-history-capture-authorization.md` | F／F-2 授权单原文与执行记录（§8 逐条哈希）                                                                                                                                 |
-| `docs/runbook.md`                                                                                                        | 当前发布门禁与资格范围                                                                                                                                                     |
-| `docs/stage-log.md`                                                                                                      | 逐轮阶段记录（含各轮交付与读数）                                                                                                                                           |
+| 文档                                                                                                                     | 管什么                                                                                                                                                                                                                                                |
+| ------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `docs/data-gate-semantics.md`                                                                                            | 门禁／判级／溯源／三级授权／鉴权总口径；§6 批准链三条机制；§8.1 三态术语；§9 baseline 与夹具；§10 回归读数                                                                                                                                            |
+| `docs/bookkeeping-source-contract.md`                                                                                    | 簿记来源登记、统计页入库映射、写库前预检码表、`--breakdown` 与批准推进的五次读数表                                                                                                                                                                    |
+| `docs/work-package-g-history-presentation.md`                                                                            | 待办 3 的方案稿**＋§7／§8 两段执行记录**：805 条历年统计的公开面实测、G-1／G-2／G-3 三块改动面与判据、判级面改 `required` 的 24 个缺口清单，第十一轮的改前／改后读数与五条实现差异，第十三轮的 G-2 完整方案（枚举加成员＋回填影响面与两条迁移硬约束） |
+| `docs/work-package-f-statistics-sources.md`                                                                              | 历史统计来源只读调研（27 条候选 URL、为何第一批只能做 3 个 HTML 来源）                                                                                                                                                                                |
+| `docs/work-package-f-live-capture-authorization.md`／`docs/work-package-f2-bookkeeping-history-capture-authorization.md` | F／F-2 授权单原文与执行记录（§8 逐条哈希）                                                                                                                                                                                                            |
+| `docs/runbook.md`                                                                                                        | 当前发布门禁与资格范围                                                                                                                                                                                                                                |
+| `docs/stage-log.md`                                                                                                      | 逐轮阶段记录（含各轮交付与读数）                                                                                                                                                                                                                      |

@@ -13,17 +13,20 @@ describe('change event classification', () => {
     expect(updateEventTypeForFact('result_date_rule')).toBe('schedule_change');
   });
 
-  it('classifies statistics and exam-content facts without claiming a date change', () => {
+  it('gives the history statistics series its own event type', () => {
     for (const factKey of [
       'applicants',
       'examinees',
       'passed',
       'pass_rate',
       'statistics_methodology',
-      'question_format',
-      'exam_time',
-      'passing_standard',
     ])
+      expect(updateEventTypeForFact(factKey)).toBe('statistics_update');
+    expect(updateEventLabel('statistics_update')).toBe('統計データの変更');
+  });
+
+  it('classifies exam-content facts without claiming a date change', () => {
+    for (const factKey of ['question_format', 'exam_time', 'passing_standard'])
       expect(updateEventTypeForFact(factKey)).toBe('system_change');
     expect(updateEventLabel('system_change')).toBe('制度・方式の変更');
   });

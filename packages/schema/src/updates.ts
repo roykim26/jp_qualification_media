@@ -25,6 +25,7 @@ const updateEventLabels: Record<string, string> = {
   eligibility_change: '受験資格の変更',
   schedule_change: '日程の変更',
   system_change: '制度・方式の変更',
+  statistics_update: '統計データの変更',
 };
 
 const updateFactLabelPrefixes: readonly [string, string][] = [
@@ -82,7 +83,10 @@ function startsWithAny(value: string, prefixes: readonly string[]): boolean {
 /**
  * `change_events.event_type` is a closed enum, so fact keys that are neither a
  * date nor a fee or eligibility rule are recorded as a system change rather
- * than falling through to the schedule label.
+ * than falling through to the schedule label.  The history statistics series
+ * has its own member (`statistics_update`, added by migration 0019) because
+ * since round 11 it is presented as per-year tables, not as a rule change.
+ * The branch order here is the order the 0020 backfill CASE mirrors.
  */
 export function updateEventTypeForFact(factKey: string): string {
   if (factKey.includes('deadline')) return 'application_deadline';
@@ -95,10 +99,8 @@ export function updateEventTypeForFact(factKey: string): string {
   if (factKey === 'result_date') return 'result_date';
   if (startsWithAny(factKey, ['fee', 'payment_'])) return 'fee_change';
   if (factKey.startsWith('eligibility')) return 'eligibility_change';
-  if (
-    statisticsFactKeys.includes(factKey) ||
-    startsWithAny(factKey, examContentFactKeyPrefixes)
-  )
+  if (statisticsFactKeys.includes(factKey)) return 'statistics_update';
+  if (startsWithAny(factKey, examContentFactKeyPrefixes))
     return 'system_change';
   return 'schedule_change';
 }
