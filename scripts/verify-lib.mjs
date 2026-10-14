@@ -278,6 +278,35 @@ export async function verifyQualification(
       status: webResponse.status,
     });
   }
+  // The per-year history presentation from work package G-1 is bookkeeping-only
+  // (it is the sole launch qualification with a multi-year statistics series),
+  // so we assert the ?year= filter here rather than expanding the shared route
+  // list.  The year is picked from the facts we just loaded to stay data-driven.
+  if (gate.slug === 'bookkeeping') {
+    const historyYears = withProvenance
+      .filter((fact) => fact.factKey === 'pass_rate')
+      .map((fact) => fact.examYear)
+      .filter((value) => Number.isInteger(value));
+    const probeYear = historyYears.length
+      ? Math.max(...historyYears)
+      : coverageYear;
+    const yearResponse = await waitFor(
+      `http://127.0.0.1:${runtime.webPort}/shikaku/bookkeeping/pass-rate/?year=${probeYear}`,
+    );
+    const yearHtml = await yearResponse.text();
+    if (!yearHtml.includes('受験者数・合格者数・合格率の年次推移'))
+      errors.push(
+        `Web pass-rate/?year=${probeYear} missing history year tables`,
+      );
+    if (!yearHtml.includes(`aria-current="page">${probeYear}年`))
+      errors.push(
+        `Web pass-rate/?year=${probeYear} current-year link not marked`,
+      );
+    webPages.push({
+      path: `/shikaku/bookkeeping/pass-rate/?year=${probeYear}`,
+      status: yearResponse.status,
+    });
+  }
   return {
     slug: gate.slug,
     passed: errors.length === 0,

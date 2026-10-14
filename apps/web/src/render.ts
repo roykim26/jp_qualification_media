@@ -1202,26 +1202,42 @@ export function renderUpdatesPage(
   events: PublicUpdateEvent[],
   filtered = false,
 ): string {
-  const cards = events
-    .map((event) => {
-      const diff = event.previousValue
-        ? `<div class="update-diff"><p><span>変更前</span>${escapeHtml(event.previousValue)}</p><p><span>変更後</span>${escapeHtml(event.newValue)}</p></div>`
-        : `<div class="update-diff"><p><span>公開値</span>${escapeHtml(event.newValue)}</p></div>`;
-      const affectedPages = event.affectedPages.length
-        ? event.affectedPages
-            .map((page) => `<span class="tag">${escapeHtml(page)}</span>`)
-            .join('')
-        : '<span class="tag">該当ページ未指定</span>';
-      const source = event.sourceUrl
-        ? `<a href="${escapeHtml(event.sourceUrl)}" target="_blank" rel="noreferrer">公式ソース</a>`
-        : '<span>公式ソース未指定</span>';
-      const targetHref = isHistoryFactKey(event.factKey)
-        ? `/shikaku/${event.qualification.slug}/pass-rate/?year=${event.examYear}`
-        : `/shikaku/${event.qualification.slug}/${event.examYear}/`;
-      return `<article class="update-card"><div class="update-card__header"><div><p class="eyebrow">${escapeHtml(event.eventLabel)}</p><h2><a href="${escapeHtml(targetHref)}">${escapeHtml(event.qualification.officialNameJa)} · ${escapeHtml(event.factLabel)}</a></h2></div><time datetime="${escapeHtml(event.createdAt)}">${escapeHtml(formatVerifiedAt(event.createdAt))}</time></div>${diff}<div class="tag-row">${affectedPages}</div><p class="meta">${event.examYear}年 / 公式確認: ${escapeHtml(formatVerifiedAt(event.verifiedAt))} / ${source}</p></article>`;
+  const renderCard = (event: PublicUpdateEvent): string => {
+    const diff = event.previousValue
+      ? `<div class="update-diff"><p><span>変更前</span>${escapeHtml(event.previousValue)}</p><p><span>変更後</span>${escapeHtml(event.newValue)}</p></div>`
+      : `<div class="update-diff"><p><span>公開値</span>${escapeHtml(event.newValue)}</p></div>`;
+    const affectedPages = event.affectedPages.length
+      ? event.affectedPages
+          .map((page) => `<span class="tag">${escapeHtml(page)}</span>`)
+          .join('')
+      : '<span class="tag">該当ページ未指定</span>';
+    const source = event.sourceUrl
+      ? `<a href="${escapeHtml(event.sourceUrl)}" target="_blank" rel="noreferrer">公式ソース</a>`
+      : '<span>公式ソース未指定</span>';
+    const targetHref = isHistoryFactKey(event.factKey)
+      ? `/shikaku/${event.qualification.slug}/pass-rate/?year=${event.examYear}`
+      : `/shikaku/${event.qualification.slug}/${event.examYear}/`;
+    return `<article class="update-card"><div class="update-card__header"><div><p class="eyebrow">${escapeHtml(event.eventLabel)}</p><h2><a href="${escapeHtml(targetHref)}">${escapeHtml(event.qualification.officialNameJa)} · ${escapeHtml(event.factLabel)}</a></h2></div><time datetime="${escapeHtml(event.createdAt)}">${escapeHtml(formatVerifiedAt(event.createdAt))}</time></div>${diff}<div class="tag-row">${affectedPages}</div><p class="meta">${event.examYear}年 / 公式確認: ${escapeHtml(formatVerifiedAt(event.verifiedAt))} / ${source}</p></article>`;
+  };
+  const groups: { label: string; items: PublicUpdateEvent[] }[] = [];
+  const indexByLabel = new Map<string, number>();
+  for (const event of events) {
+    let groupIndex = indexByLabel.get(event.eventLabel);
+    if (groupIndex === undefined) {
+      groupIndex = groups.length;
+      indexByLabel.set(event.eventLabel, groupIndex);
+      groups.push({ label: event.eventLabel, items: [] });
+    }
+    groups[groupIndex].items.push(event);
+  }
+  const groupsHtml = groups
+    .map((group) => {
+      const open = group.items.length <= 1 ? ' open' : '';
+      const cards = group.items.map(renderCard).join('');
+      return `<details class="updates-group"${open}><summary><span class="updates-group__label">${escapeHtml(group.label)}</span><span class="meta">${group.items.length}件</span></summary><div class="updates-list">${cards}</div></details>`;
     })
     .join('');
-  const body = `<div class="container"><header class="page-heading"><p class="eyebrow">公式事実の変更・訂正</p><h1>更新情報</h1><p>承認済みの公式事実に変更や訂正があった場合に、変更前後の値、対象資格、影響ページ、公式ソースを記録します。単なるページ確認やデザイン変更は掲載しません。</p></header><section class="page-section" aria-labelledby="updates-heading"><div class="section-heading"><div><p class="eyebrow">変更ログ</p><h2 id="updates-heading">公式情報の変更・訂正</h2></div><p class="meta">${events.length}件</p></div>${events.length ? `<div class="updates-list">${cards}</div>` : renderFeedbackState({ kind: 'empty', title: '公開できる更新情報はまだありません', body: '公式事実の変更・訂正が承認されるとここに表示します。ページ確認だけでは更新情報を作成しません。', actions: renderButtonLink({ href: '/shikaku/', label: '資格一覧を見る', variant: 'secondary' }) })}</section></div>`;
+  const body = `<div class="container"><header class="page-heading"><p class="eyebrow">公式事実の変更・訂正</p><h1>更新情報</h1><p>承認済みの公式事実に変更や訂正があった場合に、変更前後の値、対象資格、影響ページ、公式ソースを記録します。単なるページ確認やデザイン変更は掲載しません。</p></header><section class="page-section" aria-labelledby="updates-heading"><div class="section-heading"><div><p class="eyebrow">変更ログ</p><h2 id="updates-heading">公式情報の変更・訂正</h2></div><p class="meta">${events.length}件</p></div>${events.length ? `<div class="updates-groups">${groupsHtml}</div>` : renderFeedbackState({ kind: 'empty', title: '公開できる更新情報はまだありません', body: '公式事実の変更・訂正が承認されるとここに表示します。ページ確認だけでは更新情報を作成しません。', actions: renderButtonLink({ href: '/shikaku/', label: '資格一覧を見る', variant: 'secondary' }) })}</section></div>`;
   return renderPublicDocument({
     title: '更新情報 | 公式情報',
     description: '公式確認済み資格情報の変更と訂正記録を確認できます。',
