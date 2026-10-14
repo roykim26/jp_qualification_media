@@ -1,4 +1,4 @@
-# 工作包 G：把 805 条簿记历年统计接到「能用」的程度（2026-10-13 方案稿 → **同日第十一轮执行 G-1＋G-2 最小方案（§7）、第十三轮补做 G-2 完整方案（§8）**）
+# 工作包 G：把 805 条簿记历年统计接到「能用」的程度（2026-10-13 方案稿 → **同日第十一轮执行 G-1＋G-2 最小方案（§7）、第十三轮补做 G-2 完整方案（§8，已随 PR #36 进 main＝`9bf7ec8`）**）
 
 > 本文前半（§1–§5）是**方案稿**，§7／§8 是两段**执行记录**。目的：把「863 条簿记事实已批准，但公开面看起来仍像只有 2026 一年」这件事拆成可拍板的三块，每块标清改动面、代码坐标、验收判据与风险。
 > §1–§6 的数字是 2026-10-13 第十轮的本机现取（**改动前**基线，取证命令见 §6）；§7 是同日晚些时候 G-1／G-2 最小方案落地后的现取，§8 是第十三轮 G-2 完整方案（枚举加成员＋回填历史）的现取，逐条对照。执行细节与踩坑在 `docs/stage-log.md` 第十一轮与第十三轮。
@@ -193,5 +193,7 @@ curl -s http://127.0.0.1:3091/updates/
 回归读数：`npm run test`（vitest）**90 passed**（11 文件）、`typecheck`／`build`／`format:check`／`test:verify-gate`／`ci:fixture:verify` 全 **0**、`npm run verify:all` **`"status": "passed"`／6：0／EXIT=0**、pytest **158 passed**；`lint` 仍 **EXIT=1**（根目录未跟踪 `Python/…flamegraph.js` 两条既有噪声）。
 
 三条本轮坑（复跑者会遇到同样的）：① 自检要跑 `npm run test` 而不是 `npx vitest run`——后者会扫到 `scripts/*.test.mjs`（node:test 文件）报「No test suite found」；② 4100 若被残留进程占着，`tests/public-api.test.ts` 会抛 `EADDRINUSE` 的 Unhandled Rejection 让整轮退出码 1，`netstat -ano` 的 PID 在**第 5 列**；③ 本机 Bash 里 `taskkill //PID` 会被判成 UNC 路径要求确认，改用 `powershell -NoProfile -Command "Stop-Process -Id <pid> -Force"`。
+
+**交付（第十四轮补记）**：本轮 11 个文件（9 改＋2 新迁移，165 增／45 删）⇒ 分支 `db-round13-statistics-event-type`＝`34b38c3` ⇒ **PR #36 squash 合并＝main `9bf7ec8`**（`mergedAt=2026-10-14T00:53:04Z`，`mergedBy=roykim26`）。CI 两次现取：PR 侧 run `38491023371`／job `115615960976` **success**（00:35:17→00:36:12＝55s），合并后 main push run `38492661733`／job `115621272527` **success**（00:53:09→00:54:12＝63s）；两侧日志均出现 `Applied 0019_event_type_statistics_update.sql.`＋`Applied 0020_change_event_type_backfill.sql.` → `bound 45 sources` → `"status": "passed"`／`"passed": 6`／`"failed": 0`，**未出现 `below regression floor`** ⇒ 「baseline 与 CI 夹具不用刷」由推断变成实测。第十四轮另在本机复跑库侧终态（`docker compose up -d postgres` 起回停摆 12 小时的容器）＝`change_events` 983 分布逐字相符、按 0020 的 CASE 复算**需改写 0／孤儿 0**，幂等性再现。
 
 仍开放的延伸（各需单独授权）：`/updates/` 的 `LIMIT 100` 折叠（§G-2 第 3 条，本轮 100 张卡全被统计批占满，正好复现了稿里的担忧）、`?year=` 进 sitemap、G-3 判级面（按拍板维持不动）。
