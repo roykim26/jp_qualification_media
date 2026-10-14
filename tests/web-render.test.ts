@@ -14,6 +14,7 @@ import {
   editorialGuidePage,
 } from '../apps/web/src/editorial.js';
 import { launchQualifications } from '../packages/schema/src/qualifications.js';
+import type { PublicUpdateEvent } from '../packages/schema/src/updates.js';
 
 const itPassport = launchQualifications.find(
   (qualification) => qualification.slug === 'it-passport',
@@ -469,6 +470,45 @@ describe('shared qualification page rendering', () => {
     const html = renderUpdatesPage([]);
     expect(html).toContain('公開できる更新情報はまだありません');
     expect(html).toContain('ページ確認だけでは更新情報を作成しません');
+    expect(html).not.toContain('undefined');
+  });
+
+  it('folds repeated update categories into collapsible groups', () => {
+    const takken = launchQualifications.find((item) => item.slug === 'takken')!;
+    const event = (
+      id: string,
+      eventType: string,
+      eventLabel: string,
+      factKey: string,
+    ): PublicUpdateEvent => ({
+      id,
+      eventType,
+      eventLabel,
+      qualification: takken,
+      factKey,
+      factLabel: '合格率',
+      examYear: 2025,
+      previousValue: null,
+      newValue: '69.4%',
+      affectedPages: [],
+      sourceUrl: 'https://www.example.go.jp/stat',
+      createdAt: '2026-08-14T00:00:00.000Z',
+      verifiedAt: '2026-08-13T00:00:00.000Z',
+    });
+    const html = renderUpdatesPage([
+      event('u1', 'statistics_update', '統計データの変更', 'pass_rate'),
+      event('u2', 'statistics_update', '統計データの変更', 'applicants'),
+      event('u3', 'statistics_update', '統計データの変更', 'passed'),
+      event('u4', 'exam_date', '試験日の変更', 'exam_date'),
+    ]);
+    expect(html).toContain('<details class="updates-group"');
+    expect(html).toContain('<summary>');
+    expect(html).toContain('統計データの変更');
+    expect(html).toContain('<span class="meta">3件</span>');
+    expect(html).toContain('試験日の変更');
+    // Multi-card categories collapse; a lone card stays expanded.
+    expect(html).toContain('<details class="updates-group" open>');
+    expect(html).toContain('更新情報');
     expect(html).not.toContain('undefined');
   });
 

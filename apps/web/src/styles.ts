@@ -131,6 +131,12 @@ export const webStyles = String.raw`
 .history-table tbody th { width: 82px; }
 .history-cell--empty { color: var(--color-muted); text-align: center; }
 .history-scope-note { margin-bottom: var(--space-5); color: var(--color-text-secondary); font-size: 14px; }
+.updates-groups { display: grid; gap: var(--space-5); }
+.updates-group { border: 1px solid var(--color-border); border-radius: var(--radius-card); background: var(--color-surface); }
+.updates-group > summary { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); min-height: 44px; padding: var(--space-4) var(--space-5); cursor: pointer; }
+.updates-group > summary .updates-group__label { color: var(--color-primary); font-weight: 600; }
+.updates-group[open] > summary { border-bottom: 1px solid var(--color-border); }
+.updates-group .updates-list { padding: var(--space-5); }
 .updates-list { display: grid; gap: var(--space-5); }
 .update-card { padding: var(--space-5); border: 1px solid var(--color-border); border-left: 4px solid var(--color-review); border-radius: var(--radius-card); background: var(--color-surface); }
 .update-card__header { display: flex; flex-wrap: wrap; gap: var(--space-4); align-items: start; justify-content: space-between; margin-bottom: var(--space-4); }
