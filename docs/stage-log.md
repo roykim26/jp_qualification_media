@@ -1,5 +1,13 @@
 # 阶段记录与剩余问题
 
+## 2026-10-14（第十七轮）：纯文档轮——交接单文头 SHA／§2 交付表／§4 首段三处过时点补齐＋README 时点同批，把第十六轮按惯例欠下的账落账（零抓取／零入库／零批准／零迁移／零写库／零代码改动／零判级面改动）
+
+- 触发：号主在第十六轮收口（main＝origin/main＝`83cf841`＝PR #39 合并点）后点「交接单文头 SHA `16597e3` → `83cf841` ＋ §2 补 #39 行 ＋ §4 首段末态」＝第十七轮一次补齐三处过时＋README 时点。轮前现取：main＝origin/main＝`83cf841`，`git rev-list --merges --count main` **0**，工作区只剩 `?? Python/`，`git branch -vv` 只剩 `* main`，`git ls-remote --heads origin | wc -l` **1**（#39 分支 `feat-round16-updates-fold-year-gate`（`570772c`）已按 §4 首段三重判据删净）。
+- 文档改动＝**3 个文件、纯文档**：`docs/transition-handoff.md`（文头 main SHA `16597e3` → `83cf841`＝#39 合并点、ref 现状由「本轮开 PR 的分支＝`feat-round16-updates-fold-year-gate`」改回「本轮开 PR 的分支＝`docs-handoff-round16-sync`＋#39 分支已删净」、§2 交付表补 **#39** 行（7 文件 127 增／24 删）、§4 首段末句分支末态改成第十七轮现取的「只剩 main／`ls-remote`=1／`merges`=0」、待办 5 补第十七轮闭合并把「本轮」正名）；`docs/stage-log.md`（本段）；`README.md`（交接单指针 main SHA `16597e3` → `83cf841`，时点仍 2026-10-14）。
+- 库侧与门禁：本轮**无代码／无写库改动**，交接单 §3 数字沿第十六轮现取读数未重取（`facts` 非合成 approved 981、非合成 `pending_review` 0、`verify:all` **6/6**、`npm run test` **91 passed／11 文件**、`change_events` 983 分布、pytest 158 passed 等）；本轮只在 §3 之外登记 git ref 事实（`83cf841`／`ls-remote`=1／`merges`=0），均为本机现取。
+- 收尾：`Python/` 依铁律不提交也不删；本轮无 `uv.lock`／无 `var/` 临时件产生（未跑写库或抓取）。postgres 容器保持在已启动态。
+- 下一步（各需单独授权）：① 本轮 3 个文件落成 PR（新分支 `docs-handoff-round16-sync`→`git add --` 逐路径→commit→push→`gh pr create --body-file var/pr-body.md`→squash merge→回读 main，合并后由下一轮补交接单文头 SHA 与 §2 交付表）；② `?year=` 进 sitemap（B1 只做了门禁断言，sitemap 延伸仍开放）；③ `services/api/src/release.ts:92` 回滚路径仍硬编码 `schedule_change`，或宅建统计页多来源重构／基本情報 FE 附件提取（均属新范畴、要新授权）。
+
 ## 2026-10-14（第十六轮）：代码＋文档轮——`/updates/` 统计卡折叠（A）＋`?year=` 接成常驻门禁断言（B1）＋交接单欠账落账（C）（零抓取／零入库／零批准／零迁移／零写库／零判级面改动）
 
 - 触发：号主在第十五轮收口（main＝origin/main＝`16597e3`＝#38 合并点）后点「同时处理第 1 和第 2 选项」，经 AskUserQuestion 选定 **A＋B1＋C**＝① A 折叠回填后占满首页的 100 张统计卡（纯呈现层）；② B1 给簿記 pass-rate 的 `?year=` 补常驻门禁断言（非 B2 的 sitemap 变体）；③ C 按惯例落第十五轮欠下的文档账。commit／push／PR／merge／删分支各需单独一句话。轮前现取：main＝origin/main＝`16597e3`，`git ls-remote --heads origin | wc -l` **1**（#38 分支 `docs-handoff-round15-sync`＝`0f04950` 已删净），工作区＝本轮 4 个代码／测试改动 ＋ `?? Python/`。
