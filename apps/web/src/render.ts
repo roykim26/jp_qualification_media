@@ -956,6 +956,9 @@ export function renderQualificationSectionPage(
       navigationYear,
     ),
     canonicalPath,
+    // The ?year= variant renders the same history tables as /pass-rate/ and only
+    // swaps the card set, so it is a parameter filter per product-design 18.2.
+    noindex: section === 'pass-rate' && year !== undefined,
     body,
   });
 }

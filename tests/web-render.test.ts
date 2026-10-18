@@ -750,6 +750,26 @@ describe('bookkeeping history statistics tables', () => {
     expect(previous).not.toContain('適用年度: 2026年');
   });
 
+  it('marks the year-filtered pass-rate page noindex but keeps the base page indexable', () => {
+    const filtered = renderQualificationSectionPage(view, 'pass-rate', 2025);
+    expect(filtered).toContain('<meta name="robots" content="noindex,follow">');
+    expect(filtered).toContain(
+      '<link rel="canonical" href="/shikaku/bookkeeping/pass-rate/">',
+    );
+
+    const base = renderQualificationSectionPage(view, 'pass-rate');
+    expect(base).not.toContain('<meta name="robots"');
+    expect(base).toContain(
+      '<link rel="canonical" href="/shikaku/bookkeeping/pass-rate/">',
+    );
+
+    const annual = renderQualificationSectionPage(view, 'annual', 2025);
+    expect(annual).not.toContain('<meta name="robots"');
+    expect(annual).toContain(
+      '<link rel="canonical" href="/shikaku/bookkeeping/2025/">',
+    );
+  });
+
   it('keeps methodology out of the card list and links it from the overview', () => {
     const overview = renderQualificationSectionPage(view, 'overview');
     expect(overview).toContain('/shikaku/bookkeeping/pass-rate/');

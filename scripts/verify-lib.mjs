@@ -302,9 +302,29 @@ export async function verifyQualification(
       errors.push(
         `Web pass-rate/?year=${probeYear} current-year link not marked`,
       );
+    if (!yearHtml.includes('<meta name="robots" content="noindex,follow">'))
+      errors.push(
+        `Web pass-rate/?year=${probeYear} parameter page not marked noindex`,
+      );
     webPages.push({
       path: `/shikaku/bookkeeping/pass-rate/?year=${probeYear}`,
       status: yearResponse.status,
+    });
+    // Round 18 decision: the filtered year page keeps its canonical on
+    // /pass-rate/, so sitemap.xml must carry the canonical page only and never
+    // the ?year= variant.  Asserting both sides here is what keeps the sitemap
+    // from silently losing the page again.
+    const sitemapResponse = await waitFor(
+      `http://127.0.0.1:${runtime.webPort}/sitemap.xml`,
+    );
+    const sitemapXml = await sitemapResponse.text();
+    if (!sitemapXml.includes('/shikaku/bookkeeping/pass-rate/'))
+      errors.push('Sitemap missing the bookkeeping pass-rate page');
+    if (sitemapXml.includes('?year='))
+      errors.push('Sitemap lists a parameter-filtered page');
+    webPages.push({
+      path: '/sitemap.xml',
+      status: sitemapResponse.status,
     });
   }
   return {
