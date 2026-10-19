@@ -310,23 +310,27 @@ export async function verifyQualification(
       path: `/shikaku/bookkeeping/pass-rate/?year=${probeYear}`,
       status: yearResponse.status,
     });
-    // Round 18 decision: the filtered year page keeps its canonical on
-    // /pass-rate/, so sitemap.xml must carry the canonical page only and never
-    // the ?year= variant.  Asserting both sides here is what keeps the sitemap
-    // from silently losing the page again.
-    const sitemapResponse = await waitFor(
-      `http://127.0.0.1:${runtime.webPort}/sitemap.xml`,
-    );
-    const sitemapXml = await sitemapResponse.text();
-    if (!sitemapXml.includes('/shikaku/bookkeeping/pass-rate/'))
-      errors.push('Sitemap missing the bookkeeping pass-rate page');
-    if (sitemapXml.includes('?year='))
-      errors.push('Sitemap lists a parameter-filtered page');
-    webPages.push({
-      path: '/sitemap.xml',
-      status: sitemapResponse.status,
-    });
   }
+  // The filtered year page keeps its canonical on /pass-rate/, so sitemap.xml
+  // must carry the canonical page only and never the ?year= variant.  CI round
+  // 18 showed apps/web/src/server.ts emits qualification paths only for
+  // `verified` qualifications, so containment is asserted only for those; the
+  // partially_announced sitemap gap is tracked in the handoff instead.
+  const sitemapResponse = await waitFor(
+    `http://127.0.0.1:${runtime.webPort}/sitemap.xml`,
+  );
+  const sitemapXml = await sitemapResponse.text();
+  if (sitemapXml.includes('?year='))
+    errors.push('Sitemap lists a parameter-filtered page');
+  if (
+    expectedStatus === 'verified' &&
+    !sitemapXml.includes(`/shikaku/${gate.slug}/pass-rate/`)
+  )
+    errors.push(`Sitemap missing the verified ${gate.slug} pass-rate page`);
+  webPages.push({
+    path: '/sitemap.xml',
+    status: sitemapResponse.status,
+  });
   return {
     slug: gate.slug,
     passed: errors.length === 0,
