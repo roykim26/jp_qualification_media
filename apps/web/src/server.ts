@@ -24,6 +24,7 @@ import {
   launchQualifications,
   searchQualifications,
 } from '../../../packages/schema/src/qualifications.js';
+import { sitemapQualificationPaths } from './sitemap.js';
 
 const port = Number(process.env.WEB_PORT ?? 3000);
 const apiBaseUrl = process.env.API_BASE_URL ?? 'http://127.0.0.1:4100';
@@ -140,15 +141,7 @@ const server = createServer(async (req, res) => {
         })),
       );
       const qualificationPaths = views.flatMap(({ qualification, view }) =>
-        view.status === 'verified'
-          ? [
-              `/shikaku/${qualification.slug}/`,
-              `/shikaku/${qualification.slug}/2026/`,
-              `/shikaku/${qualification.slug}/application/`,
-              `/shikaku/${qualification.slug}/exam-content/`,
-              `/shikaku/${qualification.slug}/pass-rate/`,
-            ]
-          : [],
+        sitemapQualificationPaths(qualification.slug, view.status),
       );
       res.writeHead(200, { 'content-type': 'application/xml; charset=utf-8' });
       return res.end(

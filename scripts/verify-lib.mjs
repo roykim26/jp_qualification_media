@@ -312,21 +312,19 @@ export async function verifyQualification(
     });
   }
   // The filtered year page keeps its canonical on /pass-rate/, so sitemap.xml
-  // must carry the canonical page only and never the ?year= variant.  CI round
-  // 18 showed apps/web/src/server.ts emits qualification paths only for
-  // `verified` qualifications, so containment is asserted only for those; the
-  // partially_announced sitemap gap is tracked in the handoff instead.
+  // must carry the canonical page only and never the ?year= variant.  Both
+  // verified and partially_announced qualifications publish approved facts on
+  // indexable 200 pages, so every gate slug must be present.
   const sitemapResponse = await waitFor(
     `http://127.0.0.1:${runtime.webPort}/sitemap.xml`,
   );
   const sitemapXml = await sitemapResponse.text();
   if (sitemapXml.includes('?year='))
     errors.push('Sitemap lists a parameter-filtered page');
-  if (
-    expectedStatus === 'verified' &&
-    !sitemapXml.includes(`/shikaku/${gate.slug}/pass-rate/`)
-  )
-    errors.push(`Sitemap missing the verified ${gate.slug} pass-rate page`);
+  if (!sitemapXml.includes(`/shikaku/${gate.slug}/pass-rate/`))
+    errors.push(
+      `Sitemap missing the ${api.status} ${gate.slug} pass-rate page`,
+    );
   webPages.push({
     path: '/sitemap.xml',
     status: sitemapResponse.status,
