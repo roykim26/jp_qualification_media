@@ -1,20 +1,30 @@
+import type { QualificationSection } from './render.js';
+
 const sitemapQualificationStatuses = new Set([
   'verified',
   'partially_announced',
 ]);
 
-// Partially announced qualifications still serve approved facts on indexable
-// 200 pages without a noindex flag, so their canonical pages belong here.
+export type QualificationSitemapContent = {
+  sections: readonly QualificationSection[];
+  annualYears: readonly number[];
+};
+
+// A section without approved facts renders an empty state with noindex, so it
+// must not be advertised in the sitemap either.
 export function sitemapQualificationPaths(
   slug: string,
   status: string,
+  content: QualificationSitemapContent,
 ): string[] {
   if (!sitemapQualificationStatuses.has(status)) return [];
+  const has = (section: QualificationSection) =>
+    content.sections.includes(section);
   return [
-    `/shikaku/${slug}/`,
-    `/shikaku/${slug}/2026/`,
-    `/shikaku/${slug}/application/`,
-    `/shikaku/${slug}/exam-content/`,
-    `/shikaku/${slug}/pass-rate/`,
+    ...(has('overview') ? [`/shikaku/${slug}/`] : []),
+    ...content.annualYears.map((year) => `/shikaku/${slug}/${year}/`),
+    ...(has('application') ? [`/shikaku/${slug}/application/`] : []),
+    ...(has('exam-content') ? [`/shikaku/${slug}/exam-content/`] : []),
+    ...(has('pass-rate') ? [`/shikaku/${slug}/pass-rate/`] : []),
   ];
 }

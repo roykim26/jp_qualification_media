@@ -1,15 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import {
+  qualificationSectionHasContent,
+  qualificationSitemapContent,
   renderQualificationDirectory,
   renderQualificationPage,
   renderQualificationSectionPage,
   renderComparePage,
   renderEditorialPage,
   renderGuideIndex,
+  renderPassRateIndex,
   renderSchedulePage,
   renderUpdatesPage,
 } from '../apps/web/src/render.js';
 import {
+  correctionsIssueUrl,
+  editorialAboutPage,
   editorialComparisonPage,
   editorialGuidePage,
 } from '../apps/web/src/editorial.js';
@@ -155,11 +160,15 @@ describe('IT Passport public page rendering', () => {
     expect(application).toContain(
       '申込み・受験資格：公開できる公式情報はありません',
     );
+    expect(application).toContain(
+      '<meta name="robots" content="noindex,follow">',
+    );
     expect(application).not.toContain('CBT方式');
     const examContent = renderQualificationSectionPage(view, 'exam-content');
     expect(examContent).toContain('CBT方式');
     expect(examContent).toContain('試験内容');
     expect(examContent).toContain('更新・訂正について');
+    expect(examContent).not.toContain('<meta name="robots"');
   });
 
   it('keeps annual facts isolated by year and exposes the five page types', () => {
@@ -764,7 +773,7 @@ describe('bookkeeping history statistics tables', () => {
     );
 
     const annual = renderQualificationSectionPage(view, 'annual', 2025);
-    expect(annual).not.toContain('<meta name="robots"');
+    expect(annual).toContain('<meta name="robots" content="noindex,follow">');
     expect(annual).toContain(
       '<link rel="canonical" href="/shikaku/bookkeeping/2025/">',
     );
@@ -801,5 +810,124 @@ describe('bookkeeping history statistics tables', () => {
     ]);
     expect(html).toContain('/shikaku/bookkeeping/pass-rate/?year=2025');
     expect(html).not.toContain('/shikaku/bookkeeping/2025/');
+  });
+});
+
+describe('section content gating and discovery', () => {
+  const fact = (factKey: string, examYear: number, displayValue: string) => ({
+    qualificationSlug: 'it-passport' as const,
+    examLevelId: null,
+    examYear,
+    factKey,
+    valueType: 'text' as const,
+    normalizedValue: displayValue,
+    displayValue,
+    status: 'approved' as const,
+    riskLevel: 'medium' as const,
+    sourceId: 'source:it-passport:jitec-home',
+    sourceSnapshotId: 'snapshot:official',
+    synthetic: false,
+    verifiedAt: '2026-08-11T00:00:00.000Z',
+  });
+  const view = (facts: ReturnType<typeof fact>[]) => ({
+    qualification: itPassport,
+    status: 'verified' as const,
+    officialVerifiedAt: '2026-08-11T00:00:00.000Z',
+    facts,
+  });
+
+  it('detects sections without approved facts', () => {
+    const examOnly = view([fact('exam_method', 2026, 'CBT方式')]);
+    expect(qualificationSectionHasContent(examOnly, 'exam-content')).toBe(true);
+    expect(qualificationSectionHasContent(examOnly, 'application')).toBe(false);
+    expect(qualificationSectionHasContent(examOnly, 'pass-rate')).toBe(false);
+    expect(qualificationSectionHasContent(examOnly, 'annual', 2026)).toBe(
+      false,
+    );
+    expect(qualificationSitemapContent(examOnly)).toEqual({
+      sections: ['overview', 'exam-content'],
+      annualYears: [],
+    });
+  });
+
+  it('counts pass-rate history and annual schedule facts as content', () => {
+    const withHistory = view([
+      fact('pass_rate', 2025, '30.7%'),
+      fact('exam_date', 2026, '2026年10月18日'),
+    ]);
+    expect(qualificationSectionHasContent(withHistory, 'pass-rate')).toBe(true);
+    expect(qualificationSitemapContent(withHistory)).toEqual({
+      sections: ['overview', 'pass-rate'],
+      annualYears: [2026],
+    });
+
+    const annual = renderQualificationSectionPage(withHistory, 'annual', 2026);
+    expect(annual).toContain(
+      '<title>ITパスポートの2026年試験日程 | 公式情報</title>',
+    );
+    expect(annual).toContain('/shikaku/it-passport/2026/');
+    expect(annual).not.toContain('/shikaku/it-passport/2025/');
+    expect(annual).not.toContain('<meta name="robots"');
+  });
+
+  it('gives every section a distinct title and description', () => {
+    const html = (
+      ['overview', 'application', 'exam-content', 'pass-rate'] as const
+    ).map((section) =>
+      renderQualificationSectionPage(
+        view([fact('exam_method', 2026, 'CBT方式')]),
+        section,
+      ),
+    );
+    const titles = html.map(
+      (document) => document.match(/<title>([^<]+)<\/title>/)?.[1],
+    );
+    const descriptions = html.map(
+      (document) =>
+        document.match(/<meta name="description" content="([^"]+)">/)?.[1],
+    );
+    expect(new Set(titles).size).toBe(4);
+    expect(new Set(descriptions).size).toBe(4);
+  });
+
+  it('links the guide, pass-rate and policy pages from the global chrome', () => {
+    const html = renderGuideIndex([]);
+    expect(html).toContain('href="/guide/" aria-current="page">ガイド</a>');
+    for (const href of [
+      '/guide/',
+      '/pass-rate/',
+      '/about/sources/',
+      '/about/editorial-policy/',
+      '/about/corrections/',
+    ])
+      expect(html).toContain(`href="${href}"`);
+    expect(html).not.toContain('class="is-disabled"');
+  });
+
+  it('renders the corrections page with a working issue link', () => {
+    expect(editorialAboutPage('sources')).toBeDefined();
+    expect(editorialAboutPage('editorial-policy')).toBeDefined();
+    const page = editorialAboutPage('corrections');
+    expect(page).toBeDefined();
+    const html = renderEditorialPage(page!, 'about', '/about/corrections/');
+    expect(html).toContain('<title>訂正のご連絡 | 公式情報</title>');
+    expect(html).toContain(`href="${correctionsIssueUrl}"`);
+    expect(html).toContain('<link rel="canonical" href="/about/corrections/">');
+    expect(html).not.toContain('<meta name="robots"');
+  });
+
+  it('renders the pass-rate index only for qualifications with data', () => {
+    const html = renderPassRateIndex([
+      {
+        qualification: itPassport,
+        view: view([fact('pass_rate', 2025, '30.7%')]),
+      },
+    ]);
+    expect(html).toContain('/shikaku/it-passport/pass-rate/');
+    expect(html).toContain('2025年の合格率');
+    expect(html).not.toContain('/shikaku/bookkeeping/pass-rate/');
+    expect(renderPassRateIndex([])).toContain(
+      '公開できる合格率データはまだありません',
+    );
   });
 });

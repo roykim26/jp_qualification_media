@@ -97,6 +97,7 @@ const factLabelPrefixes: readonly [string, string][] = [
   ['application_method_rule', '申込方法ルール'],
   ['payment_deadline_rule', '支払期限ルール'],
   ['result_date_rule', '合格発表ルール'],
+  ['application_change_deadline_rule', '申込み内容変更期限ルール'],
   ['application_deadline', '申込締切'],
   ['application_open', '申込開始'],
   ['application_start', '申込開始'],
@@ -113,14 +114,17 @@ const factLabelPrefixes: readonly [string, string][] = [
   ['exam_time', '試験時間'],
   ['question_format', '出題形式'],
   ['question_count', '問題数'],
+  ['scoring_method', '採点方式'],
+  ['interview_count', '面接回数'],
+  ['practical_subject', '実技科目'],
   ['passing_standard', '合格基準'],
   ['pass_mark', '合格点'],
   ['pass_rate', '合格率'],
   ['applicants', '申込者数'],
   ['examinees', '受験者数・受検者数'],
   ['passed', '合格者数'],
+  ['statistics_methodology', '統計の集計口径'],
   ['application_rule', '申込みルール'],
-  ['application_change_deadline_rule', '申込み内容変更ルール'],
 ];
 
 const dimensionLabels: Record<string, string> = {
@@ -129,14 +133,22 @@ const dimensionLabels: Record<string, string> = {
   'bookkeeping:1': '1級',
   'bookkeeping:2': '2級',
   'bookkeeping:3': '3級',
+  'bookkeeping:basic': '簿記・基礎',
+  'bookkeeping:cost-accounting-basic': '簿記・原価計算 基礎',
   'fp:1': '1級',
   'fp:2': '2級',
   'fp:3': '3級',
+  'academic:basic': '学科（基礎）',
+  'academic:applied': '学科（応用）',
+  'practical:asset-design': '実技（資産設計提案業務）',
+  'practical:asset-consulting': '実技（資産相談業務）',
   group: '団体試験',
   jafp: '日本FP協会',
   kinzai: '金融財政事情研究会',
   network: 'ネット試験',
   paper: '筆記試験',
+  pbt: '筆記試験（PBT）',
+  interview: '面接',
   practical: '実技',
   unified: '統一試験',
 };
@@ -768,6 +780,64 @@ function isListedCardFact(
   return !historyNumericKeys.includes(fact.factKey) || fact.examYear === year;
 }
 
+function qualificationAvailableYears(view: PublicQualificationView): number[] {
+  return [
+    ...new Set(
+      view.facts
+        .map((fact) => fact.examYear)
+        .filter((value): value is number => Number.isInteger(value)),
+    ),
+  ].sort((left, right) => right - left);
+}
+
+function sectionPageFacts(
+  view: PublicQualificationView,
+  section: QualificationSection,
+  year: number | undefined,
+): PublicFact[] {
+  const sectionMeta = section === 'overview' ? null : sectionConfig[section];
+  const navigationYear =
+    year ?? Math.max(...qualificationAvailableYears(view), 2026);
+  const cardYearScoped =
+    section === 'annual' || (section === 'pass-rate' && year !== undefined);
+  return view.facts.filter(
+    (fact) =>
+      (!cardYearScoped || fact.examYear === year) &&
+      isListedCardFact(fact, section, navigationYear) &&
+      (!sectionMeta ||
+        sectionMeta.factKeyPrefixes.some((prefix) =>
+          fact.factKey.startsWith(prefix),
+        )),
+  );
+}
+
+export function qualificationSectionHasContent(
+  view: PublicQualificationView,
+  section: QualificationSection,
+  year?: number,
+): boolean {
+  if (
+    section === 'pass-rate' &&
+    year === undefined &&
+    view.facts.some((fact) => historyNumericKeys.includes(fact.factKey))
+  )
+    return true;
+  return sectionPageFacts(view, section, year).length > 0;
+}
+
+export function qualificationSitemapContent(view: PublicQualificationView): {
+  sections: QualificationSection[];
+  annualYears: number[];
+} {
+  const sections = (
+    ['overview', 'application', 'exam-content', 'pass-rate'] as const
+  ).filter((section) => qualificationSectionHasContent(view, section));
+  const annualYears = qualificationAvailableYears(view).filter((year) =>
+    qualificationSectionHasContent(view, 'annual', year),
+  );
+  return { sections: [...sections], annualYears };
+}
+
 function yearLinkHref(
   slug: string,
   section: QualificationSection,
@@ -801,32 +871,13 @@ export function renderQualificationSectionPage(
 ): string {
   const { qualification } = view;
   const sectionMeta = section === 'overview' ? null : sectionConfig[section];
-  const availableYears = [
-    ...new Set(
-      view.facts
-        .map((fact) => fact.examYear)
-        .filter((value): value is number => Number.isInteger(value)),
-    ),
-  ].sort((left, right) => right - left);
+  const availableYears = qualificationAvailableYears(view);
   const navigationYear = year ?? Math.max(...availableYears, 2026);
   const historyTables =
     section === 'pass-rate'
       ? renderHistoryTables(view.facts, navigationYear)
       : '';
-  const cardYearScoped =
-    section === 'annual' || (section === 'pass-rate' && year !== undefined);
-  const factsForPage = sectionMeta
-    ? view.facts.filter(
-        (fact) =>
-          (!cardYearScoped || fact.examYear === year) &&
-          isListedCardFact(fact, section, navigationYear) &&
-          sectionMeta.factKeyPrefixes.some((prefix) =>
-            fact.factKey.startsWith(prefix),
-          ),
-      )
-    : view.facts.filter((fact) =>
-        isListedCardFact(fact, section, navigationYear),
-      );
+  const factsForPage = sectionPageFacts(view, section, year);
   const sortedFacts = [...factsForPage].sort(
     (left, right) =>
       factPriority(left.factKey) - factPriority(right.factKey) ||
@@ -853,13 +904,41 @@ export function renderQualificationSectionPage(
   const hasHistoryStats = view.facts.some((fact) =>
     historyNumericKeys.includes(fact.factKey),
   );
-  const pageTitle =
+  const heroSectionTitle =
     section === 'annual' && year ? `${year}年試験日程` : sectionMeta?.title;
-  const status = renderBadge(
-    statusLabels[view.status],
-    view.status === 'verified' ? 'verified' : 'warning',
+  const documentSectionTitle =
+    section === 'overview' ? '試験情報' : (heroSectionTitle ?? '試験情報');
+  const documentDescription =
+    section === 'overview'
+      ? `${qualification.officialNameJa}の試験日程、申込み条件、試験内容、合格率を、公式確認済み情報で整理しています。`
+      : section === 'annual'
+        ? year
+          ? `${qualification.officialNameJa}の${year}年試験日程。申込開始、申込締切、試験日、合格発表を公式情報から確認できます。`
+          : `${qualification.officialNameJa}の年度別試験日程を公式情報から確認できます。`
+        : section === 'application'
+          ? `${qualification.officialNameJa}の申込み方法、受験資格、受験料、支払期限を公式確認済み情報で整理しています。`
+          : section === 'exam-content'
+            ? `${qualification.officialNameJa}の試験方式、試験科目、出題形式、合格基準を公式要綱に基づいて整理しています。`
+            : `${qualification.officialNameJa}の合格率、申込者数、受験者数、合格者数、合格基準を年度別に確認できます。`;
+  const sectionEmpty = sortedFacts.length === 0 && !historyTables;
+  const sectionMissingLabel = missingMessage(
+    view,
+    sectionMeta?.factKeyPrefixes ?? [],
   );
-  const yearLinks = (availableYears.length ? availableYears : [navigationYear])
+  const showSectionMissing =
+    sectionEmpty &&
+    (view.status === 'verified' || view.status === 'partially_announced');
+  const status = renderBadge(
+    showSectionMissing ? sectionMissingLabel : statusLabels[view.status],
+    showSectionMissing || view.status !== 'verified' ? 'warning' : 'verified',
+  );
+  const yearOptions =
+    section === 'annual'
+      ? availableYears.filter((availableYear) =>
+          qualificationSectionHasContent(view, 'annual', availableYear),
+        )
+      : availableYears;
+  const yearLinks = (yearOptions.length ? yearOptions : [navigationYear])
     .map(
       (availableYear) =>
         `<a class="year-link" href="${escapeHtml(
@@ -923,7 +1002,7 @@ export function renderQualificationSectionPage(
     )
       ? `<div class="page-hero__actions">${renderButtonLink({ href: `/ics/${qualification.slug}/${year}.ics`, label: `${year}年のICSをダウンロード`, variant: 'secondary', icon: 'calendar' })}</div>`
       : '';
-  const body = `<div class="container"><header class="page-hero detail-hero"><div class="tag-row"><span class="tag">${escapeHtml(fieldLabel(qualification.field))}</span><span class="tag">${escapeHtml(categoryLabel(qualification.category))}</span></div><h1>${escapeHtml(qualification.officialNameJa)}</h1>${pageTitle ? `<p class="detail-hero__section">${escapeHtml(pageTitle)}</p>` : ''}<p>${qualification.aliasesJa.map(escapeHtml).join(' / ') || '公式情報を整理して掲載します。'}</p>${sectionMeta ? `<p class="detail-hero__intro">${escapeHtml(sectionMeta.intro)}</p>` : ''}<div class="page-hero__meta">${status}<span class="meta">公式情報確認日: ${escapeHtml(formatVerifiedAt(view.officialVerifiedAt))}</span></div><nav class="detail-hero__years" aria-label="年度を選ぶ">${yearLinks}</nav>${annualIcs}</header><div class="detail-layout"><div class="detail-main">${interpretationNote}${historyTables}${scopeNote}${facts}${renderVerificationHistory(sortedFacts)}${renderSourceModule(qualification.slug)}</div>${sidebar}</div></div>`;
+  const body = `<div class="container"><header class="page-hero detail-hero"><div class="tag-row"><span class="tag">${escapeHtml(fieldLabel(qualification.field))}</span><span class="tag">${escapeHtml(categoryLabel(qualification.category))}</span></div><h1>${escapeHtml(qualification.officialNameJa)}</h1>${heroSectionTitle ? `<p class="detail-hero__section">${escapeHtml(heroSectionTitle)}</p>` : ''}<p>${qualification.aliasesJa.map(escapeHtml).join(' / ') || '公式情報を整理して掲載します。'}</p>${sectionMeta ? `<p class="detail-hero__intro">${escapeHtml(sectionMeta.intro)}</p>` : ''}<div class="page-hero__meta">${status}<span class="meta">公式情報確認日: ${escapeHtml(formatVerifiedAt(view.officialVerifiedAt))}</span></div><nav class="detail-hero__years" aria-label="年度を選ぶ">${yearLinks}</nav>${annualIcs}</header><div class="detail-layout"><div class="detail-main">${interpretationNote}${historyTables}${scopeNote}${facts}${renderVerificationHistory(sortedFacts)}${renderSourceModule(qualification.slug)}</div>${sidebar}</div></div>`;
   const canonicalPath =
     section === 'overview'
       ? `/shikaku/${qualification.slug}/`
@@ -931,8 +1010,8 @@ export function renderQualificationSectionPage(
         ? `/shikaku/${qualification.slug}/${year}/`
         : `/shikaku/${qualification.slug}/${section}/`;
   return renderPublicDocument({
-    title: `${qualification.officialNameJa} | 公式情報`,
-    description: `${qualification.officialNameJa}の公式確認済み試験情報を整理して掲載します。`,
+    title: `${qualification.officialNameJa}の${documentSectionTitle} | 公式情報`,
+    description: documentDescription,
     currentNav: 'qualifications',
     breadcrumbs:
       section === 'overview'
@@ -948,7 +1027,9 @@ export function renderQualificationSectionPage(
               label: qualification.officialNameJa,
               href: `/shikaku/${qualification.slug}/`,
             },
-            { label: pageTitle ?? sectionConfig[section].title },
+            {
+              label: heroSectionTitle ?? sectionConfig[section].title,
+            },
           ],
     subnav: renderQualificationSubnav(
       qualification.slug,
@@ -958,7 +1039,8 @@ export function renderQualificationSectionPage(
     canonicalPath,
     // The ?year= variant renders the same history tables as /pass-rate/ and only
     // swaps the card set, so it is a parameter filter per product-design 18.2.
-    noindex: section === 'pass-rate' && year !== undefined,
+    // Empty sections stay reachable from the subnav but must not be indexed.
+    noindex: sectionEmpty || (section === 'pass-rate' && year !== undefined),
     body,
   });
 }
@@ -1145,7 +1227,7 @@ export function renderComparePage(
 
 export function renderEditorialPage(
   page: EditorialPage,
-  kind: 'guide' | 'comparison',
+  kind: 'guide' | 'comparison' | 'about',
   canonicalPath: string,
 ): string {
   const sections = page.sections
@@ -1165,16 +1247,23 @@ export function renderEditorialPage(
       ? `<div class="editorial-actions">${renderButtonLink({ href: `/compare/?qualifications=${encodeURIComponent(page.compareQuery)}`, label: '公式情報で比較する', icon: 'compare' })}</div>`
       : '';
   const body = `<div class="container editorial-container"><header class="page-heading editorial-heading"><p class="eyebrow">${escapeHtml(page.eyebrow)}</p><h1>${escapeHtml(page.title)}</h1><p>${escapeHtml(page.description)}</p>${comparisonAction}</header><article class="editorial-body">${sections}</article><nav class="editorial-related" aria-label="関連ページ"><h2>関連ページ</h2><div>${related}</div></nav></div>`;
-  const label = kind === 'comparison' ? '資格比較' : 'ガイド';
+  const breadcrumbs =
+    kind === 'about'
+      ? [{ label: 'ホーム', href: '/' }, { label: page.title }]
+      : [
+          { label: 'ホーム', href: '/' },
+          {
+            label: kind === 'comparison' ? '資格比較' : 'ガイド',
+            href: kind === 'comparison' ? '/compare/' : '/guide/',
+          },
+          { label: page.title },
+        ];
   return renderPublicDocument({
     title: `${page.title} | 公式情報`,
     description: page.description,
-    currentNav: kind === 'comparison' ? 'compare' : 'qualifications',
-    breadcrumbs: [
-      { label: 'ホーム', href: '/' },
-      { label, href: kind === 'comparison' ? '/compare/' : '/guide/' },
-      { label: page.title },
-    ],
+    currentNav:
+      kind === 'comparison' ? 'compare' : kind === 'about' ? 'about' : 'guide',
+    breadcrumbs,
     canonicalPath,
     body,
   });
@@ -1194,9 +1283,56 @@ export function renderGuideIndex(
     title: '資格試験ガイド | 公式情報',
     description:
       '資格試験の情報確認、年間計画、申込み、合格率データの見方を整理します。',
-    currentNav: 'qualifications',
+    currentNav: 'guide',
     canonicalPath: '/guide/',
     breadcrumbs: [{ label: 'ホーム', href: '/' }, { label: 'ガイド' }],
+    body,
+  });
+}
+
+const affectedPageLabels: Record<string, string> = {
+  overview: '概要',
+  annual: '年度日程',
+  application: '申込み・条件',
+  'exam-content': '試験内容',
+  'pass-rate': '合格率',
+  statistics: '統計',
+  compare: '資格比較',
+  calendar: '日程カレンダー',
+};
+
+function affectedPageLabel(page: string): string {
+  return affectedPageLabels[page] ?? page;
+}
+
+export function renderPassRateIndex(
+  entries: readonly {
+    qualification: Qualification;
+    view: PublicQualificationView;
+  }[],
+): string {
+  const cards = entries
+    .map(({ qualification, view }) => {
+      const historyFacts = view.facts.filter((fact) =>
+        historyNumericKeys.includes(fact.factKey),
+      );
+      const years = [
+        ...new Set(historyFacts.map((fact) => fact.examYear)),
+      ].sort((left, right) => right - left);
+      const summary = years.length
+        ? `${years.length === 1 ? `${years[0]}年` : `${years[years.length - 1]}–${years[0]}年`}の合格率・申込者数・受験者数・合格者数を掲載しています。`
+        : '合格基準など、公開できる合格関連情報を掲載しています。';
+      return `<article class="card editorial-card"><div class="card__body"><p class="eyebrow">${escapeHtml(fieldLabel(qualification.field))}</p><h2><a href="/shikaku/${escapeHtml(qualification.slug)}/pass-rate/">${escapeHtml(qualification.officialNameJa)}</a></h2><p>${escapeHtml(summary)}</p><div class="card-actions">${renderBadge(statusLabels[view.status], view.status === 'verified' ? 'verified' : 'warning')}${renderButtonLink({ href: `/shikaku/${qualification.slug}/pass-rate/`, label: '合格率を見る', variant: 'secondary' })}</div></div></article>`;
+    })
+    .join('');
+  const body = `<div class="container editorial-container"><header class="page-heading editorial-heading"><p class="eyebrow">データツール</p><h1>合格率データ</h1><p>資格ごとに、公式発表された合格率、申込者数、受験者数、合格者数の年度別統計を確認できます。過去の実績は個人の合格可能性を示すものではありません。</p></header><section class="page-section" aria-labelledby="pass-rate-list-heading"><div class="section-heading"><div><p class="eyebrow">資格別の統計</p><h2 id="pass-rate-list-heading">合格率を確認する</h2></div><p class="meta">${entries.length}資格</p></div>${entries.length ? `<div class="editorial-grid">${cards}</div>` : renderFeedbackState({ kind: 'empty', title: '公開できる合格率データはまだありません', body: '公式統計を確認し、必要な審査を終えた資格から掲載します。未確認の数値は表示しません。', actions: renderButtonLink({ href: '/shikaku/', label: '資格一覧を見る', variant: 'secondary' }) })}</section><nav class="editorial-related" aria-label="関連ページ"><h2>関連ページ</h2><div><a href="/guide/how-to-read-pass-rates/">合格率データを見るときの注意点</a><a href="/compare/">資格比較</a><a href="/updates/">更新情報</a></div></nav></div>`;
+  return renderPublicDocument({
+    title: '合格率データ | 公式情報',
+    description:
+      '資格ごとの合格率、申込者数、受験者数、合格者数の年度別統計を公式情報から確認できます。',
+    currentNav: 'data',
+    canonicalPath: '/pass-rate/',
+    breadcrumbs: [{ label: 'ホーム', href: '/' }, { label: '合格率データ' }],
     body,
   });
 }
@@ -1211,7 +1347,10 @@ export function renderUpdatesPage(
       : `<div class="update-diff"><p><span>公開値</span>${escapeHtml(event.newValue)}</p></div>`;
     const affectedPages = event.affectedPages.length
       ? event.affectedPages
-          .map((page) => `<span class="tag">${escapeHtml(page)}</span>`)
+          .map(
+            (page) =>
+              `<span class="tag">${escapeHtml(affectedPageLabel(page))}</span>`,
+          )
           .join('')
       : '<span class="tag">該当ページ未指定</span>';
     const source = event.sourceUrl

@@ -6,7 +6,14 @@ import {
 import { webStyles } from './styles.js';
 
 export type PublicNavKey =
-  'home' | 'qualifications' | 'schedule' | 'compare' | 'data' | 'updates';
+  | 'home'
+  | 'qualifications'
+  | 'schedule'
+  | 'compare'
+  | 'guide'
+  | 'data'
+  | 'about'
+  | 'updates';
 
 export type BreadcrumbItem = {
   label: string;
@@ -40,6 +47,7 @@ const publicNav = [
   { key: 'qualifications' as const, label: '資格を探す', href: '/shikaku/' },
   { key: 'schedule' as const, label: '試験日程', href: '/schedule/' },
   { key: 'compare' as const, label: '比較する', href: '/compare/' },
+  { key: 'guide' as const, label: 'ガイド', href: '/guide/' },
   { key: 'updates' as const, label: '更新情報', href: '/updates/' },
 ];
 
@@ -72,7 +80,7 @@ function renderBreadcrumbs(items: BreadcrumbItem[]): string {
 }
 
 function renderFooter(): string {
-  return `<footer class="site-footer"><div class="container"><div class="footer-grid"><section class="footer-group"><h2>資格情報</h2><ul><li><a href="/shikaku/">資格を探す</a></li><li><a href="/schedule/">試験日程</a></li></ul></section><section class="footer-group"><h2>データツール</h2><ul><li><a href="/compare/">資格比較</a></li><li><span class="is-disabled">合格率データ</span></li></ul></section><section class="footer-group"><h2>運営・方針</h2><ul><li><span class="is-disabled">情報源について</span></li><li><span class="is-disabled">編集方針・AI方針</span></li></ul></section><section class="footer-group"><h2>連絡・訂正</h2><ul><li><a href="/updates/">更新情報</a></li><li><span class="is-disabled">訂正のご連絡</span></li></ul></section></div><p class="footer-note">動的事実は、承認済みで公式スナップショットに紐づく内容のみ表示します。日付、費用、制度情報は試験実施機関の最新発表をご確認ください。</p></div></footer>`;
+  return `<footer class="site-footer"><div class="container"><div class="footer-grid"><section class="footer-group"><h2>資格情報</h2><ul><li><a href="/shikaku/">資格を探す</a></li><li><a href="/schedule/">試験日程</a></li><li><a href="/guide/">資格試験ガイド</a></li></ul></section><section class="footer-group"><h2>データツール</h2><ul><li><a href="/compare/">資格比較</a></li><li><a href="/pass-rate/">合格率データ</a></li></ul></section><section class="footer-group"><h2>運営・方針</h2><ul><li><a href="/about/sources/">情報源について</a></li><li><a href="/about/editorial-policy/">編集方針・AI方針</a></li></ul></section><section class="footer-group"><h2>連絡・訂正</h2><ul><li><a href="/updates/">更新情報</a></li><li><a href="/about/corrections/">訂正のご連絡</a></li></ul></section></div><p class="footer-note">動的事実は、承認済みで公式スナップショットに紐づく内容のみ表示します。日付、費用、制度情報は試験実施機関の最新発表をご確認ください。</p></div></footer>`;
 }
 
 function renderMobileBottomNav(currentNav: PublicNavKey): string {

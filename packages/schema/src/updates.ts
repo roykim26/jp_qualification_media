@@ -18,7 +18,7 @@ export type PublicUpdateEvent = {
 
 const updateEventLabels: Record<string, string> = {
   application_open: '申込開始の変更',
-  application_deadline: '申込締切の変更',
+  application_deadline: '締切の変更',
   exam_date: '試験日の変更',
   result_date: '合格発表日の変更',
   fee_change: '料金の変更',
@@ -29,6 +29,7 @@ const updateEventLabels: Record<string, string> = {
 };
 
 const updateFactLabelPrefixes: readonly [string, string][] = [
+  ['application_change_deadline_rule', '申込み内容変更期限'],
   ['application_deadline', '申込締切'],
   ['application_open', '申込開始'],
   ['application_start', '申込開始'],
@@ -38,13 +39,18 @@ const updateFactLabelPrefixes: readonly [string, string][] = [
   ['exam_date', '試験日'],
   ['result_date', '合格発表'],
   ['fee', '受験料・手数料'],
-  ['payment_', '受験料・手数料'],
+  ['payment_deadline_rule', '支払期限'],
+  ['payment_method', '支払い方法'],
   ['eligibility', '受験資格'],
   ['exam_method', '試験方式'],
+  ['exam_content', '試験内容'],
   ['exam_time', '試験時間'],
   ['exam_subject', '試験科目'],
   ['question_format', '出題形式'],
   ['question_count', '問題数'],
+  ['scoring_method', '採点方式'],
+  ['interview_count', '面接回数'],
+  ['practical_subject', '実技科目'],
   ['passing_standard', '合格基準'],
   ['pass_rate', '合格率'],
   ['applicants', '申込者数'],

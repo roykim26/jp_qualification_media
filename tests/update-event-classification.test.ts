@@ -42,4 +42,18 @@ describe('change event classification', () => {
     expect(updateFactLabel('passed')).toBe('合格者数');
     expect(updateFactLabel('statistics_methodology')).toBe('統計の集計口径');
   });
+
+  it('labels deadline and newly public fact keys without raw prefixes', () => {
+    expect(updateFactLabel('payment_deadline_rule')).toBe('支払期限');
+    expect(updateFactLabel('application_change_deadline_rule')).toBe(
+      '申込み内容変更期限',
+    );
+    expect(updateFactLabel('scoring_method')).toBe('採点方式');
+    expect(updateFactLabel('interview_count')).toBe('面接回数');
+    expect(updateFactLabel('practical_subject')).toBe('実技科目');
+    expect(updateEventLabel('application_deadline')).toBe('締切の変更');
+    expect(updateEventTypeForFact('payment_deadline_rule')).toBe(
+      'application_deadline',
+    );
+  });
 });

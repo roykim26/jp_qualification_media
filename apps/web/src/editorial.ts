@@ -289,6 +289,129 @@ const guidePages: Record<string, EditorialPage> = {
   },
 };
 
+export const correctionsIssueUrl =
+  'https://github.com/roykim26/jp_qualification_media/issues/new';
+
+const aboutPages: Record<string, EditorialPage> = {
+  sources: {
+    title: '情報源について',
+    description:
+      '掲載する資格情報の出典、保存記録、公開までの確認手順について説明します。',
+    eyebrow: '運営・方針',
+    sections: [
+      {
+        heading: '情報源の範囲',
+        paragraphs: [
+          '本サイトは、試験実施機関や官公庁が公開する公式ページを情報源として登録しています。各資格ページの「公式ソースと更新について」に出典を掲載し、確認できるものは公式URLから直接たどれます。',
+        ],
+        items: [
+          '試験日程、申込期間、合格発表',
+          '受験資格、受験料、支払期限',
+          '試験方式、試験科目、出題形式、合格基準',
+          '合格率、申込者数、受験者数、合格者数などの統計',
+        ],
+      },
+      {
+        heading: '公開までの流れ',
+        paragraphs: [
+          '公式ページの内容を保存記録（スナップショット）として残し、差分を確認したうえで、承認された事実だけを公開します。承認前の情報や、出典を確認できない情報は表示しません。',
+        ],
+      },
+      {
+        heading: '掲載しない情報',
+        paragraphs: [
+          '公式発表前の日付、料金、制度情報は掲載しません。前年度の値を現在年度に流用したり、空欄を推測値で埋めたりすることもありません。',
+        ],
+      },
+    ],
+    related: [
+      { href: '/shikaku/', label: '資格を探す' },
+      { href: '/about/editorial-policy/', label: '編集方針・AI方針' },
+      { href: '/updates/', label: '更新情報を見る' },
+    ],
+  },
+  'editorial-policy': {
+    title: '編集方針・AI方針',
+    description:
+      '公式確認済み情報だけを掲載するための編集方針と、生成AIの扱いについて説明します。',
+    eyebrow: '運営・方針',
+    sections: [
+      {
+        heading: '編集の基本',
+        paragraphs: [
+          '掲載する情報は、公式ソースの保存記録と承認記録を持つ事実に限ります。読みやすさより、どの年度・どの区分の情報かを取り違えないことを優先します。',
+        ],
+        items: [
+          '公式ソースの保存記録と承認記録がある事実だけを公開する',
+          '年度、級、実施区分、実施機関を分けて表示する',
+          '確認できない値は空欄のままにし、推測で補完しない',
+          '変更や訂正は更新情報に記録し、変更前後を確認できるようにする',
+        ],
+      },
+      {
+        heading: '生成AIの扱い',
+        paragraphs: [
+          '生成AIの出力を、そのまま公開事実として掲載することはありません。公開する日付、料金、制度情報は、公式ソースとの照合と承認を経たものに限ります。',
+        ],
+      },
+      {
+        heading: '表示の責任',
+        paragraphs: [
+          '掲載内容に誤りを見つけた場合は、訂正のご連絡からお知らせください。確認のうえ、必要に応じてページと更新情報を訂正します。',
+        ],
+      },
+    ],
+    related: [
+      { href: '/about/sources/', label: '情報源について' },
+      { href: '/about/corrections/', label: '訂正のご連絡' },
+      { href: '/updates/', label: '更新情報を見る' },
+    ],
+  },
+  corrections: {
+    title: '訂正のご連絡',
+    description:
+      '掲載情報の誤り、古い情報、表示の不具合を報告する方法について説明します。',
+    eyebrow: '運営・方針',
+    sections: [
+      {
+        heading: '受け付ける内容',
+        paragraphs: [
+          '掲載内容の確認や訂正のために、次のようなご連絡を受け付けています。',
+        ],
+        items: [
+          '事実の誤りや、公式発表より古い情報',
+          '公式ソースとの不一致',
+          'リンク切れや表示の不具合',
+          '掲載内容についてのご質問',
+        ],
+      },
+      {
+        heading: 'ご連絡時に添えてほしい情報',
+        paragraphs: [
+          '対象を特定できるよう、わかる範囲で次の情報を添えてください。個人情報や受験票番号など、公開不要な情報は記載しないでください。',
+        ],
+        items: [
+          '対象ページのURLと、該当する項目',
+          '現在の表示と、正しいと考えられる内容',
+          '根拠となる公式URL',
+          '確認した時点（わかる範囲で）',
+        ],
+      },
+      {
+        heading: '対応の流れ',
+        paragraphs: [
+          'ご連絡を受けた内容は、公式ソースを確認したうえで、必要に応じてページと更新情報を訂正します。内容によっては個別の回答を差し上げられない場合があります。受験や申込みに関する最終判断は、試験実施機関の公式案内をご確認ください。',
+        ],
+      },
+    ],
+    related: [
+      { href: correctionsIssueUrl, label: 'GitHub Issues で訂正を報告する' },
+      { href: '/updates/', label: '更新情報を見る' },
+      { href: '/about/sources/', label: '情報源について' },
+    ],
+  },
+};
+
 export function editorialComparisonPage(
   slug: string,
 ): EditorialPage | undefined {
@@ -299,8 +422,13 @@ export function editorialGuidePage(slug: string): EditorialPage | undefined {
   return guidePages[slug];
 }
 
+export function editorialAboutPage(slug: string): EditorialPage | undefined {
+  return aboutPages[slug];
+}
+
 export const editorialComparisonSlugs = Object.keys(comparisonPages);
 export const editorialGuideSlugs = Object.keys(guidePages);
+export const editorialAboutSlugs = Object.keys(aboutPages);
 
 export function editorialGuideEntries(): readonly {
   slug: string;
