@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   evaluateCoverage,
+  evaluatePublicPage,
+  evaluateSitemapRoutes,
   expectedCoverageStatus,
   launchGate,
   qualificationWebRoutes,
@@ -68,6 +70,85 @@ test('coverage gaps require the partial public status', () => {
   assert.equal(
     expectedCoverageStatus([{ field: 'fee' }]),
     'partially_announced',
+  );
+});
+
+test('empty section pages are accepted only as noindex empty states', () => {
+  const page = evaluatePublicPage({
+    suffix: 'pass-rate/',
+    html: '<meta name="robots" content="noindex,follow"><h2>合格率・合格基準：公開できる公式情報はありません</h2><p>宅地建物取引士</p><p>合格率・合格基準</p>',
+    statusLabel: '一部発表済み',
+    pageContains: '宅地建物取引士',
+    marker: '合格率・合格基準',
+  });
+  assert.deepEqual(page, { indexable: false, errors: [] });
+
+  const missingMessage = evaluatePublicPage({
+    suffix: 'pass-rate/',
+    html: '<meta name="robots" content="noindex,follow">宅地建物取引士 合格率・合格基準',
+    statusLabel: '一部発表済み',
+    pageContains: '宅地建物取引士',
+    marker: '合格率・合格基準',
+  });
+  assert.equal(missingMessage.indexable, false);
+  assert.ok(
+    missingMessage.errors.some((error) => error.includes('empty-section')),
+  );
+});
+
+test('overview pages stay indexable and keep the publication status', () => {
+  const page = evaluatePublicPage({
+    suffix: '',
+    html: '<meta name="robots" content="noindex,follow">宅地建物取引士',
+    statusLabel: '公式確認済み',
+    pageContains: '宅地建物取引士',
+  });
+  assert.equal(page.indexable, false);
+  assert.ok(page.errors.includes('Web overview must stay indexable'));
+  assert.ok(page.errors.some((error) => error.includes('公式確認済み')));
+});
+
+test('sitemap lists section pages if and only if they are indexable', () => {
+  const sitemapXml =
+    '<urlset><url><loc>https://example.test/shikaku/takken/</loc></url><url><loc>https://example.test/shikaku/takken/application/</loc></url></urlset>';
+  assert.deepEqual(
+    evaluateSitemapRoutes({
+      routes: [
+        { path: '/shikaku/takken/', indexable: true },
+        { path: '/shikaku/takken/application/', indexable: true },
+        { path: '/shikaku/takken/pass-rate/', indexable: false },
+      ],
+      sitemapXml,
+    }),
+    [],
+  );
+  assert.deepEqual(
+    evaluateSitemapRoutes({
+      routes: [
+        { path: '/shikaku/takken/', indexable: false },
+        { path: '/shikaku/takken/pass-rate/', indexable: true },
+      ],
+      sitemapXml,
+    }),
+    [
+      'Sitemap lists the noindex /shikaku/takken/ page',
+      'Sitemap missing the indexable /shikaku/takken/pass-rate/ page',
+    ],
+  );
+  assert.deepEqual(
+    evaluateSitemapRoutes({
+      routes: [{ path: '/shikaku/takken/', indexable: true }],
+      sitemapXml:
+        '<urlset><url><loc>https://example.test/shikaku/takken/application/</loc></url></urlset>',
+    }),
+    ['Sitemap missing the indexable /shikaku/takken/ page'],
+  );
+  assert.deepEqual(
+    evaluateSitemapRoutes({
+      routes: [],
+      sitemapXml: `${sitemapXml}?year=2026`,
+    }),
+    ['Sitemap lists a parameter-filtered page'],
   );
 });
 
