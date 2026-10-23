@@ -1337,10 +1337,28 @@ export function renderPassRateIndex(
   });
 }
 
+export type UpdatesPageOptions = {
+  filtered?: boolean;
+  page?: number;
+  hasMore?: boolean;
+  qualification?: string;
+};
+
 export function renderUpdatesPage(
   events: PublicUpdateEvent[],
-  filtered = false,
+  options: UpdatesPageOptions = {},
 ): string {
+  const page = Math.max(1, options.page ?? 1);
+  const hasMore = options.hasMore ?? false;
+  const filtered = options.filtered ?? false;
+  const pageHref = (target: number): string => {
+    const params = new URLSearchParams();
+    if (options.qualification)
+      params.set('qualification', options.qualification);
+    if (target > 1) params.set('page', String(target));
+    const suffix = params.toString();
+    return suffix ? `/updates/?${suffix}` : '/updates/';
+  };
   const renderCard = (event: PublicUpdateEvent): string => {
     const diff = event.previousValue
       ? `<div class="update-diff"><p><span>変更前</span>${escapeHtml(event.previousValue)}</p><p><span>変更後</span>${escapeHtml(event.newValue)}</p></div>`
@@ -1379,13 +1397,50 @@ export function renderUpdatesPage(
       return `<details class="updates-group"${open}><summary><span class="updates-group__label">${escapeHtml(group.label)}</span><span class="meta">${group.items.length}件</span></summary><div class="updates-list">${cards}</div></details>`;
     })
     .join('');
-  const body = `<div class="container"><header class="page-heading"><p class="eyebrow">公式事実の変更・訂正</p><h1>更新情報</h1><p>承認済みの公式事実に変更や訂正があった場合に、変更前後の値、対象資格、影響ページ、公式ソースを記録します。単なるページ確認やデザイン変更は掲載しません。</p></header><section class="page-section" aria-labelledby="updates-heading"><div class="section-heading"><div><p class="eyebrow">変更ログ</p><h2 id="updates-heading">公式情報の変更・訂正</h2></div><p class="meta">${events.length}件</p></div>${events.length ? `<div class="updates-groups">${groupsHtml}</div>` : renderFeedbackState({ kind: 'empty', title: '公開できる更新情報はまだありません', body: '公式事実の変更・訂正が承認されるとここに表示します。ページ確認だけでは更新情報を作成しません。', actions: renderButtonLink({ href: '/shikaku/', label: '資格一覧を見る', variant: 'secondary' }) })}</section></div>`;
+  const pagination =
+    page > 1 || hasMore
+      ? `<nav class="pagination" aria-label="更新情報のページ送り">${
+          page > 1
+            ? `<a class="button button--secondary" href="${escapeHtml(pageHref(page - 1))}" rel="prev">前のページ</a>`
+            : '<span class="button button--secondary is-disabled" aria-disabled="true">前のページ</span>'
+        }<span class="pagination__status">${page}ページ目</span>${
+          hasMore
+            ? `<a class="button button--secondary" href="${escapeHtml(pageHref(page + 1))}" rel="next">次のページ</a>`
+            : '<span class="button button--secondary is-disabled" aria-disabled="true">次のページ</span>'
+        }</nav>`
+      : '';
+  const emptyState =
+    page > 1
+      ? renderFeedbackState({
+          kind: 'empty',
+          title: 'このページに更新情報はありません',
+          body: '指定したページは公開中の更新情報の範囲外です。最新のページから確認してください。',
+          actions: renderButtonLink({
+            href: '/updates/',
+            label: '最新の更新情報へ',
+            variant: 'secondary',
+          }),
+        })
+      : renderFeedbackState({
+          kind: 'empty',
+          title: '公開できる更新情報はまだありません',
+          body: '公式事実の変更・訂正が承認されるとここに表示します。ページ確認だけでは更新情報を作成しません。',
+          actions: renderButtonLink({
+            href: '/shikaku/',
+            label: '資格一覧を見る',
+            variant: 'secondary',
+          }),
+        });
+  const body = `<div class="container"><header class="page-heading"><p class="eyebrow">公式事実の変更・訂正</p><h1>更新情報</h1><p>承認済みの公式事実に変更や訂正があった場合に、変更前後の値、対象資格、影響ページ、公式ソースを記録します。単なるページ確認やデザイン変更は掲載しません。</p></header><section class="page-section" aria-labelledby="updates-heading"><div class="section-heading"><div><p class="eyebrow">変更ログ</p><h2 id="updates-heading">公式情報の変更・訂正</h2></div><p class="meta">このページ ${events.length}件</p></div>${events.length ? `<div class="updates-groups">${groupsHtml}</div>${pagination}` : emptyState}</section></div>`;
   return renderPublicDocument({
-    title: '更新情報 | 公式情報',
+    title:
+      page > 1
+        ? `更新情報（${page}ページ目） | 公式情報`
+        : '更新情報 | 公式情報',
     description: '公式確認済み資格情報の変更と訂正記録を確認できます。',
     currentNav: 'updates',
     canonicalPath: '/updates/',
-    noindex: filtered,
+    noindex: filtered || page > 1,
     breadcrumbs: [{ label: 'ホーム', href: '/' }, { label: '更新情報' }],
     body,
   });
@@ -1439,6 +1494,7 @@ export function renderHomePage(): string {
 }
 
 export function renderNotFoundPage(): string {
+  const searchForm = `<form class="qualification-search not-found-search" role="search" action="/shikaku/" method="get"><div class="field"><label for="not-found-search">資格名・略称で検索</label><div class="search-control">${renderIcon('search')}<input id="not-found-search" name="q" type="search" placeholder="例：宅建、ITパスポート、簿記" autocomplete="off"></div><p class="field__help">正式名称、略称、別名で探せます。</p></div><div class="qualification-search__actions"><button class="button button--primary" type="submit">${renderIcon('search')}<span>検索</span></button></div></form>`;
   return renderPublicDocument({
     title: 'ページが見つかりません',
     noindex: true,
@@ -1446,13 +1502,9 @@ export function renderNotFoundPage(): string {
       {
         kind: 'empty',
         title: '指定されたページを確認できませんでした',
-        body: 'URLが変更されたか、ページがまだ公開されていない可能性があります。',
-        actions: renderButtonLink({
-          href: '/shikaku/',
-          label: '資格一覧を見る',
-          variant: 'secondary',
-        }),
+        body: 'URLが変更されたか、ページがまだ公開されていない可能性があります。ホームまたは資格一覧から目的のページを探してください。',
+        actions: `${renderButtonLink({ href: '/', label: 'ホームへ戻る' })}${renderButtonLink({ href: '/shikaku/', label: '資格一覧を見る', variant: 'secondary' })}`,
       },
-    )}</div>`,
+    )}${searchForm}<div class="popular-links" aria-label="主な資格"><span>主な資格</span><a href="/shikaku/takken/">宅建</a><a href="/shikaku/it-passport/">ITパスポート</a><a href="/shikaku/bookkeeping/">日商簿記</a><a href="/shikaku/fp/">FP技能検定</a></div></div>`,
   });
 }

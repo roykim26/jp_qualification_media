@@ -399,6 +399,31 @@ describe('public qualification read path', () => {
     expect(response.json()).toMatchObject({
       data: [],
       query: { qualification: 'takken' },
+      pagination: { limit: 100, offset: 0, hasMore: false },
+    });
+  });
+
+  it('paginates the updates feed with bounded limit and offset', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/v1/updates?limit=20&offset=40',
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      data: [],
+      pagination: { limit: 20, offset: 40, hasMore: false },
+    });
+  });
+
+  it('clamps invalid updates pagination parameters to safe bounds', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/v1/updates?limit=500&offset=-5',
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      data: [],
+      pagination: { limit: 100, offset: 0, hasMore: false },
     });
   });
 

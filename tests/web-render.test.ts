@@ -11,6 +11,7 @@ import {
   renderPassRateIndex,
   renderSchedulePage,
   renderUpdatesPage,
+  renderNotFoundPage,
 } from '../apps/web/src/render.js';
 import {
   correctionsIssueUrl,
@@ -480,6 +481,87 @@ describe('shared qualification page rendering', () => {
     expect(html).toContain('公開できる更新情報はまだありません');
     expect(html).toContain('ページ確認だけでは更新情報を作成しません');
     expect(html).not.toContain('undefined');
+  });
+
+  it('paginates the updates feed and keeps the qualification filter', () => {
+    const takken = launchQualifications.find((item) => item.slug === 'takken')!;
+    const html = renderUpdatesPage(
+      [
+        {
+          id: 'change:takken:exam_date',
+          eventType: 'exam_date',
+          eventLabel: '試験日の変更',
+          qualification: takken,
+          factKey: 'exam_date',
+          factLabel: '試験日',
+          examYear: 2026,
+          previousValue: null,
+          newValue: '2026年10月18日',
+          affectedPages: [],
+          sourceUrl: 'https://www.retio.or.jp/exam/',
+          createdAt: '2026-08-14T00:00:00.000Z',
+          verifiedAt: '2026-08-13T00:00:00.000Z',
+        },
+      ],
+      { page: 2, hasMore: true, filtered: true, qualification: 'takken' },
+    );
+    expect(html).toContain('<nav class="pagination"');
+    expect(html).toContain('href="/updates/?qualification=takken"');
+    expect(html).toContain(
+      'href="/updates/?qualification=takken&amp;page=3" rel="next"',
+    );
+    expect(html).toContain('2ページ目');
+    expect(html).toContain('更新情報（2ページ目）');
+    expect(html).toContain('<meta name="robots" content="noindex,follow">');
+  });
+
+  it('offers the next page on the first updates page without noindex', () => {
+    const takken = launchQualifications.find((item) => item.slug === 'takken')!;
+    const html = renderUpdatesPage(
+      [
+        {
+          id: 'change:takken:exam_date',
+          eventType: 'exam_date',
+          eventLabel: '試験日の変更',
+          qualification: takken,
+          factKey: 'exam_date',
+          factLabel: '試験日',
+          examYear: 2026,
+          previousValue: null,
+          newValue: '2026年10月18日',
+          affectedPages: [],
+          sourceUrl: 'https://www.retio.or.jp/exam/',
+          createdAt: '2026-08-14T00:00:00.000Z',
+          verifiedAt: '2026-08-13T00:00:00.000Z',
+        },
+      ],
+      { page: 1, hasMore: true },
+    );
+    expect(html).toContain('href="/updates/?page=2" rel="next"');
+    expect(html).toContain('1ページ目');
+    expect(html).not.toContain('<meta name="robots" content="noindex,follow">');
+  });
+
+  it('shows a range empty state for an out-of-range updates page', () => {
+    const html = renderUpdatesPage([], { page: 99 });
+    expect(html).toContain('このページに更新情報はありません');
+    expect(html).toContain('最新の更新情報へ');
+    expect(html).not.toContain('公開できる更新情報はまだありません');
+    expect(html).toContain('<meta name="robots" content="noindex,follow">');
+  });
+
+  it('renders a 404 page with home, search, and qualification entry points', () => {
+    const html = renderNotFoundPage();
+    expect(html).toContain('ページが見つかりません');
+    expect(html).toContain('href="/"');
+    expect(html).toContain('href="/shikaku/"');
+    expect(html).toContain(
+      '<form class="qualification-search not-found-search" role="search" action="/shikaku/" method="get">',
+    );
+    expect(html).toContain('name="q"');
+    expect(html).toContain('/shikaku/takken/');
+    expect(html).toContain('/shikaku/it-passport/');
+    expect(html).toContain('<meta name="robots" content="noindex,follow">');
   });
 
   it('folds repeated update categories into collapsible groups', () => {
