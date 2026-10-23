@@ -7,13 +7,18 @@ import {
   renderGuideIndex,
   renderHomePage,
   renderNotFoundPage,
+  renderPassRateIndex,
   renderQualificationDirectory,
   renderQualificationSectionPage,
   renderSchedulePage,
   renderUpdatesPage,
+  qualificationSectionHasContent,
+  qualificationSitemapContent,
   type QualificationSection,
 } from './render.js';
 import {
+  editorialAboutPage,
+  editorialAboutSlugs,
   editorialComparisonPage,
   editorialComparisonSlugs,
   editorialGuideEntries,
@@ -129,10 +134,12 @@ const server = createServer(async (req, res) => {
         '/shikaku/',
         '/schedule/',
         '/compare/',
+        '/pass-rate/',
         '/updates/',
         '/guide/',
         ...editorialComparisonSlugs.map((slug) => `/compare/${slug}/`),
         ...editorialGuideSlugs.map((slug) => `/guide/${slug}/`),
+        ...editorialAboutSlugs.map((slug) => `/about/${slug}/`),
       ];
       const views = await Promise.all(
         launchQualifications.map(async (qualification) => ({
@@ -141,7 +148,11 @@ const server = createServer(async (req, res) => {
         })),
       );
       const qualificationPaths = views.flatMap(({ qualification, view }) =>
-        sitemapQualificationPaths(qualification.slug, view.status),
+        sitemapQualificationPaths(
+          qualification.slug,
+          view.status,
+          qualificationSitemapContent(view),
+        ),
       );
       res.writeHead(200, { 'content-type': 'application/xml; charset=utf-8' });
       return res.end(
@@ -213,6 +224,34 @@ const server = createServer(async (req, res) => {
     if (pathname === '/guide' || pathname === '/guide/') {
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
       return res.end(renderGuideIndex(editorialGuideEntries()));
+    }
+    if (pathname === '/pass-rate' || pathname === '/pass-rate/') {
+      const views = await Promise.all(
+        launchQualifications.map(async (qualification) => ({
+          qualification,
+          view: await readQualification(qualification.slug),
+        })),
+      );
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+      return res.end(
+        renderPassRateIndex(
+          views.filter(({ view }) =>
+            qualificationSectionHasContent(view, 'pass-rate'),
+          ),
+        ),
+      );
+    }
+    const aboutMatch = pathname.match(/^\/about\/([^/]+)\/?$/);
+    if (aboutMatch) {
+      const page = editorialAboutPage(aboutMatch[1]);
+      if (!page) {
+        res.writeHead(404, { 'content-type': 'text/html; charset=utf-8' });
+        return res.end(renderNotFoundPage());
+      }
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+      return res.end(
+        renderEditorialPage(page, 'about', `/about/${aboutMatch[1]}/`),
+      );
     }
     const comparisonGuideMatch = pathname.match(/^\/compare\/([^/]+)\/?$/);
     if (comparisonGuideMatch) {

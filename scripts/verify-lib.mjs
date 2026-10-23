@@ -90,6 +90,61 @@ export function expectedCoverageStatus(coverageGaps) {
   return coverageGaps.length ? 'partially_announced' : 'verified';
 }
 
+const emptySectionMessage = '公開できる公式情報はありません';
+
+export function evaluatePublicPage({
+  suffix,
+  html,
+  statusLabel,
+  pageContains,
+  marker,
+}) {
+  const errors = [];
+  const label = suffix || 'overview';
+  const indexable = !html.includes(
+    '<meta name="robots" content="noindex,follow">',
+  );
+  if (!suffix) {
+    if (!indexable) errors.push('Web overview must stay indexable');
+    if (!html.includes(statusLabel))
+      errors.push(`Web overview status ${statusLabel} missing`);
+  } else if (!indexable) {
+    // Sections without approved facts are reachable but must not be indexed.
+    if (!html.includes(emptySectionMessage))
+      errors.push(`Web ${suffix} noindex page missing empty-section message`);
+  } else if (!html.includes(statusLabel)) {
+    errors.push(`Web ${suffix} status ${statusLabel} missing`);
+  }
+  if (!html.includes(pageContains))
+    errors.push(`Web ${label} missing ${pageContains}`);
+  if (marker && !html.includes(marker))
+    errors.push(`Web ${suffix} missing ${marker}`);
+  return { indexable, errors };
+}
+
+export function evaluateSitemapRoutes({ routes, sitemapXml }) {
+  const errors = [];
+  if (sitemapXml.includes('?year='))
+    errors.push('Sitemap lists a parameter-filtered page');
+  const locs = new Set(
+    [...sitemapXml.matchAll(/<loc>([^<]+)<\/loc>/g)].map((match) => {
+      try {
+        return new URL(match[1]).pathname;
+      } catch {
+        return match[1];
+      }
+    }),
+  );
+  for (const route of routes) {
+    const listed = locs.has(route.path);
+    if (route.indexable && !listed)
+      errors.push(`Sitemap missing the indexable ${route.path} page`);
+    if (!route.indexable && listed)
+      errors.push(`Sitemap lists the noindex ${route.path} page`);
+  }
+  return errors;
+}
+
 export function createRuntime(databaseUrl) {
   const apiPort = Number(process.env.VERIFY_API_PORT ?? 4191);
   const webPort = Number(process.env.VERIFY_WEB_PORT ?? 3091);
@@ -256,6 +311,7 @@ export async function verifyQualification(
       `API status=${api.status} expected=${expectedStatus}, facts=${api.facts?.length}, regression floor=${gate.expectedFacts}`,
     );
   const webPages = [];
+  const sitemapRoutes = [];
   for (const route of qualificationWebRoutes) {
     const webResponse = await waitFor(
       `http://127.0.0.1:${runtime.webPort}/shikaku/${gate.slug}/${route.suffix}`,
@@ -263,20 +319,17 @@ export async function verifyQualification(
     const html = await webResponse.text();
     const statusLabel =
       expectedStatus === 'verified' ? '公式確認済み' : '一部発表済み';
-    if (!html.includes(statusLabel))
-      errors.push(
-        `Web ${route.suffix || 'overview'} status ${statusLabel} missing`,
-      );
-    if (!html.includes(gate.pageContains))
-      errors.push(
-        `Web ${route.suffix || 'overview'} missing ${gate.pageContains}`,
-      );
-    if (route.suffix && !html.includes(route.marker))
-      errors.push(`Web ${route.suffix} missing ${route.marker}`);
-    webPages.push({
-      path: `/shikaku/${gate.slug}/${route.suffix}`,
-      status: webResponse.status,
+    const path = `/shikaku/${gate.slug}/${route.suffix}`;
+    const page = evaluatePublicPage({
+      suffix: route.suffix,
+      html,
+      statusLabel,
+      pageContains: gate.pageContains,
+      marker: route.marker,
     });
+    errors.push(...page.errors);
+    sitemapRoutes.push({ path, indexable: page.indexable });
+    webPages.push({ path, status: webResponse.status });
   }
   // The per-year history presentation from work package G-1 is bookkeeping-only
   // (it is the sole launch qualification with a multi-year statistics series),
@@ -312,19 +365,14 @@ export async function verifyQualification(
     });
   }
   // The filtered year page keeps its canonical on /pass-rate/, so sitemap.xml
-  // must carry the canonical page only and never the ?year= variant.  Both
-  // verified and partially_announced qualifications publish approved facts on
-  // indexable 200 pages, so every gate slug must be present.
+  // must carry the canonical page only and never the ?year= variant.  Sections
+  // without approved facts render noindex empty states, so each section must be
+  // listed if and only if its page is indexable.
   const sitemapResponse = await waitFor(
     `http://127.0.0.1:${runtime.webPort}/sitemap.xml`,
   );
   const sitemapXml = await sitemapResponse.text();
-  if (sitemapXml.includes('?year='))
-    errors.push('Sitemap lists a parameter-filtered page');
-  if (!sitemapXml.includes(`/shikaku/${gate.slug}/pass-rate/`))
-    errors.push(
-      `Sitemap missing the ${api.status} ${gate.slug} pass-rate page`,
-    );
+  errors.push(...evaluateSitemapRoutes({ routes: sitemapRoutes, sitemapXml }));
   webPages.push({
     path: '/sitemap.xml',
     status: sitemapResponse.status,
