@@ -20,6 +20,14 @@ describe('stage 4 representative UI samples', () => {
     expect(html).toContain('href="/schedule/"');
     expect(html).toContain('href="/compare/"');
     expect(html).toContain('href="/updates/"');
+    expect(html).toContain('<a class="tool-card__link" href="/schedule/">');
+    expect(html).toContain('<a class="tool-card__link" href="/compare/">');
+    expect(html).toContain('<a class="tool-card__link" href="/updates/">');
+    expect(html).not.toContain('<span class="tool-card__link">');
+    expect(html).toContain('href="/shikaku/gyoseishoshi/">行政書士</a>');
+    expect(html).toContain(
+      'href="/shikaku/fundamental-it-engineer/">基本情報技術者</a>',
+    );
   });
 
   it('renders the directory sample with all current page destinations', () => {
