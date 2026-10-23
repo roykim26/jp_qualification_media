@@ -176,6 +176,13 @@ const server = createServer(async (req, res) => {
       const [, qualification, year, eventId] = icsMatch;
       const apiPath = `/api/v1/ics/${qualification}/${year}${eventId ? `/${eventId}` : ''}`;
       const response = await fetch(`${apiBaseUrl}${apiPath}`);
+      if (!response.ok) {
+        const notFound = response.status === 404;
+        res.writeHead(notFound ? 404 : 502, {
+          'content-type': 'text/html; charset=utf-8',
+        });
+        return res.end(notFound ? renderNotFoundPage() : renderErrorPage());
+      }
       const body = Buffer.from(await response.arrayBuffer());
       res.writeHead(response.status, {
         'content-type':

@@ -272,7 +272,8 @@ export const webStyles = String.raw`
 .tool-card > .icon { color: var(--color-primary); }
 .tool-card h3 a { color: var(--color-ink); text-decoration: none; }
 .tool-card h3 a:hover { color: var(--color-primary); }
-.tool-card__link { margin-top: auto; color: var(--color-primary); font-size: 14px; font-weight: 700; }
+.tool-card__link { margin-top: auto; color: var(--color-primary); font-size: 14px; font-weight: 700; text-decoration: none; }
+.tool-card__link:hover { text-decoration: underline; }
 .directory-overview { margin-bottom: var(--space-8); border-radius: var(--radius-card); background: var(--color-surface); padding-inline: var(--space-6); }
 .directory-card { display: flex; flex-direction: column; }
 .directory-card .card__body { display: flex; height: 100%; flex-direction: column; }
