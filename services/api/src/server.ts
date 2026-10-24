@@ -21,6 +21,17 @@ import { buildPublicQualificationView } from './public-view.js';
 
 export const app = Fastify({ logger: false });
 export const takkenPipeline = new TakkenPipeline();
+
+function boundedQueryInteger(
+  value: string | undefined,
+  fallback: number,
+  minimum: number,
+  maximum: number,
+): number {
+  const parsed = value === undefined ? Number.NaN : Number(value);
+  if (!Number.isInteger(parsed)) return fallback;
+  return Math.min(maximum, Math.max(minimum, parsed));
+}
 app.get('/health', async () => ({ status: 'ok', stage: 0 }));
 app.get<{ Querystring: { q?: string } }>(
   '/api/v1/qualifications',
@@ -124,16 +135,22 @@ app.get<{ Querystring: { qualifications?: string; q?: string } }>(
     };
   },
 );
-app.get<{ Querystring: { qualification?: string } }>(
-  '/api/v1/updates',
-  async (request) => ({
-    data: await readPublicUpdates(
-      config.databaseUrl,
-      request.query.qualification,
-    ),
+app.get<{
+  Querystring: { qualification?: string; limit?: string; offset?: string };
+}>('/api/v1/updates', async (request) => {
+  const limit = boundedQueryInteger(request.query.limit, 100, 1, 100);
+  const offset = boundedQueryInteger(request.query.offset, 0, 0, 1_000_000);
+  const updates = await readPublicUpdates(
+    config.databaseUrl,
+    request.query.qualification,
+    { limit, offset },
+  );
+  return {
+    data: updates.events,
     query: request.query,
-  }),
-);
+    pagination: { limit, offset, hasMore: updates.hasMore },
+  };
+});
 app.get('/api/v1/qualifications/takken', async () => {
   const qualification = launchQualifications.find(
     (item) => item.slug === 'takken',

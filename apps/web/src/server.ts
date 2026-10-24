@@ -33,6 +33,7 @@ import { sitemapQualificationPaths } from './sitemap.js';
 
 const port = Number(process.env.WEB_PORT ?? 3000);
 const apiBaseUrl = process.env.API_BASE_URL ?? 'http://127.0.0.1:4100';
+const updatesPageSize = 20;
 
 function siteOrigin(): string {
   const fallback = `http://127.0.0.1:${port}`;
@@ -87,14 +88,22 @@ async function readComparison(query: URLSearchParams) {
   return response.json();
 }
 
-async function readUpdates(query: URLSearchParams) {
+async function readUpdates(query: URLSearchParams, page: number) {
   const params = new URLSearchParams();
   const qualification = query.get('qualification');
   if (qualification) params.set('qualification', qualification);
-  const suffix = params.size ? `?${params.toString()}` : '';
-  const response = await fetch(`${apiBaseUrl}/api/v1/updates${suffix}`);
+  params.set('limit', String(updatesPageSize));
+  params.set('offset', String((page - 1) * updatesPageSize));
+  const response = await fetch(`${apiBaseUrl}/api/v1/updates?${params}`);
   if (!response.ok) throw new Error(`API returned ${response.status}`);
   return response.json();
+}
+
+function parseUpdatesPage(value: string | null): number {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed >= 1 && parsed <= 10_000
+    ? parsed
+    : 1;
 }
 
 const server = createServer(async (req, res) => {
@@ -167,6 +176,13 @@ const server = createServer(async (req, res) => {
       const [, qualification, year, eventId] = icsMatch;
       const apiPath = `/api/v1/ics/${qualification}/${year}${eventId ? `/${eventId}` : ''}`;
       const response = await fetch(`${apiBaseUrl}${apiPath}`);
+      if (!response.ok) {
+        const notFound = response.status === 404;
+        res.writeHead(notFound ? 404 : 502, {
+          'content-type': 'text/html; charset=utf-8',
+        });
+        return res.end(notFound ? renderNotFoundPage() : renderErrorPage());
+      }
       const body = Buffer.from(await response.arrayBuffer());
       res.writeHead(response.status, {
         'content-type':
@@ -282,13 +298,17 @@ const server = createServer(async (req, res) => {
       );
     }
     if (pathname === '/updates' || pathname === '/updates/') {
-      const updates = await readUpdates(url.searchParams);
+      const qualification = url.searchParams.get('qualification') ?? undefined;
+      const page = parseUpdatesPage(url.searchParams.get('page'));
+      const updates = await readUpdates(url.searchParams, page);
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
       return res.end(
-        renderUpdatesPage(
-          updates.data,
-          Boolean(url.searchParams.get('qualification')),
-        ),
+        renderUpdatesPage(updates.data, {
+          filtered: Boolean(qualification),
+          page,
+          hasMore: Boolean(updates.pagination?.hasMore),
+          qualification,
+        }),
       );
     }
     if (routeMatch) {

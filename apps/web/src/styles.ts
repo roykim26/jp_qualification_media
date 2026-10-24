@@ -41,6 +41,7 @@ export const webStyles = String.raw`
 .directory-overview__value { color: var(--color-ink) !important; font-size: 28px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .directory-overview__fields .tag-row { margin: var(--space-2) 0 0; }
 .qualification-search { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-4); align-items: end; margin-bottom: var(--space-6); padding: var(--space-5); border: 1px solid var(--color-border); border-radius: var(--radius-card); background: var(--color-surface); }
+.not-found-search { margin-top: var(--space-8); margin-bottom: 0; }
 .search-control { position: relative; display: flex; align-items: center; }
 .search-control .icon { position: absolute; left: var(--space-3); color: var(--color-muted); pointer-events: none; }
 .search-control input { padding-left: 44px; }
@@ -138,6 +139,8 @@ export const webStyles = String.raw`
 .updates-group[open] > summary { border-bottom: 1px solid var(--color-border); }
 .updates-group .updates-list { padding: var(--space-5); }
 .updates-list { display: grid; gap: var(--space-5); }
+.pagination { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3); margin-top: var(--space-6); }
+.pagination__status { color: var(--color-muted); font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .update-card { padding: var(--space-5); border: 1px solid var(--color-border); border-left: 4px solid var(--color-review); border-radius: var(--radius-card); background: var(--color-surface); }
 .update-card__header { display: flex; flex-wrap: wrap; gap: var(--space-4); align-items: start; justify-content: space-between; margin-bottom: var(--space-4); }
 .update-card__header h2 { margin: 0; font-size: 20px; }
@@ -269,7 +272,8 @@ export const webStyles = String.raw`
 .tool-card > .icon { color: var(--color-primary); }
 .tool-card h3 a { color: var(--color-ink); text-decoration: none; }
 .tool-card h3 a:hover { color: var(--color-primary); }
-.tool-card__link { margin-top: auto; color: var(--color-primary); font-size: 14px; font-weight: 700; }
+.tool-card__link { margin-top: auto; color: var(--color-primary); font-size: 14px; font-weight: 700; text-decoration: none; }
+.tool-card__link:hover { text-decoration: underline; }
 .directory-overview { margin-bottom: var(--space-8); border-radius: var(--radius-card); background: var(--color-surface); padding-inline: var(--space-6); }
 .directory-card { display: flex; flex-direction: column; }
 .directory-card .card__body { display: flex; height: 100%; flex-direction: column; }
