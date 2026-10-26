@@ -23,7 +23,8 @@
     "release:check": "pnpm run format:check && pnpm run lint && pnpm run typecheck && pnpm test && pnpm test:python && pnpm run build && pnpm test:verify-gate && pnpm verify:all",
     "ci:fixture:export": "node scripts/export-ci-db-fixture.mjs",
     "ci:fixture:restore": "node scripts/restore-ci-db-fixture.mjs",
-    "ci:fixture:verify": "node scripts/verify-ci-fixture.mjs"
+    "ci:fixture:verify": "node scripts/verify-ci-fixture.mjs",
+    "smoke:docker": "node scripts/docker-smoke.mjs"
   },
   "dependencies": {
     "@fastify/cors": "^11.0.0",

@@ -1,0 +1,8 @@
+www.shikakucheck.com {
+	redir https://shikakucheck.com{uri} permanent
+}
+
+shikakucheck.com {
+	encode gzip
+	reverse_proxy web:3000
+}

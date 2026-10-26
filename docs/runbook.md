@@ -76,8 +76,96 @@ pnpm release:check
 
 导出命令仅允许 localhost 数据库，真实候选存在 pending 时拒绝生成，并采用固定时间和 `ci://` object key 保证输出可审查、可重复。提交前必须同时审查基线 JSON 与 fixture SQL 的差异。
 
-夹具现为 176 facts / 176 candidate_facts / 176 fact_revisions / 25 snapshots；重导后必须同步修改 `scripts/verify-ci-fixture.mjs` 第 9–12 行的四个计数断言，否则门禁会以 `ERR_ASSERTION` 失败。完整口径见 `docs/data-gate-semantics.md` 第 5、9 节。
+夹具现为 981 facts / 981 candidate_facts / 981 fact_revisions / 29 snapshots；重导后必须同步修改 `scripts/verify-ci-fixture.mjs` 第 9–12 行的四个计数断言，否则门禁会以 `ERR_ASSERTION` 失败。完整口径见 `docs/data-gate-semantics.md` 第 5、9 节。
 
 ## 采集与入库授权
 
 采集、候选入库、审核批准是三次独立授权，逐段需要项目所有者明示批准，抓取授权不包含后两者。各资格的入口脚本与环境变量开关记录在对应的 `docs/<qualification>-source-contract.md`，总则见 `docs/data-gate-semantics.md` 第 8 节。
+
+## 生产部署（VPS，web+API 公开面）
+
+上线范围＝公开站（web）＋公开 API＋PostgreSQL＋Caddy 自动 HTTPS。admin 与采集链不在 VPS 上运行（admin 写侧只有 `x-reviewer-id` 头一种弱鉴权，绝不能暴露公网；采集继续在开发机本机跑）。
+
+拓扑：`caddy(80/443) → web(3000) → api(4100) → db(5432)`，除 caddy 外全部只在 compose 内部网络。`WEB_HOST`/`API_HOST` 默认仍为 `127.0.0.1`（本机开发形态不变），仅 compose 显式设 `0.0.0.0` 供容器互访。
+
+### 首次部署（Ubuntu 24.04，整条复制执行）
+
+1. 装 Docker（官方脚本）：
+
+```bash
+curl -fsSL https://get.docker.com | sh
+```
+
+判据＝`docker --version` 有输出。
+
+2. 域名解析：在域名商处给 `shikakucheck.com` 加 A 记录 `@` 与 `www` 都指向 VPS IPv4。判据＝`getent A shikakucheck.com` 返回该 IP。
+
+3. 拉代码并配置环境：
+
+```bash
+git clone https://github.com/roykim26/jp_qualification_media.git /opt/jpqm && cd /opt/jpqm && cp deploy/env.prod.example deploy/.env && sed -i "s/change-me/$(openssl rand -hex 24)/" deploy/.env
+```
+
+判据＝`grep -c DB_PASSWORD deploy/.env` 输出 1，且值不是 change-me。
+
+4. 构建并起服务：
+
+```bash
+cd /opt/jpqm && docker compose -f deploy/docker-compose.prod.yml up -d --build
+```
+
+判据＝`docker compose -f deploy/docker-compose.prod.yml ps` 四个服务都 running/healthy。healthcheck 只证明进程与端口活着（api 探 `/health`、web 探 `/`），数据面是否真的可用由第 7 步验收。
+
+5. 建库表并灌入已批准数据（迁移+seed 在 api 容器里跑；镜像里已带 `config/` 与 `dist/packages/db/migrations`）：
+
+```bash
+cd /opt/jpqm && docker compose -f deploy/docker-compose.prod.yml exec api node dist/packages/db/src/migrate.js && docker compose -f deploy/docker-compose.prod.yml exec api node dist/packages/db/src/seed.js
+```
+
+判据＝migrate 逐条输出 `Applied <迁移文件>.`，条数等于镜像里 `dist/packages/db/migrations/*.sql` 的文件数（2026-10-26 是 21 条、末条为 `0020_change_event_type_backfill.sql.`）；同一条 migrate 再跑一次**零 `Applied` 输出**（幂等）；seed 输出 `Seeded 6 stable qualification records`。若报 `ENOENT ... migrations`，说明镜像没带上迁移目录，属构建缺陷，不要手工补目录。
+
+6. 从开发机导入生产数据（pg_dump 的自定义格式备份）：
+
+```bash
+scp <备份文件> root@<VPS_IP>:/tmp/prod.dump && cd /opt/jpqm && docker compose -f deploy/docker-compose.prod.yml exec -T db pg_restore -U qualification_prod -d qualification_media --clean --if-exists --no-owner --exit-on-error < /tmp/prod.dump
+```
+
+（导入第 6 步后第 5 步的 seed 会被覆盖为备份时点，属预期；两者顺序不能反。）
+
+判据＝
+
+```bash
+cd /opt/jpqm && docker compose -f deploy/docker-compose.prod.yml exec -T db psql -U qualification_prod -d qualification_media -tAc "select count(*) from facts where status='approved'"
+```
+
+输出与备份时点一致（2026-10-26 开发机基线是 **981**；以实际备份时点为准，别硬套）。
+
+7. 上线验收（开发机执行）：
+
+```bash
+for path in / /shikaku/bookkeeping/ /schedule/ /updates/ /sitemap.xml /ics/takken/2026.ics; do curl -s -o /dev/null -w "$path %{http_code} %{content_type}\n" "https://shikakucheck.com$path"; done
+curl -s https://shikakucheck.com/robots.txt
+curl -s https://shikakucheck.com/sitemap.xml | grep -o '/shikaku/bookkeeping/pass-rate/' | head -1
+curl -s https://shikakucheck.com/sitemap.xml | grep -c '?year='
+curl -s "https://shikakucheck.com/shikaku/bookkeeping/pass-rate/?year=2010" | grep -c 'content="noindex,follow"'
+```
+
+判据＝六个路径全 200（ICS 为 `text/calendar`，`/sitemap.xml` 为 XML，其余 `text/html`）；robots 里 Sitemap 行是 `https://shikakucheck.com/sitemap.xml`；sitemap 含簿記 pass-rate 页、`?year=` 计数为 **0**；年份筛选页 noindex 计数为 **1**。再抽一眼内容：首页含「資格試験の公式情報」、`/shikaku/bookkeeping/` 含「日商簿記」。
+
+以上第 3–7 步的机器版＝`npm run smoke:docker`（CI 的 `docker-smoke` job 跑同一条命令）：构建镜像 → 临时 `postgres:16-alpine` → migrate（含二次幂等）→ seed → 恢复 CI 夹具 → 起 api+web → 断言 981 条事实、首页/资格页/API/sitemap/noindex/ICS/robots/404。改动 Dockerfile、compose 或依赖后先让这条冒烟绿，再上 VPS。
+
+### 例行备份（VPS root crontab）
+
+```bash
+(crontab -l 2>/dev/null; echo '15 4 * * * docker compose -f /opt/jpqm/deploy/docker-compose.prod.yml exec -T db pg_dump -U qualification_prod -Fc qualification_media > /var/backups/jpqm-$(date +\%F).dump && find /var/backups -name "jpqm-*.dump" -mtime +14 -delete') | crontab -
+```
+
+判据＝`crontab -l` 末行存在；次日 `/var/backups/jpqm-*.dump` 有当日文件。
+
+### 更新发布
+
+```bash
+cd /opt/jpqm && git pull && docker compose -f deploy/docker-compose.prod.yml up -d --build
+```
+
+有新迁移时随后补跑第 5 步的 migrate。判据＝`docker compose ... ps` 全 running 且第 7 步验收复跑通过。动了 Dockerfile、`.dockerignore`、compose 或依赖版本的发布，先在本机或 CI 跑 `npm run smoke:docker` 绿了再 merge。
