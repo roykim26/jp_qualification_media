@@ -57,6 +57,13 @@ function expect(condition, message) {
   if (!condition) throw new Error(message);
 }
 
+function envFlags(values) {
+  return Object.entries(values).flatMap(([key, value]) => [
+    '-e',
+    `${key}=${value}`,
+  ]);
+}
+
 async function freePorts(count) {
   const servers = Array.from({ length: count }, () => createServer());
   await Promise.all(
@@ -143,12 +150,11 @@ async function main() {
     dbContainer,
     '--network',
     network,
-    '-e',
-    `POSTGRES_DB=${dbName}`,
-    '-e',
-    `POSTGRES_USER=${dbUser}`,
-    '-e',
-    `POSTGRES_PASSWORD=${dbPassword}`,
+    ...envFlags({
+      POSTGRES_DB: dbName,
+      POSTGRES_USER: dbUser,
+      POSTGRES_PASSWORD: dbPassword,
+    }),
     'postgres:16-alpine',
   ]);
   for (let attempt = 0; attempt < 60; attempt += 1) {
@@ -179,10 +185,7 @@ async function main() {
     '--rm',
     '--network',
     network,
-    '-e',
-    `DATABASE_URL=${databaseUrl}`,
-    '-e',
-    'NODE_ENV=development',
+    ...envFlags({ DATABASE_URL: databaseUrl, NODE_ENV: 'development' }),
     image,
     'node',
     'dist/packages/db/src/migrate.js',
@@ -201,10 +204,7 @@ async function main() {
     '--rm',
     '--network',
     network,
-    '-e',
-    `DATABASE_URL=${databaseUrl}`,
-    '-e',
-    'NODE_ENV=development',
+    ...envFlags({ DATABASE_URL: databaseUrl, NODE_ENV: 'development' }),
     image,
     'node',
     'dist/packages/db/src/migrate.js',
@@ -219,10 +219,7 @@ async function main() {
     '--rm',
     '--network',
     network,
-    '-e',
-    `DATABASE_URL=${databaseUrl}`,
-    '-e',
-    'NODE_ENV=development',
+    ...envFlags({ DATABASE_URL: databaseUrl, NODE_ENV: 'development' }),
     image,
     'node',
     'dist/packages/db/src/seed.js',
@@ -240,8 +237,7 @@ async function main() {
       '-i',
       '--network',
       network,
-      '-e',
-      `PGPASSWORD=${dbPassword}`,
+      ...envFlags({ PGPASSWORD: dbPassword }),
       'postgres:16-alpine',
       'psql',
       '-h',
@@ -268,10 +264,7 @@ async function main() {
     network,
     '-p',
     `127.0.0.1:${apiPort}:4100`,
-    '-e',
-    `DATABASE_URL=${databaseUrl}`,
-    '-e',
-    'API_HOST=0.0.0.0',
+    ...envFlags({ DATABASE_URL: databaseUrl, API_HOST: '0.0.0.0' }),
     image,
     'node',
     'dist/services/api/src/server.js',
@@ -285,11 +278,11 @@ async function main() {
     network,
     '-p',
     `127.0.0.1:${webPort}:3000`,
-    '-e',
-    'WEB_HOST=0.0.0.0',
-    `API_BASE_URL=http://${apiContainer}:4100`,
-    '-e',
-    'SITE_ORIGIN=https://smoke.invalid',
+    ...envFlags({
+      WEB_HOST: '0.0.0.0',
+      API_BASE_URL: `http://${apiContainer}:4100`,
+      SITE_ORIGIN: 'https://smoke.invalid',
+    }),
     image,
     'node',
     'dist/apps/web/src/server.js',
