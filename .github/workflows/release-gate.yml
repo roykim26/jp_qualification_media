@@ -58,3 +58,14 @@ jobs:
         run: pnpm ci:fixture:restore
       - name: Run the same release gate used locally
         run: pnpm release:check
+
+  docker-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Build the production image and smoke it
+        run: node scripts/docker-smoke.mjs
