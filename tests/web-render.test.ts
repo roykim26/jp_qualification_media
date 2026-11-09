@@ -8,6 +8,7 @@ import {
   renderComparePage,
   renderEditorialPage,
   renderGuideIndex,
+  renderHomePage,
   renderPassRateIndex,
   renderSchedulePage,
   renderUpdatesPage,
@@ -16,6 +17,7 @@ import {
 import {
   correctionsIssueUrl,
   editorialAboutPage,
+  editorialAboutSlugs,
   editorialComparisonPage,
   editorialGuidePage,
 } from '../apps/web/src/editorial.js';
@@ -660,6 +662,7 @@ describe('shared qualification page rendering', () => {
 
     for (const html of [directory, schedule, comparison]) {
       expect(html).toContain('<meta name="robots" content="noindex,follow">');
+      expect(html).not.toContain('application/ld+json');
     }
     expect(directory).toContain('<link rel="canonical" href="/shikaku/">');
     expect(schedule).toContain('<link rel="canonical" href="/schedule/">');
@@ -677,6 +680,56 @@ describe('shared qualification page rendering', () => {
     } finally {
       if (previousOrigin === undefined) delete process.env.SITE_ORIGIN;
       else process.env.SITE_ORIGIN = previousOrigin;
+    }
+  });
+
+  it('emits Open Graph, structured data and optional verification tags', () => {
+    const previousOrigin = process.env.SITE_ORIGIN;
+    const previousVerification = process.env.GOOGLE_SITE_VERIFICATION;
+    const previousAnalytics = process.env.GA_MEASUREMENT_ID;
+    process.env.SITE_ORIGIN = 'https://shikakucheck.com';
+    delete process.env.GOOGLE_SITE_VERIFICATION;
+    delete process.env.GA_MEASUREMENT_ID;
+    try {
+      const html = renderGuideIndex([]);
+      expect(html).toContain(
+        '<meta property="og:title" content="資格試験ガイド | 公式情報">',
+      );
+      expect(html).toContain(
+        '<meta property="og:site_name" content="資格試験の公式情報">',
+      );
+      expect(html).toContain(
+        '<meta property="og:url" content="https://shikakucheck.com/guide/">',
+      );
+      expect(html).toContain('<meta name="twitter:card" content="summary">');
+      expect(html).toContain('"@type":"WebPage"');
+      expect(html).toContain('"@type":"BreadcrumbList"');
+      expect(html).toContain('"name":"ホーム"');
+      expect(html).toContain('"item":"https://shikakucheck.com/"');
+      expect(html).not.toContain('google-site-verification');
+      expect(html).not.toContain('googletagmanager');
+      expect(renderHomePage()).toContain('"@type":"WebSite"');
+
+      process.env.GOOGLE_SITE_VERIFICATION = 'verification_token_123456';
+      process.env.GA_MEASUREMENT_ID = 'G-ABC12345';
+      const enabled = renderGuideIndex([]);
+      expect(enabled).toContain(
+        '<meta name="google-site-verification" content="verification_token_123456">',
+      );
+      expect(enabled).toContain(
+        'https://www.googletagmanager.com/gtag/js?id=G-ABC12345',
+      );
+
+      process.env.GA_MEASUREMENT_ID = 'G-"><script>alert(1)</script>';
+      expect(renderGuideIndex([])).not.toContain('googletagmanager');
+    } finally {
+      if (previousOrigin === undefined) delete process.env.SITE_ORIGIN;
+      else process.env.SITE_ORIGIN = previousOrigin;
+      if (previousVerification === undefined)
+        delete process.env.GOOGLE_SITE_VERIFICATION;
+      else process.env.GOOGLE_SITE_VERIFICATION = previousVerification;
+      if (previousAnalytics === undefined) delete process.env.GA_MEASUREMENT_ID;
+      else process.env.GA_MEASUREMENT_ID = previousAnalytics;
     }
   });
 
@@ -978,8 +1031,14 @@ describe('section content gating and discovery', () => {
     for (const href of [
       '/guide/',
       '/pass-rate/',
+      '/about/operator/',
       '/about/sources/',
       '/about/editorial-policy/',
+      '/about/ai-policy/',
+      '/about/privacy/',
+      '/about/terms/',
+      '/about/advertising-policy/',
+      '/about/contact/',
       '/about/corrections/',
     ])
       expect(html).toContain(`href="${href}"`);
@@ -998,6 +1057,34 @@ describe('section content gating and discovery', () => {
     expect(html).not.toContain('<meta name="robots"');
   });
 
+  it('publishes the legal and trust pages with unique titles', () => {
+    const legalSlugs = [
+      'operator',
+      'privacy',
+      'terms',
+      'advertising-policy',
+      'ai-policy',
+      'contact',
+    ];
+    const titles = legalSlugs.map((slug) => {
+      expect(editorialAboutSlugs).toContain(slug);
+      const page = editorialAboutPage(slug);
+      expect(page).toBeDefined();
+      const html = renderEditorialPage(page!, 'about', `/about/${slug}/`);
+      expect(html).toContain(`<link rel="canonical" href="/about/${slug}/">`);
+      expect(html).not.toContain('<meta name="robots"');
+      return page!.title;
+    });
+    expect(new Set(titles).size).toBe(legalSlugs.length);
+    expect(
+      renderEditorialPage(
+        editorialAboutPage('contact')!,
+        'about',
+        '/about/contact/',
+      ),
+    ).toContain(`href="${correctionsIssueUrl}"`);
+  });
+
   it('renders the pass-rate index only for qualifications with data', () => {
     const html = renderPassRateIndex([
       {
@@ -1011,5 +1098,71 @@ describe('section content gating and discovery', () => {
     expect(renderPassRateIndex([])).toContain(
       '公開できる合格率データはまだありません',
     );
+  });
+});
+
+describe('home page data modules', () => {
+  const examEvent = (
+    id: string,
+    dateValue: string,
+    label: string,
+    sequence: number,
+  ) => ({
+    id,
+    type: 'exam_date' as const,
+    label,
+    qualification: itPassport,
+    examYear: 2999,
+    displayValue: dateValue,
+    dateValue,
+    startValue: null,
+    factKey: 'exam_date',
+    verifiedAt: '2026-01-01T00:00:00.000Z',
+    sequence,
+  });
+
+  it('lists upcoming schedule entries in date order', () => {
+    const html = renderHomePage([
+      examEvent('event:later', '2999-04-01', '申込締切', 1),
+      examEvent('event:past', '2000-01-01', '試験日', 1),
+      examEvent('event:sooner', '2999-03-01', '試験日', 1),
+    ]);
+    expect(html).toContain('href="/shikaku/it-passport/2999/"');
+    expect(html).toContain('2999年3月1日');
+    expect(html).not.toContain('2000年1月1日');
+    expect(html.indexOf('2999年3月1日')).toBeLessThan(
+      html.indexOf('2999年4月1日'),
+    );
+    expect(html).toContain('あと');
+    expect(html).not.toContain('公式確認済みの日程を一覧で確認');
+  });
+
+  it('lists recent updates and falls back to empty states', () => {
+    const html = renderHomePage(
+      [],
+      [
+        {
+          id: 'update:1',
+          eventType: 'schedule_change',
+          eventLabel: '日程の変更',
+          qualification: itPassport,
+          factKey: 'exam_date',
+          factLabel: '試験日',
+          examYear: 2999,
+          previousValue: '2999-03-01',
+          newValue: '2999-03-02',
+          affectedPages: ['/shikaku/it-passport/'],
+          createdAt: '2026-10-01T00:00:00.000Z',
+          verifiedAt: '2026-10-01T00:00:00.000Z',
+        },
+      ],
+    );
+    expect(html).toContain('日程の変更');
+    expect(html).toContain('href="/updates/?qualification=it-passport"');
+    expect(html).toContain('公式確認済みの日程を一覧で確認');
+
+    const empty = renderHomePage();
+    expect(empty).toContain('更新情報はまだありません');
+    expect(empty).toContain('href="/schedule/"');
   });
 });
