@@ -82,6 +82,101 @@ pnpm release:check
 
 采集、候选入库、审核批准是三次独立授权，逐段需要项目所有者明示批准，抓取授权不包含后两者。各资格的入口脚本与环境变量开关记录在对应的 `docs/<qualification>-source-contract.md`，总则见 `docs/data-gate-semantics.md` 第 8 节。
 
+## 事实与来源过期检查（只读）
+
+用途：按每条事实的 `verified_at` 年龄和来源的最近快照时间，列出「该重新核对哪些事实、哪些来源该重新抓」，用来决定下一轮复查先看哪个资格、哪个字段。它只输出清单，不判断内容对错，也不改任何数据。
+
+前提：
+
+- 设置 `DATABASE_URL` 指向要检查的库（本机开发库，或生产库的只读副本都可以）。
+- 账号只需要读权限。脚本只发一条 `SELECT`，并在 `BEGIN READ ONLY` 事务内执行；仍建议用只读账号，免得将来改脚本时把只读当成唯一的保险。
+- 连接超时为 5 秒。没设 `DATABASE_URL` 时脚本不建立任何连接，直接输出 `not_run`。
+
+整条复制执行（PowerShell，一行）：
+
+```powershell
+$env:DATABASE_URL="postgresql://qualification_dev:qualification_dev@127.0.0.1:5432/qualification_media"; npm run data:staleness
+```
+
+Git Bash / WSL 用同一件事的另一种写法：
+
+```bash
+DATABASE_URL="postgresql://qualification_dev:qualification_dev@127.0.0.1:5432/qualification_media" npm run data:staleness
+```
+
+输出字段（`status` 为 `ok` 时）：
+
+| 字段                              | 含义                                                                                      |
+| --------------------------------- | ----------------------------------------------------------------------------------------- |
+| `status`                          | `ok`＝已连库并检查完成；`not_run`＝未设 `DATABASE_URL`；`error`＝查询失败                 |
+| `checkedAt`                       | 本次检查时刻（UTC ISO 格式）                                                              |
+| `referenceYear`                   | 当前 JST 年份，用于判断哪些事实算「历年」                                                 |
+| `windowsDays`                     | 本次使用的过期窗口：`fee` 90、`eligibility` 180、`annual` 365、`sourceLink` 7（单位：天） |
+| `summary.approvedFacts`           | 命中口径的已批准非合成事实总数（含被跳过的历年记录）                                      |
+| `summary.historicalSkipped`       | `exam_year` 小于 `referenceYear` 而被跳过的条数                                           |
+| `summary.checked`                 | 实际参与过期判断的条数（＝ `approvedFacts` − `historicalSkipped`）                        |
+| `summary.dueFacts`                | 超过窗口的事实条数，等于 `dueFacts` 数组长度                                              |
+| `summary.sourcesBehindOnSnapshot` | 最近快照超过 7 天、或从未抓取的来源数，等于 `dueSources` 数组长度                         |
+| `dueFacts[]`                      | 过期事实明细，见下                                                                        |
+| `dueSources[]`                    | 快照滞后的来源明细，见下                                                                  |
+
+`dueFacts` 每项：`factId`、`qualification`（资格 slug）、`examYear`、`factKey`、`displayValue`（当前展示值）、`verifiedAt`、`ageDays`（距今天数）、`windowDays`（该字段的窗口）、`reason`（`fee` / `eligibility` / `statistics` / `annual`）。数组按 `ageDays ÷ windowDays` 从大到小排序，超期比例最高的排最前。
+
+`dueSources` 每项：`sourceId`、`canonicalUrl`、`lastSnapshotAt`（从未抓取为 `null`）、`ageDays`（从未抓取为 `null`）。数组按 `ageDays` 从大到小排序，从未抓取的排最前。
+
+结构示意（占位值，不是实测读数）：
+
+```json
+{
+  "status": "ok",
+  "checkedAt": "2026-11-09T00:00:00.000Z",
+  "referenceYear": 2026,
+  "windowsDays": {
+    "fee": 90,
+    "eligibility": 180,
+    "annual": 365,
+    "sourceLink": 7
+  },
+  "summary": {
+    "approvedFacts": 0,
+    "historicalSkipped": 0,
+    "checked": 0,
+    "dueFacts": 0,
+    "sourcesBehindOnSnapshot": 0
+  },
+  "dueFacts": [],
+  "dueSources": []
+}
+```
+
+窗口与跳过规则：
+
+- 事实年龄从 `verified_at` 起算，按整天向下取整；严格大于窗口才算过期，恰好等于窗口不算；`verified_at` 为空的事实不判过期。
+- 费用类（`fee`、`fee_*`、`payment_method`、`payment_deadline_rule`）90 天；报考资格类（`eligibility`、`eligibility_*`、`application_rule`、`application_change_deadline_rule`）180 天；统计类（`pass_rate`、`pass_rate_*`、`applicants`、`examinees`、`passed`、`statistics_methodology`）365 天，输出里 `reason` 记作 `statistics`；其余所有字段默认 365 天，`reason` 记作 `annual`。
+- `exam_year` 小于当前 JST 年份的记录整条跳过：不计入 `dueFacts`，其来源也不参与 `dueSources` 判定。
+- 来源按该来源最近一条快照的 `retrieved_at` 判断，没有快照或超过 7 天就进 `dueSources`；同一来源只出一行。
+- 统计口径只包含 `facts`、当前 revision、`candidate_facts` 三者均为 `approved` 且候选 `synthetic=false` 的事实。这三层过滤与公开 API 相同，但脚本**不**要求 `source_snapshot_id` 非空，也不把快照是否 `ci://` 或 synthetic 计入，所以条数可能略多于公开页面上可见的事实。
+
+无库时的预期输出（本机未设 `DATABASE_URL`，2026-11-09 实测）：
+
+```json
+{
+  "status": "not_run",
+  "reason": "DATABASE_URL is required for read-only staleness check"
+}
+```
+
+EXIT=0。这是「本机没有库」时的正常形态，不代表检查失败，也不代表数据过期数为 0。
+
+注意：若设了 `DATABASE_URL` 但库连不上（服务没起、端口不通），脚本会在建连处直接抛出未捕获异常并打印 Node 栈，EXIT=1，**不会**输出 `status: error` 的 JSON。判读时认 `ECONNREFUSED` 即可；`status: error` 只出现在连上库之后查询报错的情况。
+
+边界：
+
+- 只读。全程只有一条 `SELECT` 包在 `BEGIN READ ONLY` 里，不建表、不写 `source_checks`、不改 `verified_at`、不写 `snapshots`。
+- 不触发采集。不调用采集器，也不发任何外部 HTTP 请求；`canonicalUrl` 只是从库里原样打印出来的字符串。
+- 不参与门禁。结果不进 `release:check`；即使有到期项也仍以 EXIT=0 结束（只有连上库后查询失败才是 EXIT=1），到期项要不要处理由人工判断。
+- 「过期」只是时间阈值，不等于内容已错。是否真需要改，仍以对应 `docs/<qualification>-source-contract.md` 和官方原文为准。
+
 ## 生产部署（VPS，web+API 公开面）
 
 上线范围＝公开站（web）＋公开 API＋PostgreSQL＋Caddy 自动 HTTPS。admin 与采集链不在 VPS 上运行（admin 写侧只有 `x-reviewer-id` 头一种弱鉴权，绝不能暴露公网；采集继续在开发机本机跑）。
