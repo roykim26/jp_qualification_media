@@ -351,8 +351,22 @@ const server = createServer(async (req, res) => {
       return res.end(renderQualificationSectionPage(view, section, year));
     }
     if (pathname === '/') {
+      // The home page keeps its static entry points even when the API is
+      // unavailable, so a data outage degrades to empty modules instead of 502.
+      const [calendarResult, updatesResult] = await Promise.allSettled([
+        readCalendar(new URLSearchParams()),
+        readUpdates(new URLSearchParams(), 1),
+      ]);
+      const calendarEvents =
+        calendarResult.status === 'fulfilled'
+          ? (calendarResult.value.data ?? [])
+          : [];
+      const updateEvents =
+        updatesResult.status === 'fulfilled'
+          ? (updatesResult.value.data ?? [])
+          : [];
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
-      return res.end(renderHomePage());
+      return res.end(renderHomePage(calendarEvents, updateEvents));
     }
     res.writeHead(404, { 'content-type': 'text/html; charset=utf-8' });
     return res.end(renderNotFoundPage());
