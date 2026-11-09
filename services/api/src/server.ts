@@ -3,7 +3,10 @@ import {
   launchQualifications,
   searchQualifications,
 } from '../../../packages/schema/src/qualifications.js';
-import { buildPublicCalendarEvents } from '../../../packages/schema/src/calendar.js';
+import {
+  buildPublicCalendarEvents,
+  type PublicCalendarEvent,
+} from '../../../packages/schema/src/calendar.js';
 import { buildCalendarIcs } from '../../../packages/schema/src/ics.js';
 import {
   buildQualificationComparison,
@@ -21,6 +24,13 @@ import { buildPublicQualificationView } from './public-view.js';
 
 export const app = Fastify({ logger: false });
 export const takkenPipeline = new TakkenPipeline();
+
+const calendarEventTypes: readonly PublicCalendarEvent['type'][] = [
+  'application_open',
+  'application_deadline',
+  'exam_date',
+  'result_date',
+];
 
 function boundedQueryInteger(
   value: string | undefined,
@@ -96,6 +106,46 @@ app.get<{
       'content-disposition',
       `attachment; filename="${qualification.slug}-${year}${suffix}.ics"`,
     )
+    .send(body);
+});
+app.get<{
+  Params: { month: string };
+  Querystring: { qualification?: string; type?: string };
+}>('/api/v1/ics/month/:month', async (request, reply) => {
+  const monthMatch = request.params.month.match(/^(\d{4})-(0[1-9]|1[0-2])$/);
+  if (!monthMatch) return reply.code(404).send({ error: 'not found' });
+  const qualification = request.query.qualification
+    ? launchQualifications.find(
+        (item) => item.slug === request.query.qualification,
+      )
+    : undefined;
+  if (request.query.qualification && !qualification)
+    return reply.code(404).send({ error: 'not found' });
+  const type = calendarEventTypes.find((value) => value === request.query.type);
+  if (request.query.type && !type)
+    return reply.code(404).send({ error: 'not found' });
+  const facts = await readApprovedFacts(
+    config.databaseUrl,
+    qualification?.slug,
+  );
+  const events = buildPublicCalendarEvents(
+    qualification ? [qualification] : launchQualifications,
+    facts,
+  ).filter(
+    (event) =>
+      event.dateValue?.startsWith(request.params.month) &&
+      (!type || event.type === type),
+  );
+  const [year, month] = monthMatch.slice(1);
+  const body = buildCalendarIcs(
+    events,
+    `${qualification ? `${qualification.officialNameJa} ` : ''}${year}年${Number(month)}月の試験日程`,
+  );
+  if (!body) return reply.code(404).send({ error: 'calendar not available' });
+  const filename = `${qualification ? `${qualification.slug}-` : 'schedule-'}${request.params.month}.ics`;
+  return reply
+    .header('content-type', 'text/calendar; charset=utf-8')
+    .header('content-disposition', `attachment; filename="${filename}"`)
     .send(body);
 });
 app.get<{ Querystring: { qualifications?: string; q?: string } }>(

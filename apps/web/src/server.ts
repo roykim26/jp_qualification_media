@@ -1,4 +1,4 @@
-import { createServer } from 'node:http';
+import { createServer, type ServerResponse } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import {
   renderComparePage,
@@ -106,6 +106,29 @@ function parseUpdatesPage(value: string | null): number {
     : 1;
 }
 
+async function proxyIcs(apiPath: string, res: ServerResponse) {
+  const response = await fetch(`${apiBaseUrl}${apiPath}`);
+  if (!response.ok) {
+    const notFound = response.status === 404;
+    res.writeHead(notFound ? 404 : 502, {
+      'content-type': 'text/html; charset=utf-8',
+    });
+    res.end(notFound ? renderNotFoundPage() : renderErrorPage());
+    return;
+  }
+  const body = Buffer.from(await response.arrayBuffer());
+  res.writeHead(response.status, {
+    'content-type':
+      response.headers.get('content-type') ?? 'text/calendar; charset=utf-8',
+    ...(response.headers.get('content-disposition')
+      ? {
+          'content-disposition': response.headers.get('content-disposition')!,
+        }
+      : {}),
+  });
+  res.end(body);
+}
+
 const server = createServer(async (req, res) => {
   try {
     const url = new URL(req.url ?? '/', 'http://127.0.0.1');
@@ -126,6 +149,7 @@ const server = createServer(async (req, res) => {
     const icsMatch = pathname.match(
       /^\/ics\/([^/]+)\/(\d{4})(?:\/([^/]+))?\.ics$/,
     );
+    const monthIcsMatch = pathname.match(/^\/ics\/month\/(\d{4}-\d{2})\.ics$/);
     const routeMatch = pathname.match(
       /^\/shikaku\/([^/]+)(?:\/(application|exam-content|pass-rate|\d{4}))?\/?$/,
     );
@@ -172,31 +196,16 @@ const server = createServer(async (req, res) => {
         ),
       );
     }
+    if (monthIcsMatch) {
+      return proxyIcs(
+        `/api/v1/ics/month/${monthIcsMatch[1]}${url.search}`,
+        res,
+      );
+    }
     if (icsMatch) {
       const [, qualification, year, eventId] = icsMatch;
       const apiPath = `/api/v1/ics/${qualification}/${year}${eventId ? `/${eventId}` : ''}`;
-      const response = await fetch(`${apiBaseUrl}${apiPath}`);
-      if (!response.ok) {
-        const notFound = response.status === 404;
-        res.writeHead(notFound ? 404 : 502, {
-          'content-type': 'text/html; charset=utf-8',
-        });
-        return res.end(notFound ? renderNotFoundPage() : renderErrorPage());
-      }
-      const body = Buffer.from(await response.arrayBuffer());
-      res.writeHead(response.status, {
-        'content-type':
-          response.headers.get('content-type') ??
-          'text/calendar; charset=utf-8',
-        ...(response.headers.get('content-disposition')
-          ? {
-              'content-disposition': response.headers.get(
-                'content-disposition',
-              )!,
-            }
-          : {}),
-      });
-      return res.end(body);
+      return proxyIcs(apiPath, res);
     }
     if (pathname === '/shikaku' || pathname === '/shikaku/') {
       const query = url.searchParams.get('q') ?? '';

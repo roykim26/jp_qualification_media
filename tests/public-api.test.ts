@@ -327,6 +327,24 @@ describe('public qualification read path', () => {
     expect(response.json()).toEqual({ error: 'calendar not available' });
   });
 
+  it('validates month ICS requests before building a calendar', async () => {
+    for (const url of [
+      '/api/v1/ics/month/2026-13',
+      '/api/v1/ics/month/2026-11?qualification=unknown',
+      '/api/v1/ics/month/2026-11?type=unknown',
+    ]) {
+      const response = await app.inject({ method: 'GET', url });
+      expect(response.statusCode).toBe(404);
+      expect(response.json()).toEqual({ error: 'not found' });
+    }
+    const empty = await app.inject({
+      method: 'GET',
+      url: '/api/v1/ics/month/2026-11',
+    });
+    expect(empty.statusCode).toBe(404);
+    expect(empty.json()).toEqual({ error: 'calendar not available' });
+  });
+
   it('builds a qualification comparison from the newest approved facts', () => {
     const comparison = buildQualificationComparison(
       launchQualifications,

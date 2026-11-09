@@ -1209,11 +1209,24 @@ export function renderSchedulePage(
     if (last?.key === key) last.items.push(event);
     else monthGroups.push({ key, label, items: [event] });
   }
+  const monthIcsQuery = new URLSearchParams();
+  if (options.qualification)
+    monthIcsQuery.set('qualification', options.qualification);
+  if (options.type) monthIcsQuery.set('type', options.type);
+  const monthIcsSuffix = monthIcsQuery.size ? `?${monthIcsQuery}` : '';
   const groupedEvents = monthGroups
-    .map(
-      (group) =>
-        `<section class="schedule-month" aria-label="${escapeHtml(group.label)}"><h3>${escapeHtml(group.label)}</h3><div class="schedule-list">${group.items.map(renderEvent).join('')}</div></section>`,
-    )
+    .map((group) => {
+      const monthIcs =
+        group.key === 'undated'
+          ? ''
+          : renderButtonLink({
+              href: `/ics/month/${group.key}.ics${monthIcsSuffix}`,
+              label: `${group.label}のICSを追加`,
+              variant: 'tertiary',
+              icon: 'calendar',
+            });
+      return `<section class="schedule-month" aria-label="${escapeHtml(group.label)}"><div class="schedule-month__heading"><h3>${escapeHtml(group.label)}</h3>${monthIcs}</div><div class="schedule-list">${group.items.map(renderEvent).join('')}</div></section>`;
+    })
     .join('');
   const annualIcs =
     options.year &&
