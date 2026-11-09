@@ -96,9 +96,12 @@ export const webStyles = String.raw`
 .verification-history time { color: var(--color-text-secondary); font-weight: 600; font-variant-numeric: tabular-nums; }
 .verification-history li span { color: var(--color-muted); }
 .section-heading { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: var(--space-4); margin-bottom: var(--space-6); }
-.schedule-filter { display: grid; grid-template-columns: minmax(160px, 220px) minmax(220px, 1fr) auto; gap: var(--space-4); align-items: end; margin-bottom: var(--space-8); padding: var(--space-5); border: 1px solid var(--color-border); border-radius: var(--radius-card); background: var(--color-surface); }
+.schedule-filter { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)) auto; gap: var(--space-4); align-items: end; margin-bottom: var(--space-8); padding: var(--space-5); border: 1px solid var(--color-border); border-radius: var(--radius-card); background: var(--color-surface); }
 .schedule-filter__actions { display: flex; gap: var(--space-3); }
 .schedule-filter__actions .button { white-space: nowrap; }
+.schedule-month { display: grid; gap: var(--space-4); margin-bottom: var(--space-8); }
+.schedule-month:last-child { margin-bottom: 0; }
+.schedule-month h3 { margin: 0; padding-bottom: var(--space-2); border-bottom: 1px solid var(--color-border); color: var(--color-ink); font-size: 18px; }
 .schedule-list { display: grid; gap: var(--space-4); }
 .schedule-event { display: grid; grid-template-columns: minmax(160px, auto) minmax(0, 1fr); gap: var(--space-5); padding: var(--space-5); border: 1px solid var(--color-border); border-radius: var(--radius-card); background: var(--color-surface); }
 .schedule-event time { color: var(--color-ink); font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; }
@@ -175,6 +178,8 @@ export const webStyles = String.raw`
   .tool-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .detail-layout { grid-template-columns: minmax(0, 5fr) minmax(240px, 3fr); gap: var(--space-5); }
   .facts { grid-template-columns: minmax(0, 1fr); }
+  .schedule-filter { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .schedule-filter__actions { grid-column: 1 / -1; }
 }
 
 @media (max-width: 767px) {
