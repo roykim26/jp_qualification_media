@@ -404,6 +404,151 @@ describe('shared qualification page rendering', () => {
     expect(html).not.toContain('undefined');
   });
 
+  it('filters schedule events by type and marks the page noindex', () => {
+    const takken = launchQualifications.find((item) => item.slug === 'takken')!;
+    const today = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Tokyo',
+    }).format(new Date());
+    const shift = (days: number): string => {
+      const date = new Date(`${today}T00:00:00Z`);
+      date.setUTCDate(date.getUTCDate() + days);
+      return date.toISOString().slice(0, 10);
+    };
+    const event = (
+      id: string,
+      type: 'exam_date' | 'application_deadline',
+      dateValue: string,
+    ) => ({
+      id,
+      type,
+      label: type === 'exam_date' ? '試験日' : '申込締切',
+      qualification: takken,
+      examYear: 2026,
+      displayValue: dateValue,
+      dateValue,
+      startValue: null,
+      factKey: type,
+      verifiedAt: '2026-01-01T00:00:00.000Z',
+      sequence: 0,
+    });
+    const examDate = shift(45);
+    const deadline = shift(20);
+    const html = renderSchedulePage(
+      [
+        event('takken:2026:exam_date', 'exam_date', examDate),
+        event(
+          'takken:2026:application_deadline',
+          'application_deadline',
+          deadline,
+        ),
+      ],
+      { type: 'application_deadline' },
+    );
+    expect(html).toContain(deadline);
+    expect(html).not.toContain(examDate);
+    expect(html).toContain('selected>申込締切');
+    expect(html).toContain('絞り込み後 1件');
+    expect(html).toContain('<meta name="robots" content="noindex,follow">');
+  });
+
+  it('limits schedule events to the next 30 days', () => {
+    const takken = launchQualifications.find((item) => item.slug === 'takken')!;
+    const today = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Tokyo',
+    }).format(new Date());
+    const shift = (days: number): string => {
+      const date = new Date(`${today}T00:00:00Z`);
+      date.setUTCDate(date.getUTCDate() + days);
+      return date.toISOString().slice(0, 10);
+    };
+    const event = (id: string, dateValue: string) => ({
+      id,
+      type: 'exam_date' as const,
+      label: '試験日',
+      qualification: takken,
+      examYear: 2026,
+      displayValue: dateValue,
+      dateValue,
+      startValue: null,
+      factKey: 'exam_date',
+      verifiedAt: '2026-01-01T00:00:00.000Z',
+      sequence: 0,
+    });
+    const near = shift(10);
+    const far = shift(200);
+    const html = renderSchedulePage(
+      [event('event:near', near), event('event:far', far)],
+      { range: '30' },
+    );
+    expect(html).toContain(near);
+    expect(html).not.toContain(far);
+    expect(html).toContain('selected>今後30日');
+  });
+
+  it('groups schedule events by month in date order', () => {
+    const takken = launchQualifications.find((item) => item.slug === 'takken')!;
+    const today = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Tokyo',
+    }).format(new Date());
+    const shift = (days: number): string => {
+      const date = new Date(`${today}T00:00:00Z`);
+      date.setUTCDate(date.getUTCDate() + days);
+      return date.toISOString().slice(0, 10);
+    };
+    const event = (id: string, dateValue: string) => ({
+      id,
+      type: 'exam_date' as const,
+      label: '試験日',
+      qualification: takken,
+      examYear: 2026,
+      displayValue: dateValue,
+      dateValue,
+      startValue: null,
+      factKey: 'exam_date',
+      verifiedAt: '2026-01-01T00:00:00.000Z',
+      sequence: 0,
+    });
+    const first = shift(5);
+    const second = shift(40);
+    const label = (dateValue: string) =>
+      `${Number(dateValue.slice(0, 4))}年${Number(dateValue.slice(5, 7))}月`;
+    const html = renderSchedulePage([
+      event('event:second', second),
+      event('event:first', first),
+    ]);
+    expect(html).toContain('class="schedule-month"');
+    expect(html).toContain(label(first));
+    expect(html).toContain(label(second));
+    expect(html.indexOf(label(first))).toBeLessThan(
+      html.indexOf(label(second)),
+    );
+  });
+
+  it('shows the filtered empty state when no schedule event matches', () => {
+    const takken = launchQualifications.find((item) => item.slug === 'takken')!;
+    const html = renderSchedulePage(
+      [
+        {
+          id: 'takken:2026:exam_date',
+          type: 'exam_date',
+          label: '試験日',
+          qualification: takken,
+          examYear: 2026,
+          displayValue: '2026年10月18日',
+          dateValue: '2026-10-18',
+          startValue: null,
+          factKey: 'exam_date',
+          verifiedAt: '2026-01-01T00:00:00.000Z',
+          sequence: 0,
+        },
+      ],
+      { type: 'result_date' },
+    );
+    expect(html).toContain('条件に一致する日程はありません');
+    expect(html).toContain('絞り込み後 0件');
+    expect(html).toContain('href="/schedule/"');
+  });
+
   it('renders the compare selector and selected qualification table', () => {
     const takken = launchQualifications.find((item) => item.slug === 'takken')!;
     const itPassport = launchQualifications.find(

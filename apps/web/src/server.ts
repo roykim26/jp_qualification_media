@@ -229,6 +229,8 @@ const server = createServer(async (req, res) => {
         renderSchedulePage(calendar.data, {
           year: url.searchParams.get('year') ?? undefined,
           qualification: url.searchParams.get('qualification') ?? undefined,
+          type: url.searchParams.get('type') ?? undefined,
+          range: url.searchParams.get('range') ?? undefined,
         }),
       );
     }

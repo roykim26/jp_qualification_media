@@ -160,6 +160,19 @@ const eventTone: Record<PublicCalendarEvent['type'], string> = {
   result_date: '発表',
 };
 
+const scheduleTypeLabels: Record<PublicCalendarEvent['type'], string> = {
+  application_open: '申込開始',
+  application_deadline: '申込締切',
+  exam_date: '試験日',
+  result_date: '合格発表',
+};
+
+function addDays(dateValue: string, days: number): string {
+  const date = new Date(`${dateValue}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
 function fieldLabel(value: string): string {
   return fieldLabels[value] ?? value;
 }
@@ -1091,9 +1104,16 @@ export function renderQualificationDirectory(
   });
 }
 
+export type SchedulePageQuery = {
+  year?: string;
+  qualification?: string;
+  type?: string;
+  range?: string;
+};
+
 export function renderSchedulePage(
   events: PublicCalendarEvent[],
-  query: { year?: string; qualification?: string } = {},
+  query: SchedulePageQuery = {},
 ): string {
   const years = [...new Set(events.map((event) => event.examYear))].sort(
     (left, right) => right - left,
@@ -1105,38 +1125,95 @@ export function renderSchedulePage(
   ].sort((left, right) =>
     left.officialNameJa.localeCompare(right.officialNameJa, 'ja-JP'),
   );
+  const activeType =
+    query.type && Object.hasOwn(scheduleTypeLabels, query.type)
+      ? (query.type as PublicCalendarEvent['type'])
+      : '';
+  const activeRange =
+    query.range === '30' || query.range === '90' ? query.range : '';
+  const today = tokyoToday();
+  const rangeEnd = activeRange
+    ? addDays(today, Number(activeRange))
+    : undefined;
+  const visibleEvents = events.filter((event) => {
+    if (activeType && event.type !== activeType) return false;
+    if (rangeEnd)
+      return Boolean(
+        event.dateValue &&
+        event.dateValue >= today &&
+        event.dateValue <= rangeEnd,
+      );
+    return true;
+  });
+  const orderedEvents = [...visibleEvents].sort((left, right) =>
+    (left.dateValue ?? '9999-12-31').localeCompare(
+      right.dateValue ?? '9999-12-31',
+    ),
+  );
   const options = {
     year: query.year ?? '',
     qualification: query.qualification ?? '',
+    type: activeType,
+    range: activeRange,
   };
-  const filters = `<form class="schedule-filter" action="/schedule/" method="get"><div class="field"><label for="schedule-year">年度</label><select id="schedule-year" name="year"><option value="">すべて</option>${years.map((year) => `<option value="${year}"${String(year) === options.year ? ' selected' : ''}>${year}年</option>`).join('')}</select></div><div class="field"><label for="schedule-qualification">資格</label><select id="schedule-qualification" name="qualification"><option value="">すべて</option>${qualifications.map((qualification) => `<option value="${escapeHtml(qualification.slug)}"${qualification.slug === options.qualification ? ' selected' : ''}>${escapeHtml(qualification.officialNameJa)}</option>`).join('')}</select></div><div class="schedule-filter__actions"><button class="button button--primary" type="submit">${renderIcon('calendar')}<span>絞り込む</span></button>${options.year || options.qualification ? renderButtonLink({ href: '/schedule/', label: 'クリア', variant: 'secondary', icon: 'close' }) : ''}</div></form>`;
-  const eventCards = events
-    .map((event) => {
-      const dimensions = [
-        event.providerId,
-        event.examLevelId,
-        event.examComponent,
-        event.deliveryMode,
-      ]
-        .filter(Boolean)
-        .map(
-          (value) =>
-            `<span class="dimension">${escapeHtml(dimensionLabel(String(value)))}</span>`,
-        )
-        .join('');
-      const source = event.sourceUrl
-        ? `<a href="${escapeHtml(event.sourceUrl)}" target="_blank" rel="noreferrer">公式ソース</a>`
-        : `<span>出典: ${escapeHtml(event.factKey)}</span>`;
-      const eventIcs = event.dateValue
-        ? renderButtonLink({
-            href: `/ics/${event.qualification.slug}/${event.examYear}/${encodeURIComponent(event.id)}.ics`,
-            label: 'この予定をICSで追加',
-            variant: 'tertiary',
-            icon: 'calendar',
-          })
-        : '';
-      return `<article class="schedule-event"><time datetime="${escapeHtml(event.dateValue ?? '')}">${escapeHtml(formatCalendarDate(event.dateValue))}</time><div><div class="schedule-event__heading"><span class="schedule-event__type">${escapeHtml(eventTone[event.type])}</span><h2><a href="/shikaku/${escapeHtml(event.qualification.slug)}/${event.examYear}/">${escapeHtml(event.qualification.officialNameJa)}</a></h2></div><p class="schedule-event__value">${escapeHtml(event.displayValue)}</p>${dimensions ? `<div class="dimensions">${dimensions}</div>` : ''}<p class="meta">${event.examYear}年 / ${escapeHtml(event.label)} / 公式確認: ${escapeHtml(formatVerifiedAt(event.verifiedAt))} / ${source}</p>${eventIcs ? `<div class="schedule-event__actions">${eventIcs}</div>` : ''}</div></article>`;
-    })
+  const filtered = Boolean(
+    options.year || options.qualification || options.type || options.range,
+  );
+  const filters = `<form class="schedule-filter" action="/schedule/" method="get"><div class="field"><label for="schedule-year">年度</label><select id="schedule-year" name="year"><option value="">すべて</option>${years.map((year) => `<option value="${year}"${String(year) === options.year ? ' selected' : ''}>${year}年</option>`).join('')}</select></div><div class="field"><label for="schedule-qualification">資格</label><select id="schedule-qualification" name="qualification"><option value="">すべて</option>${qualifications.map((qualification) => `<option value="${escapeHtml(qualification.slug)}"${qualification.slug === options.qualification ? ' selected' : ''}>${escapeHtml(qualification.officialNameJa)}</option>`).join('')}</select></div><div class="field"><label for="schedule-type">日程の種類</label><select id="schedule-type" name="type"><option value="">すべて</option>${Object.entries(
+    scheduleTypeLabels,
+  )
+    .map(
+      ([value, label]) =>
+        `<option value="${value}"${value === options.type ? ' selected' : ''}>${escapeHtml(label)}</option>`,
+    )
+    .join(
+      '',
+    )}</select></div><div class="field"><label for="schedule-range">期間</label><select id="schedule-range" name="range"><option value="">すべての期間</option><option value="30"${options.range === '30' ? ' selected' : ''}>今後30日</option><option value="90"${options.range === '90' ? ' selected' : ''}>今後90日</option></select></div><div class="schedule-filter__actions"><button class="button button--primary" type="submit">${renderIcon('calendar')}<span>絞り込む</span></button>${filtered ? renderButtonLink({ href: '/schedule/', label: 'クリア', variant: 'secondary', icon: 'close' }) : ''}</div></form>`;
+  const renderEvent = (event: PublicCalendarEvent): string => {
+    const dimensions = [
+      event.providerId,
+      event.examLevelId,
+      event.examComponent,
+      event.deliveryMode,
+    ]
+      .filter(Boolean)
+      .map(
+        (value) =>
+          `<span class="dimension">${escapeHtml(dimensionLabel(String(value)))}</span>`,
+      )
+      .join('');
+    const source = event.sourceUrl
+      ? `<a href="${escapeHtml(event.sourceUrl)}" target="_blank" rel="noreferrer">公式ソース</a>`
+      : `<span>出典: ${escapeHtml(event.factKey)}</span>`;
+    const eventIcs = event.dateValue
+      ? renderButtonLink({
+          href: `/ics/${event.qualification.slug}/${event.examYear}/${encodeURIComponent(event.id)}.ics`,
+          label: 'この予定をICSで追加',
+          variant: 'tertiary',
+          icon: 'calendar',
+        })
+      : '';
+    return `<article class="schedule-event"><time datetime="${escapeHtml(event.dateValue ?? '')}">${escapeHtml(formatCalendarDate(event.dateValue))}</time><div><div class="schedule-event__heading"><span class="schedule-event__type">${escapeHtml(eventTone[event.type])}</span><h2><a href="/shikaku/${escapeHtml(event.qualification.slug)}/${event.examYear}/">${escapeHtml(event.qualification.officialNameJa)}</a></h2></div><p class="schedule-event__value">${escapeHtml(event.displayValue)}</p>${dimensions ? `<div class="dimensions">${dimensions}</div>` : ''}<p class="meta">${event.examYear}年 / ${escapeHtml(event.label)} / 公式確認: ${escapeHtml(formatVerifiedAt(event.verifiedAt))} / ${source}</p>${eventIcs ? `<div class="schedule-event__actions">${eventIcs}</div>` : ''}</div></article>`;
+  };
+  const monthGroups: {
+    key: string;
+    label: string;
+    items: PublicCalendarEvent[];
+  }[] = [];
+  for (const event of orderedEvents) {
+    const key = event.dateValue ? event.dateValue.slice(0, 7) : 'undated';
+    const label = event.dateValue
+      ? `${Number(key.slice(0, 4))}年${Number(key.slice(5, 7))}月`
+      : '日付未定';
+    const last = monthGroups.at(-1);
+    if (last?.key === key) last.items.push(event);
+    else monthGroups.push({ key, label, items: [event] });
+  }
+  const groupedEvents = monthGroups
+    .map(
+      (group) =>
+        `<section class="schedule-month" aria-label="${escapeHtml(group.label)}"><h3>${escapeHtml(group.label)}</h3><div class="schedule-list">${group.items.map(renderEvent).join('')}</div></section>`,
+    )
     .join('');
   const annualIcs =
     options.year &&
@@ -1144,13 +1221,37 @@ export function renderSchedulePage(
     events.some((event) => event.dateValue)
       ? `<div class="schedule-download">${renderButtonLink({ href: `/ics/${options.qualification}/${options.year}.ics`, label: `${options.year}年のICSをまとめてダウンロード`, variant: 'secondary', icon: 'calendar' })}</div>`
       : '';
-  const body = `<div class="container"><header class="page-heading"><p class="eyebrow">承認済み公式事実から集約</p><h1>試験日程</h1><p>申込開始、申込締切、試験日、合格発表を資格横断で確認できます。公式確認済みの事実だけを表示し、未確認日程は補完しません。</p></header>${filters}${annualIcs}<section class="page-section" aria-labelledby="schedule-heading"><div class="section-heading"><div><p class="eyebrow">重要日程</p><h2 id="schedule-heading">日程一覧</h2></div><p class="meta">${events.length}件</p></div>${events.length ? `<div class="schedule-list">${eventCards}</div>` : renderFeedbackState({ kind: 'empty', title: '表示できる公式日程はまだありません', body: '承認済みの申込日、試験日、合格発表日が登録されるとここに表示します。未確認の日付は掲載しません。', actions: renderButtonLink({ href: '/shikaku/', label: '資格一覧を見る', variant: 'secondary' }) })}</section></div>`;
+  const emptyState = filtered
+    ? renderFeedbackState({
+        kind: 'empty',
+        title: '条件に一致する日程はありません',
+        body: '絞り込み条件を変えるか、すべての日程を表示してください。未確認の日付は掲載しません。',
+        actions: renderButtonLink({
+          href: '/schedule/',
+          label: 'すべての日程を見る',
+          variant: 'secondary',
+        }),
+      })
+    : renderFeedbackState({
+        kind: 'empty',
+        title: '表示できる公式日程はまだありません',
+        body: '承認済みの申込日、試験日、合格発表日が登録されるとここに表示します。未確認の日付は掲載しません。',
+        actions: renderButtonLink({
+          href: '/shikaku/',
+          label: '資格一覧を見る',
+          variant: 'secondary',
+        }),
+      });
+  const countLabel = filtered
+    ? `絞り込み後 ${visibleEvents.length}件`
+    : `${visibleEvents.length}件`;
+  const body = `<div class="container"><header class="page-heading"><p class="eyebrow">承認済み公式事実から集約</p><h1>試験日程</h1><p>申込開始、申込締切、試験日、合格発表を資格横断で確認できます。公式確認済みの事実だけを表示し、未確認日程は補完しません。</p></header>${filters}${annualIcs}<section class="page-section" aria-labelledby="schedule-heading"><div class="section-heading"><div><p class="eyebrow">重要日程</p><h2 id="schedule-heading">日程一覧</h2></div><p class="meta">${countLabel}</p></div>${visibleEvents.length ? groupedEvents : emptyState}</section></div>`;
   return renderPublicDocument({
     title: '試験日程 | 公式情報',
     description: '公式確認済みの資格試験日程を一覧できます。',
     currentNav: 'schedule',
     canonicalPath: '/schedule/',
-    noindex: Boolean(options.year || options.qualification),
+    noindex: filtered,
     breadcrumbs: [{ label: 'ホーム', href: '/' }, { label: '試験日程' }],
     body,
   });
