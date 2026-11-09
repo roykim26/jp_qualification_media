@@ -522,6 +522,60 @@ describe('shared qualification page rendering', () => {
     expect(html.indexOf(label(first))).toBeLessThan(
       html.indexOf(label(second)),
     );
+    expect(html).toContain(`href="/ics/month/${first.slice(0, 7)}.ics"`);
+    expect(html).toContain(`${label(first)}のICSを追加`);
+  });
+
+  it('carries schedule filters into the month ICS link', () => {
+    const takken = launchQualifications.find((item) => item.slug === 'takken')!;
+    const today = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Tokyo',
+    }).format(new Date());
+    const date = new Date(`${today}T00:00:00Z`);
+    date.setUTCDate(date.getUTCDate() + 10);
+    const dateValue = date.toISOString().slice(0, 10);
+    const html = renderSchedulePage(
+      [
+        {
+          id: 'takken:2026:exam_date',
+          type: 'exam_date',
+          label: '試験日',
+          qualification: takken,
+          examYear: 2026,
+          displayValue: dateValue,
+          dateValue,
+          startValue: null,
+          factKey: 'exam_date',
+          verifiedAt: '2026-01-01T00:00:00.000Z',
+          sequence: 0,
+        },
+      ],
+      { qualification: 'takken', type: 'exam_date' },
+    );
+    expect(html).toContain(
+      `/ics/month/${dateValue.slice(0, 7)}.ics?qualification=takken&amp;type=exam_date`,
+    );
+  });
+
+  it('omits the month ICS link for undated schedule events', () => {
+    const takken = launchQualifications.find((item) => item.slug === 'takken')!;
+    const html = renderSchedulePage([
+      {
+        id: 'takken:2026:exam_schedule',
+        type: 'exam_date',
+        label: '試験日',
+        qualification: takken,
+        examYear: 2026,
+        displayValue: '随時実施',
+        dateValue: null,
+        startValue: null,
+        factKey: 'exam_schedule',
+        verifiedAt: '2026-01-01T00:00:00.000Z',
+        sequence: 0,
+      },
+    ]);
+    expect(html).toContain('日付未定');
+    expect(html).not.toContain('/ics/month/');
   });
 
   it('shows the filtered empty state when no schedule event matches', () => {

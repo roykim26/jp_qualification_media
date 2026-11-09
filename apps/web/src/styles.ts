@@ -101,7 +101,8 @@ export const webStyles = String.raw`
 .schedule-filter__actions .button { white-space: nowrap; }
 .schedule-month { display: grid; gap: var(--space-4); margin-bottom: var(--space-8); }
 .schedule-month:last-child { margin-bottom: 0; }
-.schedule-month h3 { margin: 0; padding-bottom: var(--space-2); border-bottom: 1px solid var(--color-border); color: var(--color-ink); font-size: 18px; }
+.schedule-month h3 { margin: 0; color: var(--color-ink); font-size: 18px; }
+.schedule-month__heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3); padding-bottom: var(--space-2); border-bottom: 1px solid var(--color-border); }
 .schedule-list { display: grid; gap: var(--space-4); }
 .schedule-event { display: grid; grid-template-columns: minmax(160px, auto) minmax(0, 1fr); gap: var(--space-5); padding: var(--space-5); border: 1px solid var(--color-border); border-radius: var(--radius-card); background: var(--color-surface); }
 .schedule-event time { color: var(--color-ink); font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; }
