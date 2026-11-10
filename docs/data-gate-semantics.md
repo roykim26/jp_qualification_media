@@ -114,7 +114,7 @@ Why：审核人 ID 放进 URL 就可被任意 `<img src=…>`、浏览器历史�
 - ⚠ **baseline 是「下限」不是「相等」**：`scripts/verify-lib.mjs:215` 判 `approved_official < expectedFacts` 为失败，API 侧同理比 `facts.length`。因此**抬高 baseline 必须与 CI 夹具同批改、同一个 PR 进 main**——只跑 `baseline:update` 不重导夹具，本机 `verify:all` 照样绿（本机有真数据），CI 必红在 `approved official 58 below regression floor 863`（夹具只有 58 条簿记）。2026-10-13 即按这条把 58 → 863 与夹具 176 → 981 一起提。
 - 更新基线：`RELEASE_BASELINE_CONFIRM=UPDATE_RELEASE_GATE_BASELINE` + `pnpm baseline:update -- --confirm=UPDATE_RELEASE_GATE_BASELINE`，双重确认，仅 localhost，仍有真实待审核候选时拒绝更新。
 - 重导夹具：`CI_FIXTURE_EXPORT_CONFIRM=EXPORT_SANITIZED_CI_FIXTURE` + `pnpm ci:fixture:export -- --confirm=...`（同样在非合成 `pending_review` 未清零时**直接拒绝**：`official candidates pending review: …`），然后 `pnpm ci:fixture:verify` 与 `pnpm release:check`。
-- 夹具现状（2026-10-13 重导后现取）：`fixtures/ci/approved-facts.sql` = **981 facts / 981 candidate_facts / 981 fact_revisions / 29 snapshots**，逐资格 16／15／2／10／863／75，文件 437,867 → 2,163,170 字节。**重导后必须同步改 `scripts/verify-ci-fixture.mjs` 第 9–12 行的四个硬编码断言**，否则得到 `ERR_ASSERTION actual:981 expected:176` 这类失败。
+- 夹具现状（2026-11-10 重导后现取；前值 981／FE 10）：`fixtures/ci/approved-facts.sql` = **982 facts / 982 candidate_facts / 982 fact_revisions / 29 snapshots**，逐资格 16／15／2／**11**／863／75，文件 2,165,394 字节。**重导后必须同步改 `scripts/verify-ci-fixture.mjs` 第 9–12 行的四个硬编码断言，以及 `scripts/docker-smoke.mjs` 的 982 冒烟断言**，否则得到 `ERR_ASSERTION actual:981 expected:176` 或 `expected 981 approved facts, got 982` 这类失败（后者在 2026-11-10 PR #58 首轮 CI 实际发生过）。
 - 夹具在 CI 空库落地的判据：CI 走 `db:migrate` + `db:seed` 再 `ci:fixture:restore`，所以夹具引用的每条 `source_id` 都必须由迁移登记。本机复刻库需要新建数据库（`CREATE DATABASE`），该动作属基础设施变更、不在批准轮授权面内 ⇒ 用静态比对替代：本轮夹具引用的 **23 条 `source_id` 全部命中迁移登记的 51 条**，缺失 0。
 - 夹具禁止出现的本地痕迹（同文件断言）：`local-reviewer`、`AppData`、`var/official-snapshots`、`E:\`、`C:\`、`INSERT INTO reviews`。
 - 事实数量基线禁止手工随意修改；改动必须能对应到「已审核完成的事实增减」。
@@ -134,7 +134,9 @@ Why：审核人 ID 放进 URL 就可被任意 `<img src=…>`、浏览器历史�
 | `npm run format:check`                                                             | 通过（EXIT=0）                                                                                                                                                                                                                                                                                                 |
 | `npm run lint`（`eslint .`）                                                       | ⚠ **本机 EXIT=1，但不是代码问题**：两条 parsing error 全来自根目录未跟踪的 `Python/pythoncore-3.15-*.deleteme/Lib/profiling/sampling/_flamegraph_assets/flamegraph.js`。`Python/` 按铁律既不提交也不删；CI 的 checkout 无此目录故照常绿。改动文件单测口径：`npx eslint scripts/verify-ci-fixture.mjs` EXIT=0。 |
 
-正式事实总数 **981**：takken 16、gyoseishoshi 15、it-passport 2、fundamental-it-engineer 10、bookkeeping **863**、fp 75（2026-10-13 統一表 772 条批准落地后的现取值；176 是 10-12 的旧时点数）。覆盖缺口 **0**。
+正式事实总数 **982**：takken 16、gyoseishoshi 15、it-passport 2、fundamental-it-engineer **11**、bookkeeping **863**、fp 75（2026-11-10 现取值；981／FE 10 是 2026-10-13 的旧时点数）。覆盖缺口 **0**。
+
+2026-11-10 现取（FE 停考轮，非纯文档）：`npm run build` EXIT=0、`npx vitest run --dir tests` **12 文件／120 用例**、`npm run test:verify-gate` **10/10**、`npm run verify:all` **passed 6/6**（FE `facts=11`、pending 0、gaps 0）、`npm run ci:fixture:verify` **982/982/982/29** EXIT=0、`node scripts/check-staleness.mjs` `status=ok`／`approvedFacts=982`。⚠ pytest 全量本轮未重跑，只跑了 `tests/test_fundamental_it_contract.py`（11 passed）；本机 `smoke:docker` 因拉 `node:24-slim` 时 `auth.docker.io` 超时未跑通（重试 1 次仍失败），docker 冒烟证据取自 CI。
 
 推荐在改动 baseline 或夹具后跑一次 CI 复刻：新建一次性临时库 → migrate → seed → `node scripts/restore-ci-db-fixture.mjs` → `verify-all.mjs` → `node scripts/verify-ci-fixture.mjs`；删临时库需项目所有者明示授权，且先确认 `pg_stat_activity` 连接数为 0。⚠ 本会话实测 `docker compose exec -T postgres psql -c "CREATE DATABASE …"` 会被自动模式按「基础设施变更」拦下，故 2026-10-13 改用静态判据替代：核对夹具引用的 `source_id` 全集是否都由迁移登记（本轮 23 条全部命中，缺失 0），CI 的 `db:migrate` 后外键必成立。
 
