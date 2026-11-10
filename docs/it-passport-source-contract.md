@@ -66,7 +66,7 @@
 - 测试夹具位于 `fixtures/official-snapshots/it-passport-*.html`，均为 synthetic 数据。
 - 2026-11-09 复抓：`ipa-exam`（`76cf0e64…`，55,225 B）与 `jitec-home`（`03af14f0…`，31,295 B）相对 2026-08-12 旧快照只有首页新闻列表轮换（无新增稳定字段），故适配器 0 候选；`jitec-application` 快照未变、仍产既有 2 条候选。该边界由 `test_real_parser_does_not_infer_it_passport_facts_from_ipa_cards` 与 `test_real_parser_treats_jitec_home_news_as_entry_page_only` 两条用例固化。
 
-### 2026-11-10 P0-1 真实抓取（只分析、未入库）
+### 2026-11-10 P0-1 真实抓取与本机审核队列
 
 六个来源全部 HTTP 200，快照与 `analysis-report.json` 位于 `var/official-snapshots/it-passport/`（本地证据，未提交）：
 
@@ -79,7 +79,7 @@
 | `ipa-exam-detail`   | `dd00822a92b5`           | 4    | `exam_method`=CBT、`exam_time`=120 分、`question_format`、`question_count`=100 問 |
 | `jitec-faq`         | `d8d6f4bbefd8`           | 3    | `eligibility`、`exam_subjects`、`passing_standard`                                |
 
-合计 10 条候选，全部 `pending_review`、`synthetic=false`；报告明确记录 `database_write: not_run`、`automatic_approval: not_run`。候选尚未进入数据库，也未审核或展示。
+合计 10 条候选，全部 `pending_review`、`synthetic=false`；报告明确记录 `database_write: not_run`、`automatic_approval: not_run`。随后经单独授权写入本机审核队列：`jitec-application` 的 2 条此前已批准（本次 `ON CONFLICT` 未新增），其余 **8 条新候选已入库为 `pending_review`**，审核未执行。
 
 据此补上的 P0-1 缺口：费用、报考资格、考试结构（方式/时间/形式/题数/领域）与合格标准。仍未覆盖：评分方式（仅 PDF 试验要纲）。
 
@@ -87,6 +87,6 @@
 
 离线解析边界、真实快照分析、显式授权的本地候选入库、审核队列和公开读取/展示链路均已完成本地验收。当前仍不等同于生产事实：真实候选必须人工审核，公开 API 继续过滤 synthetic 事实；实时定时采集、生产发布、正式认证和外部通知不在本阶段范围。
 
-2026-11-10 新增的 10 条候选只完成「抓取 + 解析 + 报告」，尚未写入数据库；入库需要 `IT_PASSPORT_REAL_CANDIDATE_WRITE=1` 的单独授权，审核需要审核人显式操作，两者都不在本轮自动执行。`ingest_it_passport_analysis.py` 已改为按候选自带的 `value_type`／`risk_level` 写入，并只接受 high／medium 风险，避免把结构类事实压平成 high/text。
+2026-11-10 新增的 10 条候选中，8 条已完成「抓取 + 解析 + 报告 + 写入本机审核队列」，2 条报名类候选此前已批准。写入使用 `IT_PASSPORT_REAL_CANDIDATE_WRITE=1` 的单独授权；审核仍需审核人显式操作，未在本轮执行。`ingest_it_passport_analysis.py` 按候选自带的 `value_type`／`risk_level` 写入，并只接受 high／medium 风险；首次写入曾把风险压平成 high，纠正后已删除错误行并重跑，结构类 5 条现为 `medium`，费用/资格/合格标准 3 条为 `high`。本机审核页 `/review/it-passport` 显示待审核 8 条；`verify:all` 因此对 IT Passport 报 `official pending 8 != 0`，审核完成前不会回到 6/6。
 
 本地 fixture 候选入库命令要求同时设置 `STAGE2_LOCAL_WRITE=1`、`DATABASE_URL`、`IT_PASSPORT_FIXTURE` 和明确的 `IT_PASSPORT_EXAM_YEAR`，入口为 `services/collector/src/collector/ingest_it_passport.py`。审核队列地址为 `/review/it-passport`。fixture 候选保留 `synthetic=true`，不会进入公开 API。

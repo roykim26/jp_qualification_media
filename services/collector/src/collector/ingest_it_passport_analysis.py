@@ -141,7 +141,7 @@ def ingest_analysis(
                          normalized_value, display_value, evidence_text, status,
                          risk_level, source_id, source_snapshot_id, synthetic)
                         VALUES (%s, %s, %s, %s, %s, %s::jsonb, %s, %s,
-                                'pending_review', 'high', %s, %s, false)
+                                'pending_review', %s, %s, %s, false)
                         ON CONFLICT DO NOTHING""",
                         (
                             candidate_id,
@@ -152,6 +152,7 @@ def ingest_analysis(
                             json.dumps(candidate["normalized_value"], ensure_ascii=False),
                             candidate["display_value"],
                             candidate["evidence_text"],
+                            candidate["risk_level"],
                             source_result["source_id"],
                             snapshot_id,
                         ),

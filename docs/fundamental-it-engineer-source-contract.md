@@ -52,7 +52,7 @@ FE 自令和 5 年度起全年以 CBT 随时实施，没有「统一考试日 + 
 
 所有 11 条的 `provider_id`、`exam_level_id`、`exam_component`、`delivery_mode`、`payment_method` 均为 `NULL` —— 这一点直接决定门禁行为，见下节。
 
-## 2026-11-10 P0-1 费用候选（只分析、未入库）
+## 2026-11-10 P0-1 费用候选（已入本机审核队列，未批准）
 
 `ipa-fee`（`https://www.ipa.go.jp/shiken/mousikomi/schedule.html`）HTTP 200，快照哈希 `371df8121666…`，产出 1 条候选：
 
@@ -60,9 +60,9 @@ FE 自令和 5 年度起全年以 CBT 随时实施，没有「统一考试日 + 
 | -------- | ---------------- | ---------- | ---- | ------------------------------------------------------- |
 | `fee`    | `7500`           | integer    | high | `受験手数料 7,500円(情報処理技術者試験は消費税込み。…)` |
 
-候选为 `pending_review`、`synthetic=false`；`var/official-snapshots/fundamental-it/analysis-report.json` 记录 `database_write: not_run`、`automatic_approval: not_run`。与 IT Passport 的费用候选共享同一官方网站页和内容哈希，但分属不同 source／快照记录。
+候选为 `pending_review`、`synthetic=false`；`var/official-snapshots/fundamental-it/analysis-report.json` 记录 `database_write: not_run`、`automatic_approval: not_run`。与 IT Passport 的费用候选共享同一官方网站页和内容哈希，但分属不同 source／快照记录。经单独授权后，该候选已写入本机审核队列（1 条，未批准），`/review/fundamental-it-engineer` 显示待审核 1 条；`verify:all` 因此对该资格报 `official pending 1 != 0`，审核完成前不会回到 6/6。
 
-因此 P0-1 的 FE 费用缺口已有可用官方证据，但尚未写入数据库、未审核、未展示，不能算作已上线事实。
+因此 P0-1 的 FE 费用缺口已有官方证据并进入审核队列，但仍未审核、未展示，不能算作已上线事实。
 
 ## 门禁告警：6/6 通过 ≠ FE 字段完整
 
@@ -92,7 +92,7 @@ FE 自令和 5 年度起全年以 CBT 随时实施，没有「统一考试日 + 
 
 1. `venue_rule`/`booking_window`/`application_rule` 需要一个「场次/月份」维度才能安全归属，现有契约维度（`deliveryMode`、`examComponent`）表达不了；要么扩维度，要么维持规则型说明并显式判为不适用 —— 属产品决策。
 2. `fee`、`eligibility`、`scoring_method`、`passing_standard` 仍为零已批准事实。2026-11-10 的取证结论：
-   - `fee`：已在 `ipa-fee` 页找到明确金额并生成候选（见上节），待单独授权入库与审核。
+   - `fee`：已在 `ipa-fee` 页找到明确金额并生成候选，现已写入本机审核队列（`pending_review`），待审核。
    - `eligibility`（「どなたでも受験可能」）与 `passing_standard`（「各科目 600 点以上」）只在 CBT 运营方 CBT-Solutions 的 `https://www.cbt-s.com/` 页面出现，不在当前 FE 允许域名 `www.ipa.go.jp` 内。要事实化必须先决定是否把运营方域名登记为来源；IPA 自身页面未发现同义稳定表述。
    - `scoring_method`（IRT）只在 `試験要綱 Ver.5.6` PDF 中公布，当前适配器不解析 PDF。新增 PDF 解析属于新能力，不能用推断值替代。
    - 这三项都要按三次授权流程处理，不得用推断值补全。
