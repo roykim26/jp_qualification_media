@@ -1,6 +1,6 @@
 # IT Passport 来源与字段契约
 
-更新时间：2026-08-11
+更新时间：2026-11-10
 
 ## 目标
 
@@ -29,6 +29,12 @@
 
 本资格没有固定的全年统一考试日历；未发现明确日期时必须保持 `awaiting_official`，不能生成伪日期。
 
+## 入口页只登记、不产事实
+
+`source:it-passport:ipa-exam`（試験情報）与 `source:it-passport:jitec-home`（JITEC 首页）只作来源登记入口：首页新闻列表的轮换（公告标题、更新日期、合格発表、休業告知等）不产生任何事实候选，`extract_real_page_candidates()` 对这两个来源固定返回空候选、空异常，属预期行为，不是解析故障。
+
+任何新事实必须来自具体公告页或报名页；首页上的标题、链接文字、新闻表日期一律不得转成 `exam_date`／`application_deadline`／`exam_method` 等字段。要事实化公告页，先按「受控抓取计划」登记该 URL、抓取快照并留下审核记录，再扩适配器。
+
 ## 受控抓取计划
 
 1. 只允许 HTTPS 和登记域名；重定向仍必须通过 `SafeFetcher` 校验。
@@ -45,6 +51,7 @@
 - 日期、费用、报名规则等高风险字段固定生成 `high + pending_review` 候选。
 - 页面结构失效只生成解析异常，不生成候选事实。
 - 测试夹具位于 `fixtures/official-snapshots/it-passport-*.html`，均为 synthetic 数据。
+- 2026-11-09 复抓：`ipa-exam`（`76cf0e64…`，55,225 B）与 `jitec-home`（`03af14f0…`，31,295 B）相对 2026-08-12 旧快照只有首页新闻列表轮换（无新增稳定字段），故适配器 0 候选；`jitec-application` 快照未变、仍产既有 2 条候选。该边界由 `test_real_parser_does_not_infer_it_passport_facts_from_ipa_cards` 与 `test_real_parser_treats_jitec_home_news_as_entry_page_only` 两条用例固化。
 
 ## 当前结论
 
