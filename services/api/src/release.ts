@@ -56,25 +56,30 @@ export type RollbackEvent = {
   eventType: string;
   previousRevisionId: string;
   newRevisionId: string;
+  affectedPages: string[];
+};
+
+export type RollbackEventInput = {
+  factId: string;
+  factKey: string;
+  qualificationId: string;
+  currentRevisionId: string;
+  previousRevisionId: string;
 };
 
 /**
- * The rollback event used to be pinned to `schedule_change`, which mislabels
- * every non-schedule fact (fees, deadlines, statistics...).  The type now comes
- * from the same classifier the approval path uses, so the events list shows
- * what actually changed.
+ * The rollback event used to be pinned to `schedule_change` and to the takken
+ * page.  Both now come from the fact itself (same classifier as the approval
+ * path, same `[qualification_id]` page list), so rolling back a fee or an FP
+ * fact no longer shows up under the wrong label or on the takken page.
  */
-export function buildRollbackEvent(
-  factId: string,
-  factKey: string,
-  currentRevisionId: string,
-  previousRevisionId: string,
-): RollbackEvent {
+export function buildRollbackEvent(input: RollbackEventInput): RollbackEvent {
   return {
-    id: `rollback:${factId}:${previousRevisionId}`,
-    eventType: updateEventTypeForFact(factKey),
-    previousRevisionId: currentRevisionId,
-    newRevisionId: previousRevisionId,
+    id: `rollback:${input.factId}:${input.previousRevisionId}`,
+    eventType: updateEventTypeForFact(input.factKey),
+    previousRevisionId: input.currentRevisionId,
+    newRevisionId: input.previousRevisionId,
+    affectedPages: [input.qualificationId],
   };
 }
 
@@ -90,7 +95,7 @@ export async function rollbackApprovedFact(
   try {
     await client.query('BEGIN');
     const current = await client.query(
-      `SELECT f.id, f.current_revision_id, f.fact_key FROM facts f WHERE f.id=$1 AND f.status='approved' FOR UPDATE`,
+      `SELECT f.id, f.current_revision_id, f.fact_key, f.qualification_id FROM facts f WHERE f.id=$1 AND f.status='approved' FOR UPDATE`,
       [factId],
     );
     if (!current.rowCount) throw new Error('approved fact not found');
@@ -116,12 +121,13 @@ export async function rollbackApprovedFact(
       revisionId,
       factId,
     ]);
-    const event = buildRollbackEvent(
+    const event = buildRollbackEvent({
       factId,
-      current.rows[0].fact_key as string,
-      current.rows[0].current_revision_id as string,
-      revisionId,
-    );
+      factKey: current.rows[0].fact_key as string,
+      qualificationId: current.rows[0].qualification_id as string,
+      currentRevisionId: current.rows[0].current_revision_id as string,
+      previousRevisionId: revisionId,
+    });
     await client.query(
       `INSERT INTO change_events (id,fact_id,event_type,previous_revision_id,new_revision_id,affected_pages)
       VALUES ($1,$2,$3::event_type,$4,$5,$6::jsonb) ON CONFLICT (id) DO NOTHING`,
@@ -131,7 +137,7 @@ export async function rollbackApprovedFact(
         event.eventType,
         event.previousRevisionId,
         event.newRevisionId,
-        JSON.stringify(['qualification:takken']),
+        JSON.stringify(event.affectedPages),
       ],
     );
     await client.query('COMMIT');

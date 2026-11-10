@@ -1,45 +1,59 @@
 import { describe, expect, it } from 'vitest';
-import { buildRollbackEvent } from '../services/api/src/release.js';
+import {
+  buildRollbackEvent,
+  type RollbackEventInput,
+} from '../services/api/src/release.js';
+
+function rollback(factKey: string, qualificationId = 'qualification:takken') {
+  const input: RollbackEventInput = {
+    factId: 'fact:1',
+    factKey,
+    qualificationId,
+    currentRevisionId: 'rev:new',
+    previousRevisionId: 'rev:old',
+  };
+  return buildRollbackEvent(input);
+}
 
 describe('rollback change event', () => {
   it('takes the event type from the fact key instead of a fixed schedule_change', () => {
     // 回滚过去一律写成 schedule_change，非日程类事实会在 /updates/ 里挂错标签。
-    expect(
-      buildRollbackEvent('fact:1', 'fee', 'rev:2', 'rev:1').eventType,
-    ).toBe('fee_change');
-    expect(
-      buildRollbackEvent('fact:1', 'application_deadline_online', 'r2', 'r1')
-        .eventType,
-    ).toBe('application_deadline');
-    expect(
-      buildRollbackEvent('fact:1', 'application_open_postal', 'r2', 'r1')
-        .eventType,
-    ).toBe('application_open');
-    expect(buildRollbackEvent('fact:1', 'passed', 'r2', 'r1').eventType).toBe(
-      'statistics_update',
+    expect(rollback('fee').eventType).toBe('fee_change');
+    expect(rollback('application_deadline_online').eventType).toBe(
+      'application_deadline',
     );
-    expect(
-      buildRollbackEvent('fact:1', 'eligibility', 'r2', 'r1').eventType,
-    ).toBe('eligibility_change');
-    expect(
-      buildRollbackEvent('fact:1', 'exam_method', 'r2', 'r1').eventType,
-    ).toBe('system_change');
+    expect(rollback('application_open_postal').eventType).toBe(
+      'application_open',
+    );
+    expect(rollback('passed').eventType).toBe('statistics_update');
+    expect(rollback('eligibility').eventType).toBe('eligibility_change');
+    expect(rollback('exam_method').eventType).toBe('system_change');
   });
 
   it('keeps schedule_change for schedule facts', () => {
+    expect(rollback('exam_schedule').eventType).toBe('schedule_change');
+  });
+
+  it('labels the affected page from the fact qualification instead of takken', () => {
+    // 过去 affected_pages 是常量 ['qualification:takken']，FP／簿記回滚会标错页面。
+    expect(rollback('fee', 'qualification:fp').affectedPages).toEqual([
+      'qualification:fp',
+    ]);
     expect(
-      buildRollbackEvent('fact:1', 'exam_schedule', 'r2', 'r1').eventType,
-    ).toBe('schedule_change');
+      rollback('pass_rate', 'qualification:bookkeeping').affectedPages,
+    ).toEqual(['qualification:bookkeeping']);
+    expect(rollback('exam_date').affectedPages).toEqual([
+      'qualification:takken',
+    ]);
   });
 
   it('keeps the rollback id and points from the current revision to the previous one', () => {
-    expect(
-      buildRollbackEvent('fact:9', 'exam_date', 'rev:new', 'rev:old'),
-    ).toEqual({
-      id: 'rollback:fact:9:rev:old',
+    expect(rollback('exam_date')).toEqual({
+      id: 'rollback:fact:1:rev:old',
       eventType: 'exam_date',
       previousRevisionId: 'rev:new',
       newRevisionId: 'rev:old',
+      affectedPages: ['qualification:takken'],
     });
   });
 });

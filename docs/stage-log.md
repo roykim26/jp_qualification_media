@@ -1,5 +1,15 @@
 # 阶段记录与剩余问题
 
+## 2026-11-10（回滚页标签小轮）：回滚事件的 `affected_pages` 改取事实自己的 `qualification_id`（零抓取／零入库／零批准／零迁移／零库写／零判级面改动）
+
+- 轮前现取：main＝origin/main＝**`63cede7`**（#65 回滚事件分类小轮合并点）、open PR **0 条**、本地只有 `main`；库侧 982 条事实（takken 16，其余 966 条为非宅建）。范围＝上一轮的相邻发现（同一 INSERT 的 `affected_pages` 常量）。
+- 代码改动：`services/api/src/release.ts` 的 `SELECT` 再带上 `f.qualification_id`；`buildRollbackEvent()` 入参改为对象 `{factId, factKey, qualificationId, currentRevisionId, previousRevisionId}`，产出加 `affectedPages: [qualificationId]`；INSERT 的 `affected_pages` 从常量 `['qualification:takken']` 改为 `JSON.stringify(event.affectedPages)`，与批准链 `JSON.stringify([row.qualification_id])` 同口径。宅建事实行为不变。
+- 断言：`tests/rollback-event.test.ts` 由 3 条增到 **4 条**——新增「页面标签取自事实资格」用例（`qualification:fp`／`qualification:bookkeeping` 各归各页、宅建仍为 `qualification:takken`），并把 `affectedPages` 纳入整体相等断言。`tests/setup.ts` 删 `DATABASE_URL`，写库 SQL 仍无 DB 覆盖。
+- 本机判据（2026-11-10 现取）：`npm run build` EXIT=0；`npx vitest run --dir tests …` **13 文件／124 用例**（123→124）；`npm run test:verify-gate` **10/10**；`DATABASE_URL=…:55432 npm run verify:all` **`"status": "passed"`／6 passed／0 failed**；`npm run lint -- --ignore-pattern "Python/**"` EXIT=0；`npm run format:check` EXIT=0。全量 pytest 未跑（未改 Python）。
+- 文档改动：`docs/data-gate-semantics.md` §10 vitest 行改 **13 文件／124 用例**、§11 第 4 项把「`affected_pages` 仍是常量」改成已收口（含 966／982 非宅建事实的覆盖面）；`docs/next-round-ticket.md` §0 末态切到 `63cede7`、在途改本轮；`docs/stage-log.md`（本段）。
+- 坑：① 纯函数从 4 个位置参数改为对象入参，调用点与 4 条断言要同批改，漏一处 `tsc` 会报；② `affected_pages` 是 jsonb，参数化后仍要 `$6::jsonb`；③ 该函数无调用方，非宅建回滚的页面标签只能由纯断言自证，线上无既有数据受影响（`change_events` 无 rollback 行）。
+- 下一步（各需单独授权）：① 本轮 commit→push→开 PR→CI 复验→squash merge→删分支；② 决定 `jpqm-pg18` 容器去留；③ 清理 `var/wt-docs25`；④ 新范畴（ITP 适配器、宅建统计多来源、FE 附件提取）。
+
 ## 2026-11-10（回滚事件分类小轮）：`release.ts` 回滚事件不再硬编码 `schedule_change`＋3 条纯函数断言（零抓取／零入库／零批准／零迁移／零库写／零判级面改动）
 
 - 轮前现取：main＝origin/main＝**`885a523`**（#64 交接单时点收尾轮合并点）、open PR **0 条**、本地只有 `main`；Docker 库容器 `jpqm-pg18` Up **17 hours**，库侧计数 45／31／982／994／994／994／21。范围＝`docs/next-round-ticket.md` §2 原第 2 项「全仓唯一剩下的代码小债」。
