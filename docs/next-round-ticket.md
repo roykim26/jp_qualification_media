@@ -7,10 +7,10 @@
 ## 0. 当前工单＝下一轮（写于 2026-11-10）
 
 - 仓库根＝`E:\自建程序\jp_qualification_media`，remote＝`roykim26/jp_qualification_media`。
-- 写作时点现取：main＝origin/main＝**`a72d4b7`**（PR #63＝开工单旧债清理轮，1 文件 12/12；其前三个合并点 #62＝`de54367`（§10 回归命令表刷新，1 文件 16/15）、#61＝`2189bd1`（文档时点同步，4 文件 60/49）、#60＝`47a76be`（FE 停考轮落账，2 文件 23/2））；历史纯线性（`git rev-list --merges --count main` 为 **0**，main 每个 commit 标题带 `(#NN)` ⇒ **一律 squash PR，绝不直接 push main**）；远端只有 `refs/heads/main`，open PR **0 条**。
-- **在途＝2026-11-10 交接时点收尾轮（本页就是它写的）**：分支 `docs-round30-sync`（从 `a72d4b7` 切出），4 文件＝`README.md`＋`docs/transition-handoff.md`＋`docs/stage-log.md`＋本页；PR 号开单后用 `gh pr list --state open --head docs-round30-sync` 现取，CI 待验。更早的三笔纯文档轮（#61 时点同步、#62 §10 刷新、#63 开工单旧债清理）均已合并，分支 `docs-round27-sync`／`docs-round28-sync`／`docs-round29-sync` 已按三重判据删净（本地＋远端）。
-- **上一轮（2026-11-10）已闭合，不要重做**：基本情報 FE 停考事实 `suspension_period` 落地（#58：适配器＋3 测试＋标签，候选 1 条入库批准，`facts` 981→**982**、FE 10→**11**、baseline 11、CI 夹具 982）；工作包 H 方案稿收编并补实施结果（#59）；阶段记录与门禁读数同步（#60）；文档时点同步轮（#61：交接单／README／阶段记录／本页，库侧现态切到 `jpqm-pg18` 夹具档）；§10 回归命令表刷新轮（#62：vitest 120／12、pytest 161、gate 10/10、夹具 982、新增 `data:staleness` 行）；开工单旧债清理轮（#63：删掉已闭合的 §10 旧读数债、同步末态与代理命令）。细节见 `docs/stage-log.md` 顶部当日段。
-- 本地工作树只剩未跟踪 `Python/`（不提交、不删）。`git worktree list` 三个＝主工作树（`a72d4b7`）／另一窗口的 `C:/Users/jinlo/.codex/worktrees/e24e/jp_qualification_media`（detached `97e3fc0`，**不动**）／遗留 `var/wt-docs25`（detached `88febf5`，归属未确认，删前先问）。
+- 写作时点现取：main＝origin/main＝**`885a523`**（PR #64＝交接单时点收尾轮，4 文件 23/11；其前三个合并点 #63＝`a72d4b7`（开工单旧债清理，1 文件 12/12）、#62＝`de54367`（§10 回归命令表刷新，1 文件 16/15）、#61＝`2189bd1`（文档时点同步，4 文件 60/49））；历史纯线性（`git rev-list --merges --count main` 为 **0**，main 每个 commit 标题带 `(#NN)` ⇒ **一律 squash PR，绝不直接 push main**）；远端只有 `refs/heads/main`，open PR **0 条**。
+- **在途＝2026-11-10 回滚事件分类小轮**：分支 `fix/rollback-event-type`（从 `885a523` 切出），修 `services/api/src/release.ts` 回滚路径硬编码 `schedule_change` 的最后一条代码小债——`buildRollbackEvent()` 改走 `updateEventTypeForFact()`，INSERT 的 `event_type` 改用参数并补 `::event_type` 强转；新增 `tests/rollback-event.test.ts` 3 条纯函数断言。PR 号开单后现取，CI 待验。更早的四笔纯文档轮（#61／#62／#63／#64）均已合并，分支已按三重判据删净（本地＋远端）。
+- **上一轮（2026-11-10）已闭合，不要重做**：基本情報 FE 停考事实 `suspension_period` 落地（#58：适配器＋3 测试＋标签，候选 1 条入库批准，`facts` 981→**982**、FE 10→**11**、baseline 11、CI 夹具 982）；工作包 H 方案稿收编并补实施结果（#59）；阶段记录与门禁读数同步（#60）；文档时点同步轮（#61）；§10 回归命令表刷新轮（#62）；开工单旧债清理轮（#63）；交接单时点收尾轮（#64：落账 #61／#62／#63 并同步末态到 `a72d4b7`）。细节见 `docs/stage-log.md` 顶部当日段。
+- 本地工作树只剩未跟踪 `Python/`（不提交、不删）。`git worktree list` 三个＝主工作树（`885a523`）／另一窗口的 `C:/Users/jinlo/.codex/worktrees/e24e/jp_qualification_media`（detached `97e3fc0`，**不动**）／遗留 `var/wt-docs25`（detached `88febf5`，归属未确认，删前先问）。
 - ⚠ 号主常并行开多个窗口动同一仓库 ⇒ 若 §1 现取发现 main 又前进了，就以新 mergeCommit 为基线，**不要回滚别的窗口的写入**。
 
 ## 1. 开工先跑（全部只读，整条可复制）
@@ -30,11 +30,10 @@ gh pr list --state open --json number,headRefName,headRefOid,mergeable,mergeStat
 
 ## 2. 待办（按建议顺序；commit／push／PR／CI 轮询／merge／删分支**各需单独一句话**，做到就停）
 
-1. **容器去留**：`jpqm-pg18`（postgres:18-alpine，2026-11-10 现取 Up 15h，`127.0.0.1:55432`）保留还是停，需号主一句话；起停容器属基础设施变更，单独授权。停了之后再跑库侧任务要先 `docker start jpqm-pg18`。
-2. **小债**：`services/api/src/release.ts:93` 回滚路径仍硬编码 `schedule_change`（全仓唯一剩下的代码小债；该函数只有定义、无调用方，改它要连带补断言）。`docs/data-gate-semantics.md` §10 回归命令表的旧读数债已于 2026-11-10 由 #62 闭合，不再是待办。
-3. **新范畴（要新开授权单，别顺手做）**：IT Passport 的 `ipa-exam`（`76cf0e64`）与 `jitec-home`（`03af14f0`）页面 2026-11-09 已变但适配器 0 候选，事实化需扩适配器；宅建统计页多来源重构（`snapshot_from_html()` 仍把快照 id 钉在单条 `TAKKEN_SOURCE`，那条背后有已批准事实 ⇒ 该页**只能抓、不能入库**）；基本情報技術者附件提取（`toukei_fe.html` 是目录页、零 `<table>`，数据在 20 多个 PDF／xlsx，而仓内**既无 PDF 也无 xlsx 解析能力**，要先定依赖）。
-4. **工作树清理**：`var/wt-docs25`（detached `88febf5`）不再需要，但归属未确认，删除属仓库操作、单独授权；`C:/Users/jinlo/.codex/worktrees/e24e` 不动。
-5. **部署仍暂缓**：号主尚未购服务器；`feat/deploy-vps` 虽已随 #51 合并，也不代表上线，别提议 VPS／DNS。
+1. **容器去留**：`jpqm-pg18`（postgres:18-alpine，2026-11-10 现取 Up 17h，`127.0.0.1:55432`）保留还是停，需号主一句话；起停容器属基础设施变更，单独授权。停了之后再跑库侧任务要先 `docker start jpqm-pg18`。
+2. **新范畴（要新开授权单，别顺手做）**：IT Passport 的 `ipa-exam`（`76cf0e64`）与 `jitec-home`（`03af14f0`）页面 2026-11-09 已变但适配器 0 候选，事实化需扩适配器；宅建统计页多来源重构（`snapshot_from_html()` 仍把快照 id 钉在单条 `TAKKEN_SOURCE`，那条背后有已批准事实 ⇒ 该页**只能抓、不能入库**）；基本情報技術者附件提取（`toukei_fe.html` 是目录页、零 `<table>`，数据在 20 多个 PDF／xlsx，而仓内**既无 PDF 也无 xlsx 解析能力**，要先定依赖）。
+3. **工作树清理**：`var/wt-docs25`（detached `88febf5`）不再需要，但归属未确认，删除属仓库操作、单独授权；`C:/Users/jinlo/.codex/worktrees/e24e` 不动。
+4. **部署仍暂缓**：号主尚未购服务器；`feat/deploy-vps` 虽已随 #51 合并，也不代表上线，别提议 VPS／DNS。
 
 ## 3. 本机环境卡点（未解，直接决定你能跑什么）
 

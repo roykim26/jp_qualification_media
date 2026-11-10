@@ -1,5 +1,16 @@
 # 阶段记录与剩余问题
 
+## 2026-11-10（回滚事件分类小轮）：`release.ts` 回滚事件不再硬编码 `schedule_change`＋3 条纯函数断言（零抓取／零入库／零批准／零迁移／零库写／零判级面改动）
+
+- 轮前现取：main＝origin/main＝**`885a523`**（#64 交接单时点收尾轮合并点）、open PR **0 条**、本地只有 `main`；Docker 库容器 `jpqm-pg18` Up **17 hours**，库侧计数 45／31／982／994／994／994／21。范围＝`docs/next-round-ticket.md` §2 原第 2 项「全仓唯一剩下的代码小债」。
+- 代码改动：`services/api/src/release.ts` 的 `rollbackApprovedFact()` 原本把 `change_events.event_type` 写死成 `schedule_change`，任何非日程事实回滚都会在 `/updates/` 挂错标签。现改为：`SELECT` 带上 `f.fact_key`；新增导出纯函数 `buildRollbackEvent(factId, factKey, currentRevisionId, previousRevisionId)` 统一产出 `{id, eventType, previousRevisionId, newRevisionId}`，`eventType` 走批准链同款的 `updateEventTypeForFact()`；INSERT 的 `event_type` 改成参数并补 `$3::event_type` 强转（枚举列不收 text 参数）。id 与「当前 revision → 上一 revision」方向保持原样。⚠ 同一 INSERT 的 `affected_pages` 仍是常量 `['qualification:takken']`，本轮未动（该函数只有定义、无调用方，用途未定）。
+- 断言：新增 `tests/rollback-event.test.ts` 3 条纯函数用例（既覆盖会被误标的 `fee`／`application_deadline_online`／`application_open_postal`／`passed`／`eligibility`／`exam_method`，也锁住 `exam_schedule` 仍为 `schedule_change`，并核对 id 与前后 revision 方向）。`tests/setup.ts` 会删 `DATABASE_URL`，写库 SQL 本身仍无 DB 覆盖，属纯映射断言。
+- 只读试算（库侧只 `SELECT`，无写）：把本机夹具档 982 条事实的 **79 个（资格×`fact_key`）组合**喂给编译后的 `buildRollbackEvent()`，原硬编码会把 **72 个组合、覆盖 959／982 条事实** 的事件写成 `schedule_change`；改后按 key 落位（`fee`→`fee_change`、`application_deadline*`→`application_deadline`、`application_open*`→`application_open`、`passed`／`pass_rate`／`applicants`／`examinees`／`statistics_methodology`→`statistics_update`、`eligibility`→`eligibility_change`、`exam_*` 内容类→`system_change`、`exam_date`／`result_date`→各自类型），只有 `exam_schedule` 等日程类 23 条事实保持 `schedule_change`。探针脚本放 `var/`、跑完即删。
+- 本机判据（2026-11-10 现取）：`npm run build` EXIT=0；`npx vitest run --dir tests --pool=threads --poolOptions.threads.singleThread` **13 文件／123 用例**（120→123）；`npm run test:verify-gate` **10/10**；`DATABASE_URL='postgresql://postgres@127.0.0.1:55432/qualification_media' npm run verify:all` **`"status": "passed"`／6 passed／0 failed**；`npm run format:check` 与 `npm run lint -- --ignore-pattern "Python/**"` 均 EXIT=0。全量 pytest 本轮未跑（未改 Python）。
+- 文档改动：`docs/data-gate-semantics.md` §10 表 vitest 行改 **13 文件／123 用例**（并注明 +3 来源）、§11 第 4 项补本次 `event_type` 收口与 `affected_pages` 仍为常量的说明；`docs/next-round-ticket.md` §0 末态切到 `885a523`、在途改本轮、原 §2 小债项删除并重排；`docs/stage-log.md`（本段）。
+- 坑：① 枚举列用参数绑定必须显式 `::event_type`（`apps/admin/src/server.ts` 的同类 INSERT 一直如此），否则参数按 text 处理会类型不匹配；② 参数化后占位符整体后移，`previous_revision_id`／`new_revision_id` 从 `$3/$4` 变 `$4/$5`，`affected_pages` 的 `::jsonb` 强转跟着挪到 `$6`；③ 该函数无调用方 ⇒ 改完线上行为不变，只能靠纯函数断言与代码走查自证。
+- 下一步（各需单独授权）：① 本轮 commit→push→开 PR→CI 复验→squash merge→删分支；② 决定 `jpqm-pg18` 容器去留；③ 清理 `var/wt-docs25`；④ 新范畴（ITP 适配器、宅建统计多来源、FE 附件提取）。
+
 ## 2026-11-10（交接时点收尾轮）：#61／#62／#63 三笔纯文档轮的合并与 CI 读数落账＋§10 已刷新＋末态切换到 `a72d4b7`（零抓取／零入库／零批准／零迁移／零写库／零代码改动／零判级面改动）
 
 - 轮前现取：main＝origin/main＝**`a72d4b7`**（#63 合并点）、`git rev-list --merges --count main` **0**、远端只有 `refs/heads/main`、`gh pr list --state open` **0 条**、本地分支只有 `main`、`git worktree list` 三个（主工作树／codex worktree detached `97e3fc0` 不动／`var/wt-docs25` detached `88febf5` 归属未确认）；Docker 库容器 `jpqm-pg18` Up **17 hours**（`127.0.0.1:55432`），库侧计数仍为 45／31／982／994／994／994／21。
