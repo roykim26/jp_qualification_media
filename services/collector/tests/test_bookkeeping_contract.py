@@ -249,6 +249,83 @@ def test_parse_stops_when_answer_format_sentence_is_absent():
     assert issues[0].code == "structure_changed"
 
 
+CLASS3_EXAM_HTML = """<div class="postContent"><table><tr>
+<th>試験科目</th><th>試験時間</th><th>合格基準</th></tr>
+<tr><td><strong>商業簿記</strong><br />３題以内</td><td><strong>60分</strong></td><td><strong>70%以上</strong></td></tr>
+</table></div>
+<p>試験会場では、問題用紙・答案用紙・計算用紙が一体となった冊子を配布し、試験終了後に全て回収いたします。</p>
+<p>合格発表の期日や方法、証書の受け渡し方法等は、商工会議所によって異なります。申し込みの際にご確認ください。</p>"""
+
+
+def test_class3_exam_extracts_only_explicit_scoped_values():
+    snapshot = snapshot_from_html("source:bookkeeping:class3-exam", CLASS3_EXAM_HTML, synthetic=False)
+    candidates, issues = extract_candidates(snapshot)
+    assert not issues
+    by_key = {item.fact_key: item for item in candidates}
+    assert {key: item.normalized_value for key, item in by_key.items()} == {
+        "question_format": BOOKLET_PHRASE,
+        "result_date_rule": "venue_defined",
+        "exam_subjects": "商業簿記",
+        "question_count": "3",
+        "exam_time": "60",
+        "passing_standard": "70",
+    }
+    assert by_key["question_count"].display_value == "３題以内"
+    assert by_key["passing_standard"].display_value == "70%以上"
+    assert all(item.exam_level_id == "bookkeeping:3" and item.delivery_mode == "unified" for item in candidates)
+    assert all(item.synthetic is False and item.status == "pending_review" for item in candidates)
+    assert all(item.source_snapshot_id == snapshot.content_hash for item in candidates)
+    assert all(item.evidence_text for item in candidates)
+    old_format, old_issues = extract_candidates(snapshot_from_html(
+        snapshot.source_id,
+        "<p>試験会場では、問題用紙・答案用紙・計算用紙が一体となった冊子を配布し、試験終了後に全て回収いたします。</p>",
+        synthetic=False,
+    ))
+    assert not old_issues
+    assert by_key["question_format"].normalized_value == old_format[0].normalized_value
+    assert by_key["question_format"].display_value == old_format[0].display_value
+    assert by_key["question_format"].evidence_text == old_format[0].evidence_text
+
+
+@pytest.mark.parametrize("minutes,threshold,count", [("７５", "８０", "４"), ("45", "65", "2")])
+def test_class3_exam_does_not_hardcode_numeric_values(minutes, threshold, count):
+    html = CLASS3_EXAM_HTML.replace("60分", f"{minutes}分").replace("70%以上", f"{threshold}％以上").replace("３題以内", f"{count}題以内")
+    candidates, issues = extract_candidates(snapshot_from_html("source:bookkeeping:class3-exam", html))
+    assert not issues
+    by_key = {item.fact_key: item for item in candidates}
+    assert by_key["exam_time"].normalized_value == str(int(minutes))
+    assert by_key["passing_standard"].normalized_value == str(int(threshold))
+    assert by_key["question_count"].normalized_value == str(int(count))
+    assert by_key["passing_standard"].display_value == f"{threshold}％以上"
+
+
+@pytest.mark.parametrize("old,new", [
+    ("<th>試験時間</th>", "<th>参考時間</th>"),
+    ("<td><strong>60分</strong></td>", ""),
+    ("60分", "未公表"),
+    ("70%以上", "未公表"),
+    ("３題以内", ""),
+])
+def test_class3_exam_blocks_incomplete_labelled_tables(old, new):
+    candidates, issues = extract_candidates(snapshot_from_html(
+        "source:bookkeeping:class3-exam", CLASS3_EXAM_HTML.replace(old, new), synthetic=False,
+    ))
+    assert [issue.code for issue in issues] == ["structure_changed"]
+    assert {item.fact_key for item in candidates} == {"question_format", "result_date_rule"}
+
+
+def test_class3_exam_respects_column_labels_when_reordered():
+    html = CLASS3_EXAM_HTML.replace(
+        "<th>試験時間</th><th>合格基準</th>", "<th>合格基準</th><th>試験時間</th>",
+    ).replace(
+        "<td><strong>60分</strong></td><td><strong>70%以上</strong></td>",
+        "<td><strong>70%以上</strong></td><td><strong>60分</strong></td>",
+    )
+    candidates, issues = extract_candidates(snapshot_from_html("source:bookkeeping:class3-exam", html))
+    assert not issues
+    assert next(item.normalized_value for item in candidates if item.fact_key == "exam_time") == "60"
+
+
 def test_qa_snapshot_keeps_level_order_eligibility_within_official_wording():
     html = """<ul>
     <li>商工会議所の検定試験は、どの級(クラス)から受験していただいても構いません。例えば、3級に合格していなくても、2級あるいは1級を受験できます。</li>

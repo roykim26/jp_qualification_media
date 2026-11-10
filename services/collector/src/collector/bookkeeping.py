@@ -148,7 +148,7 @@ def extract_candidates(snapshot: BookkeepingSnapshot) -> tuple[list[BookkeepingF
     elif snapshot.source_id in {"source:bookkeeping:class1-exam", "source:bookkeeping:class2-exam"}:
         candidates.extend(_extract_level_exam(snapshot, soup))
     elif snapshot.source_id == "source:bookkeeping:class3-exam":
-        candidates.extend(_extract_class3_format(snapshot, soup))
+        candidates.extend(_extract_class3_exam(snapshot, soup, issues))
     elif snapshot.source_id == "source:bookkeeping:qa":
         candidates.extend(_extract_qa_eligibility(snapshot, soup))
     elif snapshot.source_id == "source:bookkeeping:flow-teller":
@@ -312,8 +312,40 @@ def _extract_answer_format(snapshot: BookkeepingSnapshot, soup: BeautifulSoup, l
     return [_candidate(snapshot, "question_format", BOOKLET_PHRASE, booklet, level, "unified", evidence=booklet)]
 
 
-def _extract_class3_format(snapshot: BookkeepingSnapshot, soup: BeautifulSoup) -> list[BookkeepingFactCandidate]:
-    return _extract_answer_format(snapshot, soup, "3")
+def _extract_class3_exam(snapshot: BookkeepingSnapshot, soup: BeautifulSoup, issues: list[BookkeepingParseIssue]) -> list[BookkeepingFactCandidate]:
+    result = _extract_answer_format(snapshot, soup, "3")
+    announcement = _sentence(soup, "合格発表の期日や方法、証書の受け渡し方法等は、商工会議所によって異なります")
+    if announcement:
+        result.append(_candidate(snapshot, "result_date_rule", "venue_defined", announcement, "3", "unified"))
+    for table in soup.select(".postContent table"):
+        headers = [cell.get_text(" ", strip=True) for cell in table.select("th")]
+        if not set(headers) & {"試験科目", "試験時間", "合格基準"}:
+            continue
+        rows = [row for row in table.select("tr") if row.find("td")]
+        if set(headers) != {"試験科目", "試験時間", "合格基準"} or len(headers) != 3 or len(rows) != 1:
+            issues.append(BookkeepingParseIssue("structure_changed", "class3 exam table must have three labelled columns and one subject row"))
+            return result
+        cells = rows[0].find_all("td", recursive=False)
+        if len(cells) != 3:
+            issues.append(BookkeepingParseIssue("structure_changed", "class3 exam table has an incomplete subject row"))
+            return result
+        values = dict(zip(headers, (cell.get_text(" ", strip=True) for cell in cells)))
+        subject = re.fullmatch(r"(.+?)\s*([0-9０-９]+題以内)", values["試験科目"])
+        minutes = re.fullmatch(r"(\d+)分", normalize("NFKC", values["試験時間"]))
+        standard = re.fullmatch(r"(\d+)%以上", normalize("NFKC", values["合格基準"]))
+        if not subject or not minutes or not standard:
+            issues.append(BookkeepingParseIssue("structure_changed", "class3 exam table lacks explicit subject, question limit, duration or passing threshold"))
+            return result
+        subjects = subject.group(1).strip()
+        question_limit = subject.group(2)
+        result.extend([
+            _candidate(snapshot, "exam_subjects", normalize("NFKC", subjects), subjects, "3", "unified", evidence=f"試験科目 {values['試験科目']}"),
+            _candidate(snapshot, "question_count", str(int(normalize("NFKC", question_limit.removesuffix("題以内")))), question_limit, "3", "unified", "integer", evidence=f"試験科目 {values['試験科目']}"),
+            _candidate(snapshot, "exam_time", str(int(minutes.group(1))), values["試験時間"], "3", "unified", "integer", evidence=f"試験時間 {values['試験時間']}"),
+            _candidate(snapshot, "passing_standard", str(int(standard.group(1))), values["合格基準"], "3", "unified", "integer", evidence=f"合格基準 {values['合格基準']}"),
+        ])
+        break
+    return result
 
 
 def _extract_qa_eligibility(snapshot: BookkeepingSnapshot, soup: BeautifulSoup) -> list[BookkeepingFactCandidate]:
