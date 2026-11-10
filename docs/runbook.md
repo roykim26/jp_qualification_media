@@ -76,7 +76,7 @@ pnpm release:check
 
 导出命令仅允许 localhost 数据库，真实候选存在 pending 时拒绝生成，并采用固定时间和 `ci://` object key 保证输出可审查、可重复。提交前必须同时审查基线 JSON 与 fixture SQL 的差异。
 
-夹具现为 981 facts / 981 candidate_facts / 981 fact_revisions / 29 snapshots；重导后必须同步修改 `scripts/verify-ci-fixture.mjs` 第 9–12 行的四个计数断言，否则门禁会以 `ERR_ASSERTION` 失败。完整口径见 `docs/data-gate-semantics.md` 第 5、9 节。
+夹具现为 982 facts / 982 candidate_facts / 982 fact_revisions / 29 snapshots；重导后必须同步修改 `scripts/verify-ci-fixture.mjs` 第 9–12 行的四个计数断言与 `scripts/docker-smoke.mjs` 的冒烟断言，否则门禁或 docker-smoke 会以 `ERR_ASSERTION`／计数不符失败。完整口径见 `docs/data-gate-semantics.md` 第 5、9 节。
 
 ## 采集与入库授权
 
@@ -247,7 +247,7 @@ curl -s "https://shikakucheck.com/shikaku/bookkeeping/pass-rate/?year=2010" | gr
 
 判据＝六个路径全 200（ICS 为 `text/calendar`，`/sitemap.xml` 为 XML，其余 `text/html`）；robots 里 Sitemap 行是 `https://shikakucheck.com/sitemap.xml`；sitemap 含簿記 pass-rate 页、`?year=` 计数为 **0**；年份筛选页 noindex 计数为 **1**。再抽一眼内容：首页含「資格試験の公式情報」、`/shikaku/bookkeeping/` 含「日商簿記」。
 
-以上第 3–7 步的机器版＝`npm run smoke:docker`（CI 的 `docker-smoke` job 跑同一条命令）：构建镜像 → 临时 `postgres:16-alpine` → migrate（含二次幂等）→ seed → 恢复 CI 夹具 → 起 api+web → 断言 981 条事实、首页/资格页/API/sitemap/noindex/ICS/robots/404。改动 Dockerfile、compose 或依赖后先让这条冒烟绿，再上 VPS。
+以上第 3–7 步的机器版＝`npm run smoke:docker`（CI 的 `docker-smoke` job 跑同一条命令）：构建镜像 → 临时 `postgres:16-alpine` → migrate（含二次幂等）→ seed → 恢复 CI 夹具 → 起 api+web → 断言 982 条事实、首页/资格页/API/sitemap/noindex/ICS/robots/404。改动 Dockerfile、compose 或依赖后先让这条冒烟绿，再上 VPS。
 
 ### 例行备份（VPS root crontab）
 
