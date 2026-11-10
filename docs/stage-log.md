@@ -1,5 +1,15 @@
 # 阶段记录与剩余问题
 
+## 2026-11-10（文档时点同步轮）：#58／#59／#60 三条合并读数落账＋本机库现态切换到 Docker `jpqm-pg18` 夹具档（45／31／982／994／994／994／21）＋README 982 口径（零抓取／零入库／零批准／零迁移／零写库／零代码改动／零判级面改动）
+
+- 轮前现取：main＝origin/main＝**`47a76be`**（#60 合并点）、`git rev-list --merges --count main` **0**、远端只有 `refs/heads/main`、`gh pr list --state open` **0 条**、本地分支只有 `main`；`git worktree list` 三个＝主工作树／另一窗口的 codex worktree（detached `97e3fc0`，不动）／遗留 `var/wt-docs25`（detached `88febf5`，归属未确认）；Docker 引擎 `running`，库容器 `jpqm-pg18`（postgres:18-alpine，`127.0.0.1:55432`）Up 14 hours。
+- 库侧现取：`sources` **45**／`snapshots` **31**／`facts` **982**（takken 16／gyoseishoshi 15／it-passport 2／FE **11**／bookkeeping 863／fp 75）／`candidate_facts` **994 全 approved**（pending 0、rejected 0）／`reviews` **994 全 approve**／`change_events` **994**（`statistics_update` 805／`system_change` 96／`schedule_change` 25／`application_deadline` 19／`fee_change` 15／`application_open` 13／`eligibility_change` 11／`result_date` 8／`exam_date` 2）／`schema_migrations` **21**。⚠ 这是夹具档叠加 FE 停考轮写库的结果，**不是**开发库（开发库 1075＋13 rejected／1006 reviews 等已不可复原）。
+- 三条合并读数：#58 `abee98c`（9 文件 179/60，run `42738309046`／job `129572880085`，同 run 的 `docker-smoke` job `129572879992`）、#59 `a8b5fbe`（1 文件 123/0，run `42739772762`／job `129577665160`）、#60 `47a76be`（2 文件 23/2，run `42747947509`／job `129604463475`）；三条 CI 同为 vitest **12 文件／120 用例**、pytest **161 passed**、`test:verify-gate` **10/0**、`verify:all` **6/0**。
+- 本机复跑（Docker 夹具库）：`DATABASE_URL='postgresql://postgres@127.0.0.1:55432/qualification_media' npm run verify:all` ⇒ `"status": "passed"`／**6 passed／0 failed**／EXIT=0，六格 16／15／2／11／863／75、`coverageGaps` 全空；`npm run ci:fixture:verify` ⇒ EXIT=0；`npm run test:verify-gate` ⇒ **10 pass／0 fail**；`npm run build` ⇒ EXIT=0；`npx vitest run --dir tests --pool=threads --poolOptions.threads.singleThread` ⇒ **12 文件／120 用例**。全量 pytest 本轮未复跑，CI 侧为 **161 passed**。
+- 文档改动＝**4 个文件、纯文档**：`docs/transition-handoff.md`（文头时点→2026-11-10、main SHA→`47a76be`、CI 列表补 #58／#59／#60、§2 表补三行、§3 库侧改为 Docker `jpqm-pg18` 夹具档并把本机复跑换成 2026-11-10 读数、baseline/夹具段升 982 并补 `docker-smoke.mjs` 联动、§4 首段末态改 2026-11-10 现取、§5 补 FE 停考事实、待办 6 更新 README 闭合）；`README.md`（176→**982**、时点与 SHA、交接单描述）；`docs/stage-log.md`（本段）；`docs/next-round-ticket.md`（就地重写为下一轮）。numstat 见合并后回读。
+- 踩坑：① `.env` 的 `DATABASE_URL` 仍指 `localhost:5432`（compose 的库不存在）⇒ 库侧命令必须显式传 `127.0.0.1:55432`；② `docs/data-gate-semantics.md` §10 表仍是 2026-10-13 历史读数（vitest 81/81、pytest 158），本轮未改；③ #58 首跑因 `scripts/docker-smoke.mjs` 硬编码 981 红过一次（`expected 981 approved facts, got 982`），修后绿。
+- 下一步（各需单独授权）：① 本轮 4 文件 commit→push→开 PR→CI 复验→squash merge→回读→删 `docs-round27-sync`；② 决定 `jpqm-pg18` 容器去留；③ 跑全量 pytest 后刷新 `docs/data-gate-semantics.md` §10 表；④ 新范畴（IT Passport 适配器、宅建统计多来源、FE 附件提取）；⑤ 清理 `var/wt-docs25`。
+
 ## 2026-11-10：基本情報 FE 停考事实全链路——采集（FE 2＋ITP 3）→ 入库 13 条 → 批准 13 条 → 停考发现／方案稿 → 适配器＋测试＋标签 → 门禁／夹具同步 982 → PR #58（`abee98c`）＋#59（`a8b5fbe`）
 
 - 触发与轮前现取：main＝`1ec9957`；本机库＝`jpqm-pg18`（PG 18，`127.0.0.1:55432`）恢复的 2026-10-23 夹具档＝45 sources／29 snapshots／981 facts／981 candidates（全 approved）／981 reviews／981 change_events／迁移 21；工作树只有 `?? Python/`。口径＝采集／入库／批准三次独立授权，批准前不动 baseline／夹具。

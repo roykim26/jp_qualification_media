@@ -4,14 +4,14 @@
 >
 > **维护约定**＝每轮收尾时**就地重写本文**（同一文件、别新开），把「当前工单」换成下一轮的；已闭合的条目删掉并在 `docs/stage-log.md` 留读数。文中任何计数只是写作时点的现取值，**开工先跑 §1**。
 
-## 0. 当前工单＝第二十七轮（写于 2026-11-02）
+## 0. 当前工单＝下一轮（写于 2026-11-10）
 
 - 仓库根＝`E:\自建程序\jp_qualification_media`，remote＝`roykim26/jp_qualification_media`。
-- 写作时点现取：main＝origin/main＝**`57ecb70`**（PR #52＝第二十五轮纯文档合并点，4 文件 101 增／69 删；其前三个合并点是 #50＝`fb40890`、#49＝`eb24e3b`、#48＝`4dd44f5`）；历史纯线性（`git rev-list --merges --count main` 为 **0**，main 每个 commit 标题带 `(#NN)` ⇒ **一律 squash PR，绝不直接 push main**）。
-- **在途＝第二十六轮纯文档 PR**（#52 收口落账＋ref／Docker 现态同步）：分支 `docs-round26-sync`，隔离 worktree `var/wt-docs25`（基线 `57ecb70`），4 文件＝`docs/transition-handoff.md`＋`docs/stage-log.md`＋`README.md`＋本文。**PR 号开单后才存在** ⇒ 用 `gh pr list --state open --head docs-round26-sync` 现取，别照抄本文。**状态＝文档已改完、待 commit／push／开 PR；CI 待验。**
-- 本轮（第二十六轮）内容口径＝纯文档：#52 收口（head `7f737b7` → squash `57ecb70`，4 文件 101/69；CI run `40465121634`／job `122058546182`：vitest 109／12、pytest 158、`test:verify-gate` 10/0、`verify:all` 6/0）＋ref 末态（本地 `main` 与 origin 同步、六条已合并分支删净、遗留 `var/wt-docs22|23|24` 已不在）＋**Docker 引擎已恢复 `running`**（`docker info` EXIT=0）但 `docker compose ps` 为空、无 postgres 容器；零抓取／零入库／零批准／零迁移／零业务库写入／零代码改动／零判级面改动。
-  ⚠ 号主常并行开多个窗口动同一仓库 ⇒ 若 §1 现取发现该 PR 已被别的窗口合并，就跳过 §2 第 1 步、直接进第 2 步，并把 main 的 mergeCommit 当新基线；**不要回滚别的窗口的写入**。主工作树现切在 **`feat/deploy-vps`（`5aecf25`，已推送、开着 open PR #51；第二十六轮现取 `mergeStateStatus=BEHIND`、`mergeable=MERGEABLE`、两条 check 均 SUCCESS）**，另一窗口在做部署；本窗口全程用 worktree 隔离，**绝不碰主工作树**。
-- 另注意：`git worktree list` 现在只有三个＝主工作树（`5aecf25`）／另一窗口的 `C:/Users/jinlo/.codex/worktrees/e24e/jp_qualification_media`（detached `97e3fc0`，不动）／`var/wt-docs25`（本轮分支）；上一轮记的 `var/wt-docs22`／`23`／`24` 已不在（目录与登记都没有）。`#45`／`#46`／`#47`／`#49`／`#50`／`#52` 的六条分支已按三重判据删净，远端现有 `main`＋另一窗口的 `feat/deploy-vps`。
+- 写作时点现取：main＝origin/main＝**`47a76be`**（PR #60＝FE 停考轮落账，2 文件 23/2；前两个合并点 #59＝`a8b5fbe`、#58＝`abee98c`）；历史纯线性（`git rev-list --merges --count main` 为 **0**，main 每个 commit 标题带 `(#NN)` ⇒ **一律 squash PR，绝不直接 push main**）；远端只有 `refs/heads/main`，open PR **0 条**。
+- **在途＝2026-11-10 文档时点同步轮**：分支 `docs-round27-sync`（基线 `47a76be`），4 文件＝`README.md`＋`docs/transition-handoff.md`＋`docs/stage-log.md`＋本页；PR 号开单后才存在 ⇒ 用 `gh pr list --state open --head docs-round27-sync` 现取。状态＝文档已改完、待 commit／push／开 PR；CI 待验。**本轮合并后，本页 §0 的 main SHA 就过时，下一轮以 §1 现取为准。**
+- **上一轮（2026-11-10）已闭合，不要重做**：基本情報 FE 停考事实 `suspension_period` 落地（#58：适配器＋3 测试＋标签，候选 1 条入库批准，`facts` 981→**982**、FE 10→**11**、baseline 11、CI 夹具 982）；工作包 H 方案稿收编并补实施结果（#59）；阶段记录与门禁读数同步（#60）；文档时点同步轮（本 PR：交接单／README／阶段记录／本页）。细节见 `docs/stage-log.md` 顶部当日两段。
+- 本地工作树只剩未跟踪 `Python/`（不提交、不删）。`git worktree list` 三个＝主工作树（`47a76be`）／另一窗口的 `C:/Users/jinlo/.codex/worktrees/e24e/jp_qualification_media`（detached `97e3fc0`，**不动**）／遗留 `var/wt-docs25`（detached `88febf5`，归属未确认，删前先问）。
+- ⚠ 号主常并行开多个窗口动同一仓库 ⇒ 若 §1 现取发现 main 又前进了，就以新 mergeCommit 为基线，**不要回滚别的窗口的写入**。
 
 ## 1. 开工先跑（全部只读，整条可复制）
 
@@ -23,53 +23,50 @@ gh pr list --state open --json number,headRefName,headRefOid,mergeable,mergeStat
 ```
 
 - 远端 git 命令**必须**带那串 `-c credential.helper= -c credential.helper=manager -c credential.interactive=0 -c http.version=HTTP/1.1`（第一个 helper 置空以清空追加列表；不加 `http.version=HTTP/1.1` 时 push 报 `Recv failure: Connection was reset`）。
-- ⚠ 仓库 git config 里有 `http.proxy=http://127.0.0.1:7890`：该端口**没在听**时要补 `-c http.proxy= -c https.proxy=` 直接连（否则 `Failed to connect to github.com port 443 via 127.0.0.1`）；**在听**时反而不能加（第二十四轮实测：加了空覆盖后 push 超时 21076 ms）。先 `netstat -ano | grep "127.0.0.1:7890.*LISTENING"` 判；**第二十六轮现取该端口在听**。
+- ⚠ 仓库 git config 里有 `http.proxy=http://127.0.0.1:7890`：该端口**没在听**时要补 `-c http.proxy= -c https.proxy=` 直接连（否则 `Failed to connect to github.com port 443 via 127.0.0.1`）；**在听**时反而不能加（加了空覆盖后 push 会超时）。先 `netstat -ano | grep "127.0.0.1:7890.*LISTENING"` 判；**2026-11-10 现取在听**。
 - 裸 `git fetch` 偶发 `schannel: failed to receive handshake, SSL/TLS connection failed`＝本机指纹、不代表断网，远端真值只用上面的 `ls-remote --heads`。
-- `gh` 侧：`gh pr create` **必须 `--body-file`**（内联 heredoc 会 exit 0 但静默不开 PR）；`gh pr merge --squash` 成功时**零输出**；`gh pr view -q` 里「字符串 + 数字」会报 `cannot add`，要用 `tostring`／`join`。
+- `gh` 侧：`gh pr create` **必须 `--body-file`**（内联 heredoc 会 exit 0 但静默不开 PR）；`gh pr merge --squash` 成功时**零输出**；`gh pr view -q` 里「字符串 + 数字」会报 `cannot add`，要用 `tostring`／`join`；`gh pr checks --watch` 偶发 `wsarecv: An existing connection was forcibly closed`／GraphQL 断连，原样重跑一次即恢复。
 - 在 worktree 里开工时，`git status` 只看得到该 worktree；要判主工作树是否被别的窗口动了，用 `git -C "E:/自建程序/jp_qualification_media" status --porcelain` 现取，别据本 worktree 的干净状态推断全仓。
 
 ## 2. 待办（按建议顺序；commit／push／PR／CI 轮询／merge／删分支**各需单独一句话**，做到就停）
 
-1. **收口第二十六轮纯文档 PR**：只读轮询 `release-gate` → squash merge → 回读 `mergeCommit.oid` ＋ `git show --numstat` 核对与 4 文件逐文件 numstat 一致（数字现取，本文不预写）→ 按三重判据删 `docs-round26-sync`（⚠ 删分支**单独**问一句，即使已授权合并）。
-   - 纯文档轮，CI 预期复现上一轮读数：vitest **109 passed／12 文件**、pytest **158 passed**、`test:verify-gate` **pass 10／fail 0**、`verify:all` **`"status": "passed"`／6 passed／0 failed**。⚠ 这四个数是第二十六轮从 #52 的 run `40465121634`／job `122058546182` 的 job 日志现取的，**不是本轮实测**；本轮只核 CI 是否同样绿。
-   - 若 `gh pr merge --squash` 报 head 不最新：用服务端 `gh pr update-branch <号>`（新 merge commit＋CI 自动重跑），更新后重新轮询；**不要 `--admin`**。
-   - 删分支三重判据（squash 仓库里 `git branch -d` 必报 `not fully merged`、`git rev-list --count main <branch>` 恒为 1，都不是「未合并」的证据）：`gh pr list --state merged --head <branch>` 取 `mergeCommit`＋`headRefOid` → 核 `headRefOid` 与本地／远端 tip 三者相等 → `git diff --diff-filter=A --name-only main <headRefOid>` 计数 **0**；过了再 `git branch -D`＋带 helper 链的 `git push origin --delete <branch>`，删后用 `ls-remote --heads` 核对（现应是 `main`＋另一窗口的 `feat/deploy-vps` 两条）。
-2. **文档欠账**（本仓库线性历史下的结构性惯例：本轮交付只能随**下一个** PR 写档，所以每轮收尾必欠一条）：`docs/transition-handoff.md` 文头 main SHA→新 mergeCommit、文头 CI run／job 换成第二十六轮 PR 的、§2 交付表补第二十六轮 PR 行（4 文件 numstat 现取）、§3 把该 PR 的 CI 读数落账、§4 首段分支末态改本轮现取、待办 5 补闭合段；`docs/stage-log.md` 补本轮交付段；`README.md` 时点与 SHA；**并就地重写本文**（§0 换成新 mergeCommit 基线、§2 第 1 步删掉）。
-3. **库侧：开发库已丢失，本机现存库＝夹具档；Docker 引擎已恢复但没起库**。第二十六轮现取＝Docker `running`（`docker info` EXIT=0）但 `docker compose ps` 为空、无 `jp_qualification_media-postgres-1` 容器；本机现存库仍是从 `var/backup/jpqm-dev-20261023-0930.dump` 恢复出来的**夹具档**（`schema_migrations` 21／`sources` 45／`facts` 981／`candidate_facts` 981 全 approved／`reviews` 981 全 approve／`snapshots` 29／`change_events` 981），临时 PG 集群当前**未运行**。开发库的 `sources` 47／`candidate_facts` 1075+13 rejected／`reviews` 1006／`snapshots` 44／`change_events` 983／迁移 22 **已不可复原**。
-   - 起临时库（PG 18.4，ASCII 路径，端口 55432）：`cd "C:/Users/jinlo/AppData/Local/Temp" && ./jpqm-pg-bin/bin/pg_ctl.exe -D jpqm-r25-pg -l jpqm-r25-pg.log -o "-p 55432 -c listen_addresses=127.0.0.1" start`；停：同目录 `./jpqm-pg-bin/bin/pg_ctl.exe -D jpqm-r25-pg stop -m fast`。
-   - 连接串＝`postgresql://postgres@127.0.0.1:55432/qualification_media`，要显式传给 `npm run verify:all`。若数据目录也没了，按交接单 §6「库丢失后的恢复」重来（下 zip → bsdtar 抽 bin/share/lib → **复制到 ASCII 路径** → initdb → pg_ctl → createdb → pg_restore；`createdb`／`pg_restore` 属写库，各需一句话授权）。
-   - 若要用 Docker 侧的 postgres：`docker compose up -d postgres` 属基础设施变更，需单独授权；起来后仍要 `db:migrate`／`db:seed`（各需授权），且容器里是空库，不是本机开发库。
-4. **MVP P1／P2／P3 已全部交付，别再重复做**：#45（P1，11 文件 724/84）、#46（P2，8 文件 264/55）、#48（P3，4 文件 18/2）均已进 main。当前活跃工作是另一窗口的部署分支 `feat/deploy-vps`（`5aecf25`，已推送、open PR **#51**，当前 `BEHIND` main）；接手前先按 §1 现取 main 与 open PR，避免撞车。
-5. **次选小债（各自可独立成轮）**：`services/api/src/release.ts:93` 回滚路径仍硬编码 `schedule_change`；`README.md:5` 仍写「176 条已批准正式事实」（与交接单 §3 的 **981** 口径不一致，改写前需先取库侧读数 —— 现只能取夹具档的 981）。⚠ `apps/web/src/sitemap.ts` 的 `/2026/` 硬编码**已由 #45 闭合**，这条不再是欠账。
-6. **新范畴（要新开授权单，别顺手做）**：宅建统计页多来源重构（`snapshot_from_html()` 仍把快照 id 钉在单条 `TAKKEN_SOURCE`，那条背后有已批准事实 ⇒ 该页**只能抓、不能入库**）；基本情報技術者附件提取（`toukei_fe.html` 是目录页、零 `<table>`，数据全在 20 多个 PDF／xlsx，而仓内**既无 PDF 也无 xlsx 解析能力**，要先定依赖）。
+1. **容器去留**：`jpqm-pg18`（postgres:18-alpine，2026-11-10 现取 Up 14h，`127.0.0.1:55432`）保留还是停，需号主一句话；起停容器属基础设施变更，单独授权。停了之后再跑库侧任务要先 `docker start jpqm-pg18`。
+2. **小债（可各自成轮）**：`services/api/src/release.ts:93` 回滚路径仍硬编码 `schedule_change`；`docs/data-gate-semantics.md` §10 表里 vitest 81/81、pytest 158 是 2026-10-13 历史读数，下次跑全量 `npm run test:python`（两目录同传）后整表刷新（当前规范 vitest **12 文件／120 用例**、CI pytest **161**）。
+3. **新范畴（要新开授权单，别顺手做）**：IT Passport 的 `ipa-exam`（`76cf0e64`）与 `jitec-home`（`03af14f0`）页面 2026-11-09 已变但适配器 0 候选，事实化需扩适配器；宅建统计页多来源重构（`snapshot_from_html()` 仍把快照 id 钉在单条 `TAKKEN_SOURCE`，那条背后有已批准事实 ⇒ 该页**只能抓、不能入库**）；基本情報技術者附件提取（`toukei_fe.html` 是目录页、零 `<table>`，数据在 20 多个 PDF／xlsx，而仓内**既无 PDF 也无 xlsx 解析能力**，要先定依赖）。
+4. **工作树清理**：`var/wt-docs25`（detached `88febf5`）不再需要，但归属未确认，删除属仓库操作、单独授权；本轮 `docs-round27-sync` 合并后若不再需要也按三重判据删；`C:/Users/jinlo/.codex/worktrees/e24e` 不动。
+5. **部署仍暂缓**：号主尚未购服务器；`feat/deploy-vps` 虽已随 #51 合并，也不代表上线，别提议 VPS／DNS。
 
 ## 3. 本机环境卡点（未解，直接决定你能跑什么）
 
-- **Docker 引擎第二十六轮已恢复 `running`**（`docker info` EXIT=0、`docker desktop status` 为 `running`；现有容器只有 `bailu-naming-redis`／`bailu-naming-mysql`）。但**没有** `jp_qualification_media-postgres-1`、`docker compose ps` 为空 ⇒ 库侧仍走 `%TEMP%` 的临时 PG 夹具档；起容器属基础设施变更，需单独授权。第十八～第二十五轮连续八轮起不来的故障链（`docker_data.vhdx` 的 `ERROR_SHARING_VIOLATION` → `no sd* disk` → engine `_ping` 503）保留作历史，若再复发别按「重启 Desktop 就好」试。
-- **临时 PG 18.4 集群（第二十五轮建的）**：二进制 `%TEMP%\jpqm-pg-bin`（官方 zip 抽出，337,444,127 B 那份）、数据 `%TEMP%\jpqm-r25-pg`、日志 `%TEMP%\jpqm-r25-pg.log`、端口 `127.0.0.1:55432`。第二十六轮现取＝**未运行**（`pg_ctl status` ⇒ `no server running`），要跑库侧任务先 `pg_ctl start`。⚠ 二进制**不能放中文路径**：直接在 `E:\自建程序\...` 下跑 `initdb` 必报 `FATAL: invalid byte sequence for encoding "UTF8": 0xd7 0xd4`，复制到 ASCII 路径即成功。
-- **本机库现态**＝夹具档（45／981／981／981／29／981、迁移 21），能跑 `verify:all` 与 `ci:fixture` 面，**不能**回答开发库的 `reviews`／`snapshots`／被拒候选。历史开发库读数见交接单 §3（已标注为历史值）。
-- 测试面：**规范读数用 `npx vitest run --dir tests --pool=threads --poolOptions.threads.singleThread`（12 文件／109 用例）**。⚠ 仓库根直接跑 `npm run test` 时 `tests` 是**子串过滤**，仍可能把 `var/wt-docs25` 的测试一起扫进来（遗留 `wt-docs22|23|24` 已不在，但本窗口 worktree 还在 ⇒ 本轮未复跑该读数，别照抄旧数）。也不要用裸 `npx vitest run`（会扫 `scripts/*.test.mjs` 的 node:test 文件，报「No test suite found」假 FAIL）。跑前确认 **4100 端口没被残留进程占着**，否则 `tests/public-api.test.ts` 抛 `EADDRINUSE` 退出码 1。本机**没有 `pnpm`**，README／CI 里那串 `pnpm …` 等价换成 `npm run …`。
-- 不依赖库的本地自检＝`npm run format:check`／`npm run typecheck`／`npm run build`、`npm run lint` 需补 `--ignore-pattern "Python/**"`（裸跑只红在未跟踪 `Python/` 的 `flamegraph.js` parse error，按铁律不删不提交）、聚焦 vitest、`npm run test:verify-gate`（现在是 **10** 条纯函数断言）。
-- ⚠ **worktree 在 `var/` 下时，`format:check` 的复检必须 `cd` 进 worktree**：从仓库根对 `var/wt-docsNN/...` 跑 prettier 会被根 `.prettierignore` 第 4 行的 `var/` 整段跳过、回「All matched files use Prettier code style!」＝**假绿**（#49 那轮因此让 CI 红在 `format:check`）。正确做法＝`cd var/wt-docs25` 后用相对 glob：`node ../../node_modules/prettier/bin/prettier.cjs --write "docs/**/*.md" README.md` 再 `--check "docs/**/*.md" README.md`（给交接单 §2 表加行后必须先 `--write`，否则表格重排会让检查转红）。
-- 输出与轮询坑：`wsl`／`powershell` 在 Git Bash 下 stdout 是 **UTF-16LE**，直接管道给 `grep` 会被判 `Binary output` ⇒ `| iconv -f UTF-16LE -t UTF-8 | tr -d '\000'`。判 Docker 就绪要看 `docker desktop status` 字符串＋`docker info` 退出码两条。长轮询会被约 150s 的工具超时移到后台且其输出文件在 workspace 外**读不回来** ⇒ **分段跑，每段 ≤100s**。`gh run view <runId> --log` 报 results-receiver 连接错误时改用 `gh run view --job <jobId> --log`（多数情况原样重试即成功）。CI 日志里有 ANSI 转义，`grep` 用 `-a`。
-- 自动权限门：`createdb`／`pg_restore`／任何写库会被分类器判「写操作」直接拒，**即使上一句授权覆盖了整条流程也要再说一句**（第二十五轮实测连拒 3 次后才在明确授权下通过）；`docker compose up -d` 也会被按基础设施变更拦。
+- **库侧＝Docker 容器 `jpqm-pg18`（夹具档）**：2026-11-10 现取 `postgres:18-alpine`、`Up 14 hours`、`127.0.0.1:55432->5432`；另有 `bailu-naming-redis`／`bailu-naming-mysql`（与本项目无关，不动）。没有 `docker compose` 起的 `jp_qualification_media-postgres-1`。⚠ `.env` 里的 `DATABASE_URL` 仍指向 `localhost:5432`（compose 库、并不存在）⇒ 跑任何库侧命令必须**显式**带 `DATABASE_URL='postgresql://postgres@127.0.0.1:55432/qualification_media'`，别靠 `.env` 默认值。
+- **本机库现态（2026-11-10 现取）＝夹具档**：`sources` 45／`snapshots` 31／`facts` 982（takken 16／gyoseishoshi 15／it-passport 2／FE 11／bookkeeping 863／fp 75）／`candidate_facts` 994 全 approved、pending 0／`reviews` 994 全 approve／`change_events` 994（statistics_update 805／system_change 96／schedule_change 25／application_deadline 19／fee_change 15／application_open 13／eligibility_change 11／result_date 8／exam_date 2）／`schema_migrations` 21。能跑 `verify:all`、`ci:fixture` 面与门禁复算，**不能**回答开发库的 `reviews`／`snapshots`／被拒候选（开发库已丢失，历史读数见交接单 §3，均标注为历史值）。⚠ 这是「按夹具清洗过的库」，不是带审核历史的开发库。
+- 容器起停：`docker start jpqm-pg18`／`docker stop jpqm-pg18` 属基础设施变更，需单独授权；`docker compose up -d postgres` 同理。上一轮建的 `%TEMP%` 临时 PG 集群已被这个容器取代，只在 Docker 再坏时按交接单 §6 重建（⚠ PG 二进制**不能放中文路径**，否则 `initdb` 报 `FATAL: invalid byte sequence for encoding "UTF8": 0xd7 0xd4`）。
+- 采集器的网络坑：`.env` 的 `NO_PROXY` 含 `[::1]`，httpx 0.28.1 会抛 `InvalidURL: Invalid port: ':1]'` ⇒ 跑 collector 要 `env -u NO_PROXY -u no_proxy …` 剥掉再传 `DATABASE_URL`。
+- 审核通道：`POST /internal/reviews/{candidate_id}` 只认 `x-reviewer-id` 头（值取 `ADMIN_REVIEWER_ID`，见 `apps/admin/src/server.ts:15`），`?reviewer=` 是只读降级；curl 判据前先确认 **3001** 没被残留进程占着（上一轮实测 `taskkill //PID <pid> //F` 后只剩 TIME_WAIT）。
+- 测试面：**规范读数＝`npx vitest run --dir tests --pool=threads --poolOptions.threads.singleThread`，2026-11-10 现取 12 文件／120 用例**（比上一轮 109 多的 11 条来自 FE 停考适配器与公开层标签）。⚠ 必须在**仓库根**跑：Bash 的 cwd 跨命令保留，`cd services/collector` 之后再跑会在收集器目录里报「No test files found」。仓库根的 `npm run test`（`vitest run tests`）里 `tests` 是**子串过滤**，会把 `var/wt-docs25` 的测试一起扫进来；裸 `npx vitest run` 会扫 `scripts/*.test.mjs` 的 node:test 文件、报「No test suite found」假 FAIL。跑前确认 **4100** 端口没被占（否则 `tests/public-api.test.ts` 抛 `EADDRINUSE`）。本机**没有 `pnpm`**，README／CI 里的 `pnpm …` 一律换 `npm run …`。
+- pytest：2026-11-10 FE 轮只跑了 FE 契约那个文件（11 passed）；本轮文档轮与全量 `npm run test:python`（`pytest services/collector/tests services/parser/tests`，两目录必须同传）均未跑（CI 侧 #58 起为 **161 passed**）⇒ 报 pytest 总数前先现取，别照抄 §10 表的 158。
+- 不依赖库的本地自检＝`npm run format:check`／`npm run typecheck`／`npm run build`、`npm run lint` 需补 `--ignore-pattern "Python/**"`（裸跑只红在未跟踪 `Python/` 的 `flamegraph.js` parse error，按铁律不删不提交）、聚焦 vitest、`npm run test:verify-gate`（**10** 条纯函数断言）。
+- ⚠ **worktree 在 `var/` 下时 `format:check` 会假绿**：从仓库根对 `var/wt-docsNN/...` 跑 prettier 被根 `.prettierignore` 第 4 行的 `var/` 整段跳过、回「All matched files use Prettier code style!」（#49 那轮因此让 CI 红在 `format:check`）。正确做法＝`cd var/wt-docsNN` 后用相对 glob：`node ../../node_modules/prettier/bin/prettier.cjs --write "docs/**/*.md" README.md` 再 `--check …`；给交接单 §2 表加行后必须先 `--write`，否则表格重排会让检查转红。
+- **夹具计数改一处不够**：数字写在四个地方——`config/release-gate-baseline.json` 的 `expectedFacts`、`fixtures/ci/approved-facts.sql`、`scripts/verify-ci-fixture.mjs` 第 9–12 行断言、`scripts/docker-smoke.mjs` 的断言。2026-11-10 PR #58 首跑就因漏改 `docker-smoke.mjs` 而红（`expected 981 approved facts, got 982`）。
+- 输出与轮询坑：`wsl`／`powershell` 在 Git Bash 下 stdout 是 **UTF-16LE**，管道给 `grep` 会被判 `Binary output` ⇒ `| iconv -f UTF-16LE -t UTF-8 | tr -d '\000'`。判 Docker 就绪看 `docker desktop status` ＋`docker info` 退出码两条。长轮询会被约 150s 的工具超时移到后台且输出文件在 workspace 外**读不回来** ⇒ **分段跑，每段 ≤100s**。`gh run view <runId> --log` 报 results-receiver 连接错误时改用 `--job <jobId> --log`（多数情况原样重试即成功）。CI 日志里有 ANSI 转义，`grep` 用 `-a`。
+- 自动权限门：`createdb`／`pg_restore`／`docker exec … psql -c "写语句"` 会被分类器判「写操作」直接拒，**即使上一句授权覆盖了整条流程也要再说一句**（2026-10-13／10-25 实测反复被拦）；`docker compose up -d` 同样按基础设施变更拦。
 
 ## 4. 铁律速记（全文见 `docs/transition-handoff.md` §1，违反即返工）
 
 - 采集／候选入库／逐条批准＝**三次独立授权**；commit、push、PR、CI 轮询、merge、删分支、`db:migrate`、`db:seed`、写库、DROP 一律等号主「一句话」，**一步一停**（操作类命令可直接跑、不用他点同意）。
-- 改 `config/data-coverage-contract.json`（判级面）＝产品决策，另行请示。
+- 改 `config/data-coverage-contract.json`（判级面）＝产品决策，另行请示；`config/release-gate-baseline.json`、CI 夹具、`verify-ci-fixture.mjs`、`docker-smoke.mjs` 属同一条计数链，必须**同一个 PR** 一起改（baseline 是下限：只抬 baseline 不重导夹具，本机绿、CI 必红）。
 - `git add --` **逐路径，绝不 `-A`**；仓库根未跟踪的 **`Python/` 永不提交、也不要删**。
-- 临时件放 gitignored 的 `var/` 并在提交前删（往轮遗留的 `var/` 文件别动）；`uv run` 生成的 `services/collector/uv.lock` 提交前删。
+- 临时件放 gitignored 的 `var/` 并在提交前删（往轮遗留的 `var/` 文件别动）；`uv run` 生成的 `services/collector/uv.lock` 是未跟踪的本地产物（CI 用 pip 装包），提交前删掉。
 - **判据可复跑、数字要现取**：报任何计数前先跑只读命令；发命令那条消息不得预写读数；写库用词分三态（「入库 N 条」要带 `pending_review` 与「未公开」，「批准 N 条」要带 `facts` 计数变化）。
-- 门禁语义：非合成 `pending_review != 0` ⇒ `verify:all` **硬失败**（设计内中间态）；`scripts/verify-lib.mjs` 跳过 `requiredLevel ∈ {post_event, optional, not_applicable}` ⇒ 历史统计类**永远不会把门禁跑红**，属产品覆盖债，只能靠人记着。
+- 门禁语义：非合成 `pending_review != 0` ⇒ `verify:all` **硬失败**（设计内中间态）；`scripts/verify-lib.mjs` 跳过 `requiredLevel ∈ {post_event, optional, not_applicable}` ⇒ 历史统计类**永远不会把门禁跑红**，属产品覆盖债，只能靠人记着。FE 的维度全 NULL，三个 `{deliveryMode:"cbt"}` 条件字段因此不参与检查 ⇒ **6/6 ≠ 字段齐全**。
 - 并行窗口：优先 `git worktree` 隔离；**不碰主工作树里的未提交改动、不回滚别的窗口的写入**；删分支前先确认它确实属于自己这轮。
 
 ## 5. 该读的权威文档（口径不写在本文）
 
 - `docs/transition-handoff.md`＝时点快照＋铁律全文＋§6 可复跑判据命令（含库丢失后的恢复命令组）＋§7 GitHub 通路＋§8 审核通道操作口径。
-- `docs/data-gate-semantics.md`＝门禁／判级／溯源／三级授权／鉴权总口径（§6 批准链、§8.1 三态术语、§9 baseline 与夹具维护）。
+- `docs/data-gate-semantics.md`＝门禁／判级／溯源／三级授权／鉴权总口径（§6 批准链、§8.1 三态术语、§9 baseline 与夹具维护的现态读数、§10 回归命令表）。⚠ §10 表是 **2026-10-13 的历史读数**（vitest 81/81、pytest 158），现行读数看 §9 的 2026-11-10 段与本页 §3。
 - 各资格契约：`docs/bookkeeping-source-contract.md`、`docs/gyoseishoshi-source-contract.md`、`docs/fundamental-it-engineer-source-contract.md`、`docs/it-passport-source-contract.md`、`docs/fp-source-contract.md`；宅建没有独立契约文件，阶段闭环与 `source:takken:retio-exam` 登记说明在 `docs/stage1-takken.md`。
 - `docs/product-design.md`＝SEO／页面收录契约（18.2 参数筛选页 `noindex,follow`、`:1081` Sitemap 只放可索引 200 正式页；#45 起 sitemap＝状态门＋按内容，空栏目页 `noindex` 且不收；#46 起 `/updates/?page=` 与筛选页 `noindex,follow`、sitemap 仍只收 `/updates/`；#48 起首页工具卡为真链接、主な資格 6 项、非法 ICS 直连走站内 404／错误页）。
 - `docs/stage-log.md`＝逐轮交付读数（每轮一段，含踩坑），要「上一轮到底做了什么」看这里而不是看本文。
-- `docs/work-package-g-history-presentation.md`＝历年统计接公开面（G-1／G-2）的方案与执行记录。
+- `docs/work-package-g-history-presentation.md`＝历年统计接公开面（G-1／G-2）的方案与执行记录；`docs/work-package-h-suspension-fact-proposal.md`＝FE 停考事实的方案、拍板与实施结果（已闭合，只作追溯）；`docs/work-package-f-statistics-sources.md`＝历史统计来源的调研与缺口定性。
 - ⚠ `docs/codex-handoff.md` 与 `docs/codex-handoff-next.md` 是 **2026-08-11 时点的归档**（文首自述「仅供追溯」），不要据它们推当前状态。
