@@ -155,3 +155,19 @@ def test_real_parser_does_not_infer_it_passport_facts_from_ipa_cards():
     candidates, issues = extract_real_page_candidates(snapshot)
     assert candidates == []
     assert issues == ()
+
+
+def test_real_parser_treats_jitec_home_news_as_entry_page_only():
+    snapshot = snapshot_from_html(
+        "source:it-passport:jitec-home",
+        """<html><head><title>【ITパスポート試験】情報処理推進機構</title></head><body>
+        <table><tr><td>2026年11月5日</td><td>
+        CBT方式で実施するITパスポート試験、情報セキュリティマネジメント試験及び
+        基本情報技術者試験における2027年1月以降の実施予定について
+        </td></tr></table>
+        </body></html>""",
+        synthetic=False,
+    )
+    candidates, issues = extract_real_page_candidates(snapshot)
+    assert candidates == []
+    assert issues == ()
