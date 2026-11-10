@@ -1,5 +1,15 @@
 # 阶段记录与剩余问题
 
+## 2026-11-10（IT Passport 入口页边界落账轮）：#68 的合并与 CI 读数落账＋开工单「ITP 适配器」待办改为已闭合（零抓取／零入库／零批准／零迁移／零库写／零生产代码改动／零判级面改动）
+
+- 轮前现取：main＝origin/main＝**`16ce98a`**（#68 合并点）、`gh pr list --state open` **0 条**、本地只有 `main`、远端只有 `refs/heads/main`、`git rev-list --merges --count main` **0**；工作树只剩未跟踪 `Python/`；`docker ps -a` 现取 `jpqm-pg18`＝`Exited (0)`（卷保留）。
+- #68 的交付＝**2 文件 24 增／1 删**：`services/collector/tests/test_it_passport_contract.py` 新增 `test_real_parser_treats_jitec_home_news_as_entry_page_only`（+16 行，用带「2027年1月以降」公告行的首页表格快照断言空候选、空异常，与 `ipa-exam` 用例对称）；`docs/it-passport-source-contract.md`（+9/−1：时点 → 2026-11-10、新增「入口页只登记、不产事实」、验收段补 2026-11-09 复抓结论与两条固化用例名）。归因＝2026-11-09 复抓时 `ipa-exam`（`76cf0e64`）与 `jitec-home`（`03af14f0`）相对 2026-08-12 旧快照只有首页新闻列表轮换，适配器 0 候选是代码里的显式设计，此前只有 `ipa-exam` 有守卫。
+- CI 读数：#68 PR 侧 run `42771378142`＝**success**（`release-gate` job `129679728173`、`docker-smoke` job `129679727874`）⇒ vitest `13 passed (13)`／`124 passed (124)`、pytest **162 passed**、`test:verify-gate` `pass 10／fail 0`、`verify:all` `"passed": 6／"failed": 0`、docker-smoke 日志 `ok - the image restores the 982 approved facts`；合并后 main push run `42784078932`（`release-gate` job `129720840410`／`docker-smoke` job `129720839841`）同为四条读数。分支 `feat/itp-entry-page-guard`（`f99e53f`）已按三重判据删净（合并记录 headRefOid＝本地 tip＝远端 tip、added-files diff 0）。
+- 本机复跑（本轮，全部不依赖库）：ITP 契约文件 `pytest services/collector/tests/test_it_passport_contract.py` ⇒ **11 passed**（改前 10，`git show HEAD:` 数 `^def test_` 现取）；全量 `npm run test:python` ⇒ **162 passed**（161→162）；`npx vitest run --dir tests …` ⇒ **13 文件／124 用例**；`npm run test:verify-gate` ⇒ **10/0**；`npm run format:check` ⇒「All matched files use Prettier code style!」；`npm run typecheck` ⇒ 通过。库侧 `verify:all`／`ci:fixture:verify` 未跑＝容器已停，文档保留「停之前的现取」并注明。
+- 文档改动＝**5 个文件、纯文档**：`docs/transition-handoff.md`（文头 CI 列表补 #68 与其 main push run、pytest 改 161→162、§2 表补 #68 行、§3 标题与 CI 段换到 #68、§3 本机 pytest 补 162、§4 首段末态改 `16ce98a`＋十七条已删分支＋本轮分支 `docs-round32-sync`）；`docs/next-round-ticket.md`（§0 基线／在途／已闭合清单、§2 第 1 项把 ITP 入口页 0 候选标为已闭合、§3 pytest 162、§5 §10 描述）；`docs/data-gate-semantics.md`（§10 pytest 行 161→162）；`README.md`（交接指针补 #68、pytest 162、main SHA→`16ce98a`）；`docs/stage-log.md`（本段）。numstat 见合并后回读。
+- 坑：① 交接单里我先写「ITP 契约文件现取 11 passed」，实际改前是 10 条，报数前必须用 `git show HEAD:<file> | grep -c '^def test_'` 现取，别凭记忆；② 计数链（baseline／`fixtures/ci/approved-facts.sql`／`verify-ci-fixture.mjs`／`docker-smoke.mjs`）本轮**一处都没动**——方案 A 的价值就在这里，动它们要另开事实化授权；③ 容器停掉后任何库侧读数都只能标「停之前」，复跑先单独请示 `docker start jpqm-pg18`。
+- 下一步（各需单独授权）：① 本轮 commit→push→开 PR→CI 复验→squash merge→删分支；② 新范畴（ITP 公告页事实化须先推翻工作包 H §9、宅建统计多来源、FE 附件提取）；③ 清理 `var/wt-docs25`；④ 要看库先 `docker start jpqm-pg18`。
+
 ## 2026-11-10（#65／#66 收尾轮）：两笔回滚代码轮的合并与 CI 读数落账＋`jpqm-pg18` 容器已停（零抓取／零入库／零批准／零迁移／零库写／零代码改动／零判级面改动）
 
 - 轮前现取：main＝origin/main＝**`8cfe3d6`**（#66 合并点）、`gh pr list --state open` **0 条**、本地只有 `main`、远端只有 `refs/heads/main`、`git rev-list --merges --count main` **0**；`docker ps -a --filter name=jpqm` 现取 `jpqm-pg18`＝`Exited (0)`（号主「1、停」授权的停容器已生效，卷保留、数据不丢）。
