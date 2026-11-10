@@ -32,27 +32,28 @@ FE 自令和 5 年度起全年以 CBT 随时实施，没有「统一考试日 + 
 - `ipa-fee` 页标题必须含「スケジュール」，只匹配「受験手数料 7,500円(…消費税込み…)」原文 ⇒ 产出 `fee`（`value_type=integer`，`risk=high`，`normalized_value=7500`），证据保留完整括注。该金额是「情報処理技術者試験」区分共通值，不是 FE 专属报价；页面没有明确金额 ⇒ 不产候选、报 `structure_changed`。
 - 风险分级：走 `[data-fact-key]` 路径时，`application_rule`/`application_deadline`/`exam_date`/`fee`/`eligibility` 固定 `high`，其余 `medium`；`_extract_exam_page()` 与 `_extract_cbt_page()` 产出的字段固定 `medium`（`suspension_period` 例外，固定 `high`）。`_extract_fee_page()` 固定 `high`。
 
-## 当前已批准事实（2026 年度，11 条）
+## 当前已批准事实（2026 年度，12 条）
 
-全部绑定真实官方快照（`snapshots.synthetic=false`，HTTP 200）：10 条科目字段来自 `exam` 页快照 `7e349607`，`exam_method`／`exam_schedule`／`suspension_period` 来自 `cbt` 页快照 `7bf47930`；两次采集的 `retrieved_at_jst` 均为 2026-11-09（`cbt` 页更新日为 2026-11-05）。
+全部绑定真实官方快照（`snapshots.synthetic=false`，HTTP 200）：10 条科目字段来自 `exam` 页快照 `7e349607`，`exam_method`／`exam_schedule`／`suspension_period` 来自 `cbt` 页快照 `7bf47930`（两次采集的 `retrieved_at_jst` 均为 2026-11-09，`cbt` 页更新日为 2026-11-05），`fee` 来自 `ipa-fee` 页快照 `371df812`（2026-11-10 采集；`ipa-fee` 页面本身不标注更新日）。
 
-| fact_key                        | normalized_value                                         | value_type | 来源   |
-| ------------------------------- | -------------------------------------------------------- | ---------- | ------ |
-| `exam_method`                   | `CBT`                                                    | text       | `cbt`  |
-| `exam_schedule`                 | `year_round`                                             | text       | `cbt`  |
-| `exam_subject_a_time`           | `90`                                                     | integer    | `exam` |
-| `exam_subject_a_format`         | `多肢選択式（四肢択一）`                                 | text       | `exam` |
-| `exam_subject_a_question_count` | `60`                                                     | integer    | `exam` |
-| `exam_subject_a_answer_count`   | `60`                                                     | integer    | `exam` |
-| `exam_subject_b_time`           | `100`                                                    | integer    | `exam` |
-| `exam_subject_b_format`         | `多肢選択式`                                             | text       | `exam` |
-| `exam_subject_b_question_count` | `20`                                                     | integer    | `exam` |
-| `exam_subject_b_answer_count`   | `20`                                                     | integer    | `exam` |
-| `suspension_period`             | `{"startsOn":"2026-12-28","resumesFrom":"2027-01-late"}` | json       | `cbt`  |
+| fact_key                        | normalized_value                                         | value_type | 来源      |
+| ------------------------------- | -------------------------------------------------------- | ---------- | --------- |
+| `exam_method`                   | `CBT`                                                    | text       | `cbt`     |
+| `exam_schedule`                 | `year_round`                                             | text       | `cbt`     |
+| `exam_subject_a_time`           | `90`                                                     | integer    | `exam`    |
+| `exam_subject_a_format`         | `多肢選択式（四肢択一）`                                 | text       | `exam`    |
+| `exam_subject_a_question_count` | `60`                                                     | integer    | `exam`    |
+| `exam_subject_a_answer_count`   | `60`                                                     | integer    | `exam`    |
+| `exam_subject_b_time`           | `100`                                                    | integer    | `exam`    |
+| `exam_subject_b_format`         | `多肢選択式`                                             | text       | `exam`    |
+| `exam_subject_b_question_count` | `20`                                                     | integer    | `exam`    |
+| `exam_subject_b_answer_count`   | `20`                                                     | integer    | `exam`    |
+| `suspension_period`             | `{"startsOn":"2026-12-28","resumesFrom":"2027-01-late"}` | json       | `cbt`     |
+| `fee`                           | `7500`                                                   | integer    | `ipa-fee` |
 
-所有 11 条的 `provider_id`、`exam_level_id`、`exam_component`、`delivery_mode`、`payment_method` 均为 `NULL` —— 这一点直接决定门禁行为，见下节。
+所有 12 条的 `provider_id`、`exam_level_id`、`exam_component`、`delivery_mode`、`payment_method` 均为 `NULL` —— 这一点直接决定门禁行为，见下节。
 
-## 2026-11-10 P0-1 费用候选（已入本机审核队列，未批准）
+## 2026-11-10 P0-1 费用事实（已批准）
 
 `ipa-fee`（`https://www.ipa.go.jp/shiken/mousikomi/schedule.html`）HTTP 200，快照哈希 `371df8121666…`，产出 1 条候选：
 
@@ -60,15 +61,15 @@ FE 自令和 5 年度起全年以 CBT 随时实施，没有「统一考试日 + 
 | -------- | ---------------- | ---------- | ---- | ------------------------------------------------------- |
 | `fee`    | `7500`           | integer    | high | `受験手数料 7,500円(情報処理技術者試験は消費税込み。…)` |
 
-候选为 `pending_review`、`synthetic=false`；`var/official-snapshots/fundamental-it/analysis-report.json` 记录 `database_write: not_run`、`automatic_approval: not_run`。与 IT Passport 的费用候选共享同一官方网站页和内容哈希，但分属不同 source／快照记录。经单独授权后，该候选已写入本机审核队列（1 条，未批准），`/review/fundamental-it-engineer` 显示待审核 1 条；`verify:all` 因此对该资格报 `official pending 1 != 0`，审核完成前不会回到 6/6。
+候选经单独授权写入本机审核队列后，已于同日经项目所有者授权批准（审阅人 `p0-1-owner-review`，理由绑定上述快照证据）。`/review/fundamental-it-engineer` 回到 0 条待审，`verify:all` 恢复 6/6。该金额是「情報処理技術者試験」区分共通值，不是 FE 专属报价，页面文案已按此口径展示。
 
-因此 P0-1 的 FE 费用缺口已有官方证据并进入审核队列，但仍未审核、未展示，不能算作已上线事实。
+审核为**本机库**操作：本机 `facts` 由 982 增至 991（同批共批准 9 条：IT Passport 8 条 + FE 费用 1 条），CI 夹具与 release baseline 的公开计数仍为 982，两者不能混称。P0-1 的 FE 费用缺口至此已有官方证据并显示为已批准事实。
 
 ## 门禁告警：6/6 通过 ≠ FE 字段完整
 
-`scripts/verify-lib.mjs` 的 `evaluateCoverage()` 对 `conditional` 的处理是：**先用维度筛出该年度该维度的事实，若一条都没筛到就整条 requirement 跳过**。FE 现有 11 条事实的 `delivery_mode` 是 `NULL`，而契约三条 requirement 的维度都是 `{deliveryMode: "cbt"}`，因此三条全部被跳过。
+`scripts/verify-lib.mjs` 的 `evaluateCoverage()` 对 `conditional` 的处理是：**先用维度筛出该年度该维度的事实，若一条都没筛到就整条 requirement 跳过**。FE 现有 12 条事实的 `delivery_mode` 全是 `NULL`（含新批准的 `fee`），而契约三条 requirement 的维度都是 `{deliveryMode: "cbt"}`，因此三条全部被跳过。
 
-本机复算判据（2026-10-09，直接调用 `scripts/verify-lib.mjs` 导出的 `evaluateCoverage('fundamental-it-engineer', facts, 2026)`，事实数组用当时已有的 10 个 fact_key，其余字段同现状）：
+本机复算判据（2026-10-09，直接调用 `scripts/verify-lib.mjs` 导出的 `evaluateCoverage('fundamental-it-engineer', facts, 2026)`，事实数组用当时已有的 10 个 fact_key，其余字段同现状 —— 这是历史读数，早于 `fee` 批准）：
 
 - 现状（`deliveryMode=null`）：`gaps = 0`，门禁 `passed 6/6`、`coverageGaps=[]`、API `verified`。
 - 假如给这批事实补上 `delivery_mode='cbt'`（不新增任何事实）：`gaps = 10`，缺的字段是 `application_rule`、`booking_window`、`venue_rule`、`eligibility`、`fee`、`scoring_method`、`passing_standard`、`exam_time`、`question_count`、`question_format`。
@@ -91,8 +92,8 @@ FE 自令和 5 年度起全年以 CBT 随时实施，没有「统一考试日 + 
 ## 已知剩余项
 
 1. `venue_rule`/`booking_window`/`application_rule` 需要一个「场次/月份」维度才能安全归属，现有契约维度（`deliveryMode`、`examComponent`）表达不了；要么扩维度，要么维持规则型说明并显式判为不适用 —— 属产品决策。
-2. `fee`、`eligibility`、`scoring_method`、`passing_standard` 仍为零已批准事实。2026-11-10 的取证结论：
-   - `fee`：已在 `ipa-fee` 页找到明确金额并生成候选，现已写入本机审核队列（`pending_review`），待审核。
+2. `eligibility`、`scoring_method`、`passing_standard` 仍为零已批准事实（`fee` 已于 2026-11-10 经审核批准，见上节）。2026-11-10 的取证结论：
+   - `fee`：已在 `ipa-fee` 页找到明确金额，候选经审核批准，已是正式事实。
    - `eligibility`（「どなたでも受験可能」）与 `passing_standard`（「各科目 600 点以上」）只在 CBT 运营方 CBT-Solutions 的 `https://www.cbt-s.com/` 页面出现，不在当前 FE 允许域名 `www.ipa.go.jp` 内。要事实化必须先决定是否把运营方域名登记为来源；IPA 自身页面未发现同义稳定表述。
    - `scoring_method`（IRT）只在 `試験要綱 Ver.5.6` PDF 中公布，当前适配器不解析 PDF。新增 PDF 解析属于新能力，不能用推断值替代。
    - 这三项都要按三次授权流程处理，不得用推断值补全。
