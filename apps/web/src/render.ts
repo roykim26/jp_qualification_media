@@ -151,6 +151,10 @@ const dimensionLabels: Record<string, string> = {
   interview: '面接',
   practical: '実技',
   unified: '統一試験',
+  'subject-a': '科目A',
+  'subject-b': '科目B',
+  convenience_store: 'コンビニ支払い',
+  pay_easy: 'ペイジー',
 };
 
 const eventTone: Record<PublicCalendarEvent['type'], string> = {
@@ -209,6 +213,12 @@ function factPriority(factKey: string): number {
 
 function dimensionLabel(value: string): string {
   return dimensionLabels[value] ?? value;
+}
+
+function qualificationScopeNotice(slug: string): string {
+  return slug === 'fp'
+    ? '<p class="history-scope-note">収集対象：日本FP協会2・3級（学科・資産設計提案業務）、金融財政事情研究会1級（学科・資産相談業務）。全実施機関・全級の情報を網羅するものではありません。</p>'
+    : '';
 }
 
 const sectionConfig: Record<
@@ -314,6 +324,10 @@ const sectionConfig: Record<
       'exam_time',
       'question_format',
       'question_count',
+      'scoring_method',
+      'pass_mark',
+      'practical_subject',
+      'interview_count',
     ],
     groups: [
       {
@@ -323,7 +337,10 @@ const sectionConfig: Record<
           'exam_method',
           'exam_time',
           'question_format',
-          'exam_subject_',
+          'exam_subject_a_time',
+          'exam_subject_b_time',
+          'exam_subject_a_format',
+          'exam_subject_b_format',
         ],
       },
       {
@@ -333,13 +350,18 @@ const sectionConfig: Record<
           'exam_content',
           'exam_subjects',
           'question_count',
-          'exam_subject_',
+          'exam_subject_a_question_count',
+          'exam_subject_b_question_count',
+          'exam_subject_a_answer_count',
+          'exam_subject_b_answer_count',
+          'practical_subject',
+          'interview_count',
         ],
       },
       {
         title: '合格基準',
         description: '公式に示された評価・合格基準です。',
-        factKeyPrefixes: ['passing_standard'],
+        factKeyPrefixes: ['passing_standard', 'pass_mark', 'scoring_method'],
       },
     ],
   },
@@ -531,12 +553,31 @@ function formatCalendarDate(value: string | null): string {
   }).format(new Date(`${value}T00:00:00+09:00`));
 }
 
+function verificationLabel(
+  fact: Pick<PublicFact, 'officialVerifiedAt' | 'provenanceStatus'>,
+): string {
+  if (fact.provenanceStatus === 'verified' && fact.officialVerifiedAt)
+    return `公式情報確認: ${formatVerifiedAt(fact.officialVerifiedAt)}`;
+  return fact.provenanceStatus === 'fixture'
+    ? '公式情報確認: 回帰用 fixture（確認時刻なし）'
+    : '公式情報確認: 確認記録未移行';
+}
+
+function renderFactSource(fact: PublicFact): string {
+  const verification = escapeHtml(verificationLabel(fact));
+  return fact.sourceUrl
+    ? `<details><summary>公式ソースを確認</summary><div><p><a href="${escapeHtml(fact.sourceUrl)}" target="_blank" rel="noreferrer">公式サイトで確認（新しいタブ）</a></p><p class="source-url">${escapeHtml(fact.sourceUrl)}</p><p>保存記録: ${escapeHtml(fact.sourceSnapshotId)}</p><p>${verification}</p></div></details>`
+    : `<details><summary>出典情報</summary><div><p>ソース ID: ${escapeHtml(fact.sourceId)}</p><p>スナップショット: ${escapeHtml(fact.sourceSnapshotId)}</p><p>${verification}</p></div></details>`;
+}
+
 function renderFact(fact: PublicFact): string {
   const dimensions = [
     fact.providerId,
     fact.examLevelId,
     fact.examComponent,
     fact.deliveryMode,
+    fact.paymentMethod,
+    fact.examSession,
   ]
     .filter(Boolean)
     .map(
@@ -544,15 +585,9 @@ function renderFact(fact: PublicFact): string {
         `<span class="dimension" data-dimension-value="${escapeHtml(String(value))}">${escapeHtml(dimensionLabel(String(value)))}</span>`,
     )
     .join('');
-  const verification = fact.officialVerifiedAt
-    ? `公式情報確認: ${escapeHtml(formatVerifiedAt(fact.officialVerifiedAt))}`
-    : fact.provenanceStatus === 'fixture'
-      ? '公式情報確認: 回帰用 fixture（確認時刻なし）'
-      : '公式情報確認: 確認記録未移行';
-  const source = fact.sourceUrl
-    ? `<details><summary>公式ソースを確認</summary><div><p><a href="${escapeHtml(fact.sourceUrl)}" target="_blank" rel="noreferrer">公式サイトで確認（新しいタブ）</a></p><p class="source-url">${escapeHtml(fact.sourceUrl)}</p><p>保存記録: ${escapeHtml(fact.sourceSnapshotId)}</p><p>${verification}</p></div></details>`
-    : `<details><summary>出典情報</summary><div><p>ソース ID: ${escapeHtml(fact.sourceId)}</p><p>スナップショット: ${escapeHtml(fact.sourceSnapshotId)}</p><p>${verification}</p></div></details>`;
-  return `<article class="card fact" data-fact-key="${escapeHtml(fact.factKey)}"><div class="card__body"><div class="fact__heading"><h3>${escapeHtml(factLabel(fact.factKey))}</h3>${renderBadge('公式確認済み', 'verified')}</div>${dimensions ? `<div class="dimensions">${dimensions}</div>` : ''}<p class="fact-value">${escapeHtml(fact.displayValue)}</p><p class="meta">適用年度: ${escapeHtml(String(fact.examYear))}年</p>${source}</div></article>`;
+  const verified =
+    fact.provenanceStatus === 'verified' && Boolean(fact.officialVerifiedAt);
+  return `<article class="card fact" data-fact-key="${escapeHtml(fact.factKey)}"><div class="card__body"><div class="fact__heading"><h3>${escapeHtml(factLabel(fact.factKey))}</h3>${renderBadge(verified ? '公式確認済み' : '出典確認待ち', verified ? 'verified' : 'review')}</div>${dimensions ? `<div class="dimensions">${dimensions}</div>` : ''}<p class="fact-value">${escapeHtml(fact.displayValue)}</p><p class="meta">適用年度: ${escapeHtml(String(fact.examYear))}年</p>${renderFactSource(fact)}</div></article>`;
 }
 
 function matchesPrefixes(fact: PublicFact, prefixes: readonly string[]) {
@@ -599,7 +634,13 @@ function isHistoryFactKey(factKey: string): boolean {
 }
 
 function historyGroupKey(fact: PublicFact): string {
-  return `${fact.examLevelId ?? '-'}|${fact.deliveryMode ?? '-'}`;
+  return JSON.stringify([
+    fact.providerId ?? null,
+    fact.examLevelId,
+    fact.examComponent ?? null,
+    fact.deliveryMode ?? null,
+    fact.paymentMethod ?? null,
+  ]);
 }
 
 function levelRank(groupId: string): number {
@@ -615,10 +656,13 @@ const historyColumnLabels: Record<string, string> = {
 };
 
 function compareHistoryGroup(left: string, right: string): number {
-  const [, leftMode] = left.split('|');
-  const [, rightMode] = right.split('|');
+  const [leftProvider, leftLevel, leftComponent, leftMode] = JSON.parse(left);
+  const [rightProvider, rightLevel, rightComponent, rightMode] =
+    JSON.parse(right);
   return (
-    levelRank(left) - levelRank(right) ||
+    String(leftProvider ?? '').localeCompare(String(rightProvider ?? '')) ||
+    levelRank(leftLevel ?? '') - levelRank(rightLevel ?? '') ||
+    String(leftComponent ?? '').localeCompare(String(rightComponent ?? '')) ||
     (deliveryRank[leftMode] ?? 9) - (deliveryRank[rightMode] ?? 9) ||
     left.localeCompare(right)
   );
@@ -650,7 +694,7 @@ function sessionLabel(fact: PublicFact): string {
 type HistoryRow = {
   year: number;
   session: string;
-  cells: Map<string, PublicFact>;
+  cells: Map<string, PublicFact[]>;
 };
 
 function compareHistoryRows(left: HistoryRow, right: HistoryRow): number {
@@ -662,9 +706,9 @@ function compareHistoryRows(left: HistoryRow, right: HistoryRow): number {
 
 function renderHistoryRow(row: HistoryRow, currentYear: number): string {
   const cells = historyNumericKeys.map((key) => {
-    const fact = row.cells.get(key);
-    if (!fact) return '<td class="history-cell--empty">—</td>';
-    return `<td>${escapeHtml(officialValueToken(fact.displayValue))}</td>`;
+    const facts = row.cells.get(key);
+    if (!facts?.length) return '<td class="history-cell--empty">—</td>';
+    return `<td>${facts.map((fact) => `<div class="history-value"><span>${escapeHtml(officialValueToken(fact.displayValue))}</span>${renderFactSource(fact)}</div>`).join('')}</td>`;
   });
   const attrs =
     row.year === currentYear
@@ -676,16 +720,14 @@ function renderHistoryRow(row: HistoryRow, currentYear: number): string {
 function renderHistoryTable(
   groupKey: string,
   rows: Map<string, HistoryRow>,
-  note: string | undefined,
+  notes: PublicFact[],
   groupIndex: number,
   currentYear: number,
 ): string {
-  const [levelId, modeId] = groupKey.split('|');
-  const title = [
-    levelId === '-' ? '' : dimensionLabel(levelId),
-    modeId === '-' ? '' : dimensionLabel(modeId),
-  ]
-    .filter(Boolean)
+  const dimensions: (string | null)[] = JSON.parse(groupKey);
+  const title = dimensions
+    .filter((value): value is string => Boolean(value))
+    .map(dimensionLabel)
     .join('・');
   const headingId = `history-table-${groupIndex}`;
   const head = [
@@ -701,10 +743,13 @@ function renderHistoryTable(
     .sort(compareHistoryRows)
     .map((row) => renderHistoryRow(row, currentYear))
     .join('');
-  const noteHtml = note
-    ? `<p class="history-table__note">集計口径：${escapeHtml(note)}</p>`
-    : '';
-  return `<div class="history-table-block"><h3 id="${headingId}">${escapeHtml(title || '公式統計')}</h3>${noteHtml}<div class="compare-table-wrap"><table class="compare-table history-table" aria-labelledby="${headingId}"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div></div>`;
+  const noteHtml = notes
+    .map(
+      (note) =>
+        `<div class="history-table__note"><p>集計口径：${escapeHtml(note.displayValue)}</p><p class="meta">口径の公表年: ${note.examYear}年</p>${renderFactSource(note)}</div>`,
+    )
+    .join('');
+  return `<div class="history-table-block"><h3 id="${headingId}">${escapeHtml(title || '公式統計')}</h3>${noteHtml}<div class="compare-table-wrap" tabindex="0" role="region" aria-label="比較・統計表（横スクロールできます）"><table class="compare-table history-table" aria-labelledby="${headingId}"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div></div>`;
 }
 
 function renderHistoryTables(facts: PublicFact[], currentYear: number): string {
@@ -712,22 +757,27 @@ function renderHistoryTables(facts: PublicFact[], currentYear: number): string {
     historyNumericKeys.includes(fact.factKey),
   );
   if (!numeric.length) return '';
-  const notes = new Map<string, string>();
-  for (const fact of facts)
-    if (fact.factKey === 'statistics_methodology')
-      notes.set(historyGroupKey(fact), fact.displayValue);
+  const notes = new Map<string, PublicFact[]>();
+  for (const fact of facts) {
+    if (fact.factKey !== 'statistics_methodology') continue;
+    const key = historyGroupKey(fact);
+    notes.set(key, [...(notes.get(key) ?? []), fact]);
+  }
 
   const groups = new Map<string, Map<string, HistoryRow>>();
   for (const fact of numeric) {
     const groupKey = historyGroupKey(fact);
     const rows = groups.get(groupKey) ?? new Map<string, HistoryRow>();
-    const rowKey = `${fact.examYear}|${fact.examSession ?? ''}`;
+    const rowKey = JSON.stringify([
+      fact.examYear,
+      fact.examSession ?? officialScopeText(fact.displayValue),
+    ]);
     const row = rows.get(rowKey) ?? {
       year: fact.examYear,
       session: sessionLabel(fact),
-      cells: new Map<string, PublicFact>(),
+      cells: new Map<string, PublicFact[]>(),
     };
-    row.cells.set(fact.factKey, fact);
+    row.cells.set(fact.factKey, [...(row.cells.get(fact.factKey) ?? []), fact]);
     rows.set(rowKey, row);
     groups.set(groupKey, rows);
   }
@@ -738,7 +788,7 @@ function renderHistoryTables(facts: PublicFact[], currentYear: number): string {
       renderHistoryTable(
         groupKey,
         rows,
-        notes.get(groupKey),
+        notes.get(groupKey) ?? [],
         groupIndex,
         currentYear,
       ),
@@ -1015,7 +1065,7 @@ export function renderQualificationSectionPage(
     )
       ? `<div class="page-hero__actions">${renderButtonLink({ href: `/ics/${qualification.slug}/${year}.ics`, label: `${year}年のICSをダウンロード`, variant: 'secondary', icon: 'calendar' })}</div>`
       : '';
-  const body = `<div class="container"><header class="page-hero detail-hero"><div class="tag-row"><span class="tag">${escapeHtml(fieldLabel(qualification.field))}</span><span class="tag">${escapeHtml(categoryLabel(qualification.category))}</span></div><h1>${escapeHtml(qualification.officialNameJa)}</h1>${heroSectionTitle ? `<p class="detail-hero__section">${escapeHtml(heroSectionTitle)}</p>` : ''}<p>${qualification.aliasesJa.map(escapeHtml).join(' / ') || '公式情報を整理して掲載します。'}</p>${sectionMeta ? `<p class="detail-hero__intro">${escapeHtml(sectionMeta.intro)}</p>` : ''}<div class="page-hero__meta">${status}<span class="meta">公式情報確認日: ${escapeHtml(formatVerifiedAt(view.officialVerifiedAt))}</span></div><nav class="detail-hero__years" aria-label="年度を選ぶ">${yearLinks}</nav>${annualIcs}</header><div class="detail-layout"><div class="detail-main">${interpretationNote}${historyTables}${scopeNote}${facts}${renderVerificationHistory(sortedFacts)}${renderSourceModule(qualification.slug)}</div>${sidebar}</div></div>`;
+  const body = `<div class="container"><header class="page-hero detail-hero"><div class="tag-row"><span class="tag">${escapeHtml(fieldLabel(qualification.field))}</span><span class="tag">${escapeHtml(categoryLabel(qualification.category))}</span></div><h1>${escapeHtml(qualification.officialNameJa)}</h1>${heroSectionTitle ? `<p class="detail-hero__section">${escapeHtml(heroSectionTitle)}</p>` : ''}<p>${qualification.aliasesJa.map(escapeHtml).join(' / ') || '公式情報を整理して掲載します。'}</p>${sectionMeta ? `<p class="detail-hero__intro">${escapeHtml(sectionMeta.intro)}</p>` : ''}<div class="page-hero__meta">${status}<span class="meta">公式情報確認日: ${escapeHtml(formatVerifiedAt(view.officialVerifiedAt))}</span></div><nav class="detail-hero__years" aria-label="年度を選ぶ">${yearLinks}</nav>${annualIcs}</header><div class="detail-layout"><div class="detail-main">${qualificationScopeNotice(qualification.slug)}${interpretationNote}${historyTables}${scopeNote}${facts}${renderVerificationHistory(sortedFacts)}${renderSourceModule(qualification.slug)}</div>${sidebar}</div></div>`;
   const canonicalPath =
     section === 'overview'
       ? `/shikaku/${qualification.slug}/`
@@ -1288,7 +1338,7 @@ export function renderComparePage(
   const headerCells = comparison.qualifications
     .map(
       (qualification) =>
-        `<th scope="col"><a href="/shikaku/${escapeHtml(qualification.slug)}/">${escapeHtml(qualification.officialNameJa)}</a></th>`,
+        `<th scope="col"><a href="/shikaku/${escapeHtml(qualification.slug)}/">${escapeHtml(qualification.officialNameJa)}</a>${qualificationScopeNotice(qualification.slug)}</th>`,
     )
     .join('');
   const rows = comparison.rows
@@ -1296,12 +1346,26 @@ export function renderComparePage(
       const cells = comparison.qualifications
         .map((qualification) => {
           const cell = row.cells[qualification.slug];
-          if (!cell?.value)
+          if (!cell?.entries.length)
             return `<td><span class="compare-empty">${escapeHtml(cell?.missingReason ? (missingReasonLabels[cell.missingReason] ?? '掲載情報なし') : '掲載情報なし')}</span></td>`;
-          const source = cell.sourceUrl
-            ? `<a href="${escapeHtml(cell.sourceUrl)}" target="_blank" rel="noreferrer">出典</a>`
-            : '';
-          return `<td><p>${escapeHtml(cell.value)}</p><span class="meta">${cell.examYear}年${source ? ` / ${source}` : ''}</span></td>`;
+          return `<td>${cell.entries
+            .map((entry) => {
+              const scope = [
+                entry.providerId,
+                entry.examLevelId,
+                entry.examComponent,
+                entry.deliveryMode,
+                entry.paymentMethod,
+              ]
+                .filter(Boolean)
+                .map((value) => dimensionLabel(String(value)))
+                .join('・');
+              const source = entry.sourceUrl
+                ? `<a href="${escapeHtml(entry.sourceUrl)}" target="_blank" rel="noreferrer">出典</a>`
+                : '';
+              return `<div class="compare-entry"><p class="meta">${escapeHtml(scope || '区分指定なし')} / ${escapeHtml(factLabel(entry.factKey))}</p><p>${escapeHtml(entry.value)}</p><p class="meta">適用年度: ${entry.examYear}年${entry.examSession ? ` / 回・期間: ${escapeHtml(entry.examSession)}` : ''}</p><p class="meta">${escapeHtml(verificationLabel(entry))}${source ? ` / ${source}` : ''}</p></div>`;
+            })
+            .join('')}</td>`;
         })
         .join('');
       return `<tr><th scope="row">${escapeHtml(row.label)}</th>${cells}</tr>`;
@@ -1309,7 +1373,7 @@ export function renderComparePage(
     .join('');
   const table =
     selectedCount >= 2
-      ? `<div class="compare-table-wrap"><table class="compare-table"><thead><tr><th scope="col">比較項目</th>${headerCells}</tr></thead><tbody>${rows}</tbody></table></div>`
+      ? `<div class="compare-table-wrap" tabindex="0" role="region" aria-label="比較・統計表（横スクロールできます）"><table class="compare-table"><thead><tr><th scope="col">比較項目</th>${headerCells}</tr></thead><tbody>${rows}</tbody></table></div>`
       : renderFeedbackState({
           kind: 'empty',
           title: '比較する資格を2件以上選択してください',

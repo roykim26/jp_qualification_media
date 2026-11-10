@@ -617,17 +617,17 @@ describe('shared qualification page rendering', () => {
             label: '試験方式',
             cells: {
               takken: {
-                value: '筆記試験',
-                factKey: 'exam_method',
-                examYear: 2026,
-                verifiedAt: '2026-08-12T00:00:00.000Z',
+                entries: [
+                  {
+                    value: '筆記試験',
+                    factKey: 'exam_method',
+                    examLevelId: null,
+                    examYear: 2026,
+                    verifiedAt: '2026-08-12T00:00:00.000Z',
+                  },
+                ],
               },
-              'it-passport': {
-                value: null,
-                factKey: null,
-                examYear: null,
-                verifiedAt: null,
-              },
+              'it-passport': { entries: [] },
             },
           },
         ],
@@ -1060,7 +1060,10 @@ describe('bookkeeping history statistics tables', () => {
     expect(html).toContain(
       '<tr class="history-row--current" aria-current="true"><th scope="row">2026年</th>',
     );
-    expect(html).toContain('<td>11,959名</td>');
+    expect(html).toContain('<span>11,959名</span>');
+    expect(html).toContain(
+      '<div class="history-value"><span>11,959名</span><details>',
+    );
     expect(html).not.toContain('<td>11,959名 applicants');
     expect(html).toContain('<td class="history-cell--empty">—</td>');
     expect(html).toContain('<th scope="col">受験者数</th>');

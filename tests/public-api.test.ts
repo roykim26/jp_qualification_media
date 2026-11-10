@@ -389,11 +389,13 @@ describe('public qualification read path', () => {
       'fp',
     ]);
     const methodRow = comparison.rows.find((row) => row.key === 'exam_method');
-    expect(methodRow?.cells['it-passport']).toMatchObject({
-      value: 'CBT方式',
-      examYear: 2026,
-    });
-    expect(methodRow?.cells.takken).toMatchObject({ value: null });
+    expect(methodRow?.cells['it-passport'].entries).toMatchObject([
+      {
+        value: 'CBT方式',
+        examYear: 2026,
+      },
+    ]);
+    expect(methodRow?.cells.takken).toMatchObject({ entries: [] });
   });
 
   it('serves an empty comparison shell when no qualifications are selected', async () => {

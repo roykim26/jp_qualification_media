@@ -128,6 +128,11 @@ export const webStyles = String.raw`
 .compare-table tbody th { width: 180px; color: var(--color-ink); background: var(--color-bg-subtle); }
 .compare-table td p { margin-bottom: var(--space-2); font-weight: 600; overflow-wrap: anywhere; }
 .compare-empty { color: var(--color-muted); font-size: 14px; }
+.compare-entry + .compare-entry, .history-value + .history-value { margin-top: var(--space-3); padding-top: var(--space-3); border-top: 1px solid var(--color-border); }
+.compare-entry .meta { font-size: 12px; font-weight: 400; }
+.history-value details { margin-top: var(--space-2); font-size: 12px; }
+.history-value details > div { max-width: 280px; overflow-wrap: anywhere; }
+.compare-table-wrap:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
 .history-table-block + .history-table-block { margin-top: var(--space-8); }
 .history-table-block h3 { margin-bottom: var(--space-2); font-size: 19px; }
 .history-table__note { margin-bottom: var(--space-3); color: var(--color-muted); font-size: 13px; overflow-wrap: anywhere; }
