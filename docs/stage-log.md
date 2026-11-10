@@ -1,5 +1,14 @@
 # 阶段记录与剩余问题
 
+## 2026-11-10（交接时点收尾轮）：#61／#62／#63 三笔纯文档轮的合并与 CI 读数落账＋§10 已刷新＋末态切换到 `a72d4b7`（零抓取／零入库／零批准／零迁移／零写库／零代码改动／零判级面改动）
+
+- 轮前现取：main＝origin/main＝**`a72d4b7`**（#63 合并点）、`git rev-list --merges --count main` **0**、远端只有 `refs/heads/main`、`gh pr list --state open` **0 条**、本地分支只有 `main`、`git worktree list` 三个（主工作树／codex worktree detached `97e3fc0` 不动／`var/wt-docs25` detached `88febf5` 归属未确认）；Docker 库容器 `jpqm-pg18` Up **17 hours**（`127.0.0.1:55432`），库侧计数仍为 45／31／982／994／994／994／21。
+- 三笔纯文档轮的合并与 CI 读数：#61 `2189bd1`（4 文件 60/49＝README 2/2＋ticket 30/33＋stage-log 10/0＋handoff 18/14；run `42749734226`／job `129610260632`，`docker-smoke` job `129610260936`）、#62 `de54367`（1 文件 16/15；run `42757273360`／job `129634451317`，`docker-smoke` job `129634451005`）、#63 `a72d4b7`（1 文件 12/12；run `42760009986`／job `129643218762`，`docker-smoke` job `129643219099`）；三条 CI 同为 vitest **12 文件／120 用例**、pytest **161 passed**、`test:verify-gate` **10/0**、`verify:all` **6/0**；三次 main push run `42749937141`／`42757587356`／`42760261666` 同值且 success。
+- 本机复跑（本轮补齐全量，Docker 夹具库）：`npm run build` EXIT=0、`npx vitest run --dir tests …` **12 文件／120 用例**、`npm run test:python` **161 passed**（此前只跑过 FE 契约文件的 11 条）、`npm run test:verify-gate` **10/10**、`DATABASE_URL=…:55432 npm run verify:all` **6/6**（16／15／2／11／863／75、`coverageGaps` 全空）、`npm run ci:fixture:verify` EXIT=0（982／982／982／29）、`npm run data:staleness` `status=ok`／`approvedFacts=982`、`npm run format:check` 与 `npm run lint -- --ignore-pattern "Python/**"` 均 EXIT=0。
+- 文档改动＝**4 个文件、纯文档**：`docs/transition-handoff.md`（文头 CI 列表补 #61／#62／#63 与其 main push run、§2 表补三行、§3 标题与 CI 段换到 #63 并把「未重跑全量 pytest」改成 161 实测、§4 首段末态改成 `a72d4b7`＋十三条已删分支、文头末段历史补三笔文档轮）；`README.md`（交接单指针补 #61／#62／#63 与 pytest 161、main SHA→`a72d4b7`）；`docs/next-round-ticket.md`（§0 main SHA→`a72d4b7`、在途改「无」、补 #63）；`docs/stage-log.md`（本段）。
+- 踩坑：① `gh` 必须在仓库内跑，在 `%TEMP%` 下执行 `gh run view --job --log` 报 `fatal: not a git repository`；② 7890 在听时给 `ls-remote` 加空的代理覆盖会挂到工具超时（工单 §1 的写法已删）；③ 分类器把「提交」只当 commit，合并 PR 必须另有「合并」措辞；④ 临时 `node` 脚本要 import `pg` 必须放进仓库 `var/` 里跑，放 `%TEMP%` 会 `ERR_MODULE_NOT_FOUND`。
+- 下一步（各需单独授权）：① `jpqm-pg18` 容器去留；② `services/api/src/release.ts:93` 回滚路径硬编码 `schedule_change`（全仓唯一剩下的代码小债）；③ `var/wt-docs25` 清理；④ 新范畴（IT Passport 适配器、宅建统计多来源、FE 附件提取）。
+
 ## 2026-11-10（文档时点同步轮）：#58／#59／#60 三条合并读数落账＋本机库现态切换到 Docker `jpqm-pg18` 夹具档（45／31／982／994／994／994／21）＋README 982 口径（零抓取／零入库／零批准／零迁移／零写库／零代码改动／零判级面改动）
 
 - 轮前现取：main＝origin/main＝**`47a76be`**（#60 合并点）、`git rev-list --merges --count main` **0**、远端只有 `refs/heads/main`、`gh pr list --state open` **0 条**、本地分支只有 `main`；`git worktree list` 三个＝主工作树／另一窗口的 codex worktree（detached `97e3fc0`，不动）／遗留 `var/wt-docs25`（detached `88febf5`，归属未确认）；Docker 引擎 `running`，库容器 `jpqm-pg18`（postgres:18-alpine，`127.0.0.1:55432`）Up 14 hours。

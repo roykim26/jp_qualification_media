@@ -7,10 +7,10 @@
 ## 0. 当前工单＝下一轮（写于 2026-11-10）
 
 - 仓库根＝`E:\自建程序\jp_qualification_media`，remote＝`roykim26/jp_qualification_media`。
-- 写作时点现取：main＝origin/main＝**`de54367`**（PR #62＝§10 回归命令表刷新轮，1 文件 16/15；前两个合并点 #61＝`2189bd1`（文档时点同步轮，4 文件 60/49）、#60＝`47a76be`（FE 停考轮落账，2 文件 23/2））；历史纯线性（`git rev-list --merges --count main` 为 **0**，main 每个 commit 标题带 `(#NN)` ⇒ **一律 squash PR，绝不直接 push main**）；远端只有 `refs/heads/main`，open PR **0 条**。
-- **在途＝无**。2026-11-10 的两个文档轮（#61 时点同步、#62 §10 刷新）均已合并，分支 `docs-round27-sync`／`docs-round28-sync` 已按三重判据删净（本地＋远端）。
-- **上一轮（2026-11-10）已闭合，不要重做**：基本情報 FE 停考事实 `suspension_period` 落地（#58：适配器＋3 测试＋标签，候选 1 条入库批准，`facts` 981→**982**、FE 10→**11**、baseline 11、CI 夹具 982）；工作包 H 方案稿收编并补实施结果（#59）；阶段记录与门禁读数同步（#60）；文档时点同步轮（#61：交接单／README／阶段记录／本页，库侧现态切到 `jpqm-pg18` 夹具档）；§10 回归命令表刷新轮（#62：vitest 120／12、pytest 161、gate 10/10、夹具 982、新增 `data:staleness` 行）。细节见 `docs/stage-log.md` 顶部当日段。
-- 本地工作树只剩未跟踪 `Python/`（不提交、不删）。`git worktree list` 三个＝主工作树（`de54367`）／另一窗口的 `C:/Users/jinlo/.codex/worktrees/e24e/jp_qualification_media`（detached `97e3fc0`，**不动**）／遗留 `var/wt-docs25`（detached `88febf5`，归属未确认，删前先问）。
+- 写作时点现取：main＝origin/main＝**`a72d4b7`**（PR #63＝开工单旧债清理轮，1 文件 12/12；其前三个合并点 #62＝`de54367`（§10 回归命令表刷新，1 文件 16/15）、#61＝`2189bd1`（文档时点同步，4 文件 60/49）、#60＝`47a76be`（FE 停考轮落账，2 文件 23/2））；历史纯线性（`git rev-list --merges --count main` 为 **0**，main 每个 commit 标题带 `(#NN)` ⇒ **一律 squash PR，绝不直接 push main**）；远端只有 `refs/heads/main`，open PR **0 条**。
+- **在途＝2026-11-10 交接时点收尾轮（本页就是它写的）**：分支 `docs-round30-sync`（从 `a72d4b7` 切出），4 文件＝`README.md`＋`docs/transition-handoff.md`＋`docs/stage-log.md`＋本页；PR 号开单后用 `gh pr list --state open --head docs-round30-sync` 现取，CI 待验。更早的三笔纯文档轮（#61 时点同步、#62 §10 刷新、#63 开工单旧债清理）均已合并，分支 `docs-round27-sync`／`docs-round28-sync`／`docs-round29-sync` 已按三重判据删净（本地＋远端）。
+- **上一轮（2026-11-10）已闭合，不要重做**：基本情報 FE 停考事实 `suspension_period` 落地（#58：适配器＋3 测试＋标签，候选 1 条入库批准，`facts` 981→**982**、FE 10→**11**、baseline 11、CI 夹具 982）；工作包 H 方案稿收编并补实施结果（#59）；阶段记录与门禁读数同步（#60）；文档时点同步轮（#61：交接单／README／阶段记录／本页，库侧现态切到 `jpqm-pg18` 夹具档）；§10 回归命令表刷新轮（#62：vitest 120／12、pytest 161、gate 10/10、夹具 982、新增 `data:staleness` 行）；开工单旧债清理轮（#63：删掉已闭合的 §10 旧读数债、同步末态与代理命令）。细节见 `docs/stage-log.md` 顶部当日段。
+- 本地工作树只剩未跟踪 `Python/`（不提交、不删）。`git worktree list` 三个＝主工作树（`a72d4b7`）／另一窗口的 `C:/Users/jinlo/.codex/worktrees/e24e/jp_qualification_media`（detached `97e3fc0`，**不动**）／遗留 `var/wt-docs25`（detached `88febf5`，归属未确认，删前先问）。
 - ⚠ 号主常并行开多个窗口动同一仓库 ⇒ 若 §1 现取发现 main 又前进了，就以新 mergeCommit 为基线，**不要回滚别的窗口的写入**。
 
 ## 1. 开工先跑（全部只读，整条可复制）
