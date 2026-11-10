@@ -27,7 +27,7 @@
 | `source:bookkeeping:qa`          | 検定試験 Q&A（受験条件・級順・得点開示） |
 | `source:bookkeeping:news-51504`  | 2027 年度以降 3 级配点变更公告           |
 
-当前适配器只会从这些来源产出候选：`class1-exam`／`class2-exam`／`class3-exam` 产出按等级分流的 `question_format`，`qa` 产出统一试验 1／2／3 级的 `eligibility`，`flow-teller` 产出 `payment_deadline_rule`，另有 `home`／`network`／`calendar-2026` 产出日程与费用类字段。其余新登记来源（`class1`／`class2`／`class3`／`flow`／`flow-net`／`report`／`news-51504`）只作证据留存，不产出候选。
+当前适配器只会从这些来源产出候选：`class1-exam`／`class2-exam`／`class3-exam` 产出按等级分流的 `question_format`；`class3-exam` 另按页面三列表头提取 `exam_subjects`、`exam_time`、`question_count`、`passing_standard`，并保留商工会議所决定的 `result_date_rule`（仅离线适配完成，新增字段尚未入库或批准；表头、行或数值不完整时阻止入库），`qa` 产出统一试验 1／2／3 级的 `eligibility`，`flow-teller` 产出 `payment_deadline_rule`，另有 `home`／`network`／`calendar-2026` 产出日程与费用类字段。其余新登记来源（`class1`／`class2`／`class3`／`flow`／`flow-net`／`report`／`news-51504`）只作证据留存，不产出候选。
 
 ## 工作包 F／F-2 新增的统计来源登记（2026-10-11 采集，2026-10-12 建映射）
 
