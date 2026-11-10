@@ -1,4 +1,5 @@
 import { Pool } from 'pg';
+import { updateEventTypeForFact } from '../../../packages/schema/src/updates.js';
 
 export type ReleaseGate = {
   pending: number;
@@ -50,6 +51,33 @@ export async function checkTakkenRelease(
   }
 }
 
+export type RollbackEvent = {
+  id: string;
+  eventType: string;
+  previousRevisionId: string;
+  newRevisionId: string;
+};
+
+/**
+ * The rollback event used to be pinned to `schedule_change`, which mislabels
+ * every non-schedule fact (fees, deadlines, statistics...).  The type now comes
+ * from the same classifier the approval path uses, so the events list shows
+ * what actually changed.
+ */
+export function buildRollbackEvent(
+  factId: string,
+  factKey: string,
+  currentRevisionId: string,
+  previousRevisionId: string,
+): RollbackEvent {
+  return {
+    id: `rollback:${factId}:${previousRevisionId}`,
+    eventType: updateEventTypeForFact(factKey),
+    previousRevisionId: currentRevisionId,
+    newRevisionId: previousRevisionId,
+  };
+}
+
 export async function rollbackApprovedFact(
   databaseUrl: string,
   factId: string,
@@ -62,7 +90,7 @@ export async function rollbackApprovedFact(
   try {
     await client.query('BEGIN');
     const current = await client.query(
-      `SELECT f.id, f.current_revision_id FROM facts f WHERE f.id=$1 AND f.status='approved' FOR UPDATE`,
+      `SELECT f.id, f.current_revision_id, f.fact_key FROM facts f WHERE f.id=$1 AND f.status='approved' FOR UPDATE`,
       [factId],
     );
     if (!current.rowCount) throw new Error('approved fact not found');
@@ -88,14 +116,21 @@ export async function rollbackApprovedFact(
       revisionId,
       factId,
     ]);
+    const event = buildRollbackEvent(
+      factId,
+      current.rows[0].fact_key as string,
+      current.rows[0].current_revision_id as string,
+      revisionId,
+    );
     await client.query(
       `INSERT INTO change_events (id,fact_id,event_type,previous_revision_id,new_revision_id,affected_pages)
-      VALUES ($1,$2,'schedule_change',$3,$4,$5::jsonb) ON CONFLICT (id) DO NOTHING`,
+      VALUES ($1,$2,$3::event_type,$4,$5,$6::jsonb) ON CONFLICT (id) DO NOTHING`,
       [
-        `rollback:${factId}:${revisionId}`,
+        event.id,
         factId,
-        current.rows[0].current_revision_id,
-        revisionId,
+        event.eventType,
+        event.previousRevisionId,
+        event.newRevisionId,
         JSON.stringify(['qualification:takken']),
       ],
     );
