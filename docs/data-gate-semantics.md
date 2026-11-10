@@ -121,7 +121,7 @@ Why：审核人 ID 放进 URL 就可被任意 `<img src=…>`、浏览器历史�
 
 ## 10. 回归命令与最近读数（2026-11-10 本机实跑，回滚事件收口小轮现取）
 
-改 TypeScript 必须先 build 再 verify —— `scripts/verify-all.mjs` 跑的是 `dist/` 编译产物。本会话 Git Bash **没有 `pnpm`**，`pnpm <script>` 一律等价换成 `npm run <script>`。库侧命令必须**显式**带 `DATABASE_URL='postgresql://postgres@127.0.0.1:55432/qualification_media'`（本机是 Docker `jpqm-pg18` 夹具档；`.env` 默认值指向并不存在的 compose 库 `localhost:5432`）。
+改 TypeScript 必须先 build 再 verify —— `scripts/verify-all.mjs` 跑的是 `dist/` 编译产物。本会话 Git Bash **没有 `pnpm`**，`pnpm <script>` 一律等价换成 `npm run <script>`。库侧命令必须**显式**带 `DATABASE_URL='postgresql://postgres@127.0.0.1:55432/qualification_media'`（本机是 Docker `jpqm-pg18` 夹具档；`.env` 默认值指向并不存在的 compose 库 `localhost:5432`）。⚠ 该容器 2026-11-10 已在 #66 合并后停掉（`docker ps -a` 现取 `Exited (0)`，卷保留）⇒ 下表与下文库侧读数是**停之前**的现取值，要复跑先单独请示 `docker start jpqm-pg18`；不依赖库的 vitest／`test:verify-gate`／`format:check` 不受影响。
 
 | 命令                                                                             | 读数                                                                                                                                                                                                                                                                                                                               |
 | -------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

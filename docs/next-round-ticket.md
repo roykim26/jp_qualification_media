@@ -7,10 +7,10 @@
 ## 0. 当前工单＝下一轮（写于 2026-11-10）
 
 - 仓库根＝`E:\自建程序\jp_qualification_media`，remote＝`roykim26/jp_qualification_media`。
-- 写作时点现取：main＝origin/main＝**`63cede7`**（PR #65＝回滚事件分类小轮，5 文件 117/27；其前三个合并点 #64＝`885a523`（交接单时点收尾，4 文件 23/11）、#63＝`a72d4b7`（开工单旧债清理，1 文件 12/12）、#62＝`de54367`（§10 回归命令表刷新，1 文件 16/15））；历史纯线性（`git rev-list --merges --count main` 为 **0**，main 每个 commit 标题带 `(#NN)` ⇒ **一律 squash PR，绝不直接 push main**）；远端只有 `refs/heads/main`，open PR **0 条**。
-- **在途＝2026-11-10 回滚页标签小轮**：分支 `fix/rollback-affected-pages`（从 `63cede7` 切出），把 `rollbackApprovedFact()` 同一 INSERT 的 `affected_pages` 从常量 `['qualification:takken']` 改成事实自己的 `qualification_id`（与批准链同口径，宅建行为不变）；`buildRollbackEvent()` 改对象入参并产出 `affectedPages`，`tests/rollback-event.test.ts` 3→4 条断言。PR 号开单后现取，CI 待验。更早的五笔轮次（#61／#62／#63／#64 纯文档＋#65 代码）均已合并，分支已按三重判据删净（本地＋远端）。
-- **上一轮（2026-11-10）已闭合，不要重做**：基本情報 FE 停考事实 `suspension_period` 落地（#58：适配器＋3 测试＋标签，候选 1 条入库批准，`facts` 981→**982**、FE 10→**11**、baseline 11、CI 夹具 982）；工作包 H 方案稿收编并补实施结果（#59）；阶段记录与门禁读数同步（#60）；文档时点同步轮（#61）；§10 回归命令表刷新轮（#62）；开工单旧债清理轮（#63）；交接单时点收尾轮（#64）；回滚事件分类小轮（#65：`event_type` 改走 `updateEventTypeForFact()`，新增 3 条纯断言）。细节见 `docs/stage-log.md` 顶部当日段。
-- 本地工作树只剩未跟踪 `Python/`（不提交、不删）。`git worktree list` 三个＝主工作树（`63cede7`）／另一窗口的 `C:/Users/jinlo/.codex/worktrees/e24e/jp_qualification_media`（detached `97e3fc0`，**不动**）／遗留 `var/wt-docs25`（detached `88febf5`，归属未确认，删前先问）。
+- 写作时点现取：main＝origin/main＝**`8cfe3d6`**（PR #66＝回滚页标签小轮，5 文件 84/54；其前四个合并点 #65＝`63cede7`（回滚事件分类，5 文件 117/27）、#64＝`885a523`（交接单时点收尾，4 文件 23/11）、#63＝`a72d4b7`（开工单旧债清理，1 文件 12/12）、#62＝`de54367`（§10 回归命令表刷新，1 文件 16/15））；历史纯线性（`git rev-list --merges --count main` 为 **0**，main 每个 commit 标题带 `(#NN)` ⇒ **一律 squash PR，绝不直接 push main**）；远端只有 `refs/heads/main`，open PR **0 条**。
+- **在途＝2026-11-10 #65／#66 收尾轮（纯文档）**：分支 `docs-round31-sync`（从 `8cfe3d6` 切出），把两笔代码轮的合并与 CI 读数落账，并记下 `jpqm-pg18` 容器已由号主停掉（`Exited (0)`，卷保留）。PR 号开单后现取，CI 待验。更早的六笔轮次（#61／#62／#63／#64 纯文档＋#65／#66 代码）均已合并，分支已按三重判据删净（本地＋远端）。
+- **上一轮（2026-11-10）已闭合，不要重做**：基本情報 FE 停考事实 `suspension_period` 落地（#58：适配器＋3 测试＋标签，候选 1 条入库批准，`facts` 981→**982**、FE 10→**11**、baseline 11、CI 夹具 982）；工作包 H 方案稿收编并补实施结果（#59）；阶段记录与门禁读数同步（#60）；文档时点同步轮（#61）；§10 回归命令表刷新轮（#62）；开工单旧债清理轮（#63）；交接单时点收尾轮（#64）；回滚事件分类小轮（#65：`event_type` 改走 `updateEventTypeForFact()`）；回滚页标签小轮（#66：`affected_pages` 取事实自己的 `qualification_id`，`tests/rollback-event.test.ts` 共 4 条断言）。细节见 `docs/stage-log.md` 顶部当日段。
+- 本地工作树只剩未跟踪 `Python/`（不提交、不删）。`git worktree list` 三个＝主工作树（`8cfe3d6`）／另一窗口的 `C:/Users/jinlo/.codex/worktrees/e24e/jp_qualification_media`（detached `97e3fc0`，**不动**）／遗留 `var/wt-docs25`（detached `88febf5`，归属未确认，删前先问）。
 - ⚠ 号主常并行开多个窗口动同一仓库 ⇒ 若 §1 现取发现 main 又前进了，就以新 mergeCommit 为基线，**不要回滚别的窗口的写入**。
 
 ## 1. 开工先跑（全部只读，整条可复制）
@@ -30,19 +30,19 @@ gh pr list --state open --json number,headRefName,headRefOid,mergeable,mergeStat
 
 ## 2. 待办（按建议顺序；commit／push／PR／CI 轮询／merge／删分支**各需单独一句话**，做到就停）
 
-1. **容器去留**：`jpqm-pg18`（postgres:18-alpine，2026-11-10 现取 Up 17h，`127.0.0.1:55432`）保留还是停，需号主一句话；起停容器属基础设施变更，单独授权。停了之后再跑库侧任务要先 `docker start jpqm-pg18`。
-2. **新范畴（要新开授权单，别顺手做）**：IT Passport 的 `ipa-exam`（`76cf0e64`）与 `jitec-home`（`03af14f0`）页面 2026-11-09 已变但适配器 0 候选，事实化需扩适配器；宅建统计页多来源重构（`snapshot_from_html()` 仍把快照 id 钉在单条 `TAKKEN_SOURCE`，那条背后有已批准事实 ⇒ 该页**只能抓、不能入库**）；基本情報技術者附件提取（`toukei_fe.html` 是目录页、零 `<table>`，数据在 20 多个 PDF／xlsx，而仓内**既无 PDF 也无 xlsx 解析能力**，要先定依赖）。
-3. **工作树清理**：`var/wt-docs25`（detached `88febf5`）不再需要，但归属未确认，删除属仓库操作、单独授权；`C:/Users/jinlo/.codex/worktrees/e24e` 不动。
-4. **部署仍暂缓**：号主尚未购服务器；`feat/deploy-vps` 虽已随 #51 合并，也不代表上线，别提议 VPS／DNS。
+1. **新范畴（要新开授权单，别顺手做）**：IT Passport 的 `ipa-exam`（`76cf0e64`）与 `jitec-home`（`03af14f0`）页面 2026-11-09 已变但适配器 0 候选，事实化需扩适配器；宅建统计页多来源重构（`snapshot_from_html()` 仍把快照 id 钉在单条 `TAKKEN_SOURCE`，那条背后有已批准事实 ⇒ 该页**只能抓、不能入库**）；基本情報技術者附件提取（`toukei_fe.html` 是目录页、零 `<table>`，数据在 20 多个 PDF／xlsx，而仓内**既无 PDF 也无 xlsx 解析能力**，要先定依赖）。
+2. **工作树清理**：`var/wt-docs25`（detached `88febf5`）不再需要，但归属未确认，删除属仓库操作、单独授权；`C:/Users/jinlo/.codex/worktrees/e24e` 不动。
+3. **部署仍暂缓**：号主尚未购服务器；`feat/deploy-vps` 虽已随 #51 合并，也不代表上线，别提议 VPS／DNS。
+4. **库容器已停（2026-11-10 号主拍板）**：`jpqm-pg18` 现为 `Exited (0)`、卷保留；要跑库侧任务先单独请示 `docker start jpqm-pg18`（起停容器属基础设施变更）。
 
 ## 3. 本机环境卡点（未解，直接决定你能跑什么）
 
-- **库侧＝Docker 容器 `jpqm-pg18`（夹具档）**：2026-11-10 现取 `postgres:18-alpine`、`Up 15 hours`、`127.0.0.1:55432->5432`；另有 `bailu-naming-redis`／`bailu-naming-mysql`（与本项目无关，不动）。没有 `docker compose` 起的 `jp_qualification_media-postgres-1`。⚠ `.env` 里的 `DATABASE_URL` 仍指向 `localhost:5432`（compose 库、并不存在）⇒ 跑任何库侧命令必须**显式**带 `DATABASE_URL='postgresql://postgres@127.0.0.1:55432/qualification_media'`，别靠 `.env` 默认值。
-- **本机库现态（2026-11-10 现取）＝夹具档**：`sources` 45／`snapshots` 31／`facts` 982（takken 16／gyoseishoshi 15／it-passport 2／FE 11／bookkeeping 863／fp 75）／`candidate_facts` 994 全 approved、pending 0／`reviews` 994 全 approve／`change_events` 994（statistics_update 805／system_change 96／schedule_change 25／application_deadline 19／fee_change 15／application_open 13／eligibility_change 11／result_date 8／exam_date 2）／`schema_migrations` 21。能跑 `verify:all`、`ci:fixture` 面与门禁复算，**不能**回答开发库的 `reviews`／`snapshots`／被拒候选（开发库已丢失，历史读数见交接单 §3，均标注为历史值）。⚠ 这是「按夹具清洗过的库」，不是带审核历史的开发库。
-- 容器起停：`docker start jpqm-pg18`／`docker stop jpqm-pg18` 属基础设施变更，需单独授权；`docker compose up -d postgres` 同理。上一轮建的 `%TEMP%` 临时 PG 集群已被这个容器取代，只在 Docker 再坏时按交接单 §6 重建（⚠ PG 二进制**不能放中文路径**，否则 `initdb` 报 `FATAL: invalid byte sequence for encoding "UTF8": 0xd7 0xd4`）。
+- **库侧＝Docker 容器 `jpqm-pg18`（夹具档，现已停）**：`postgres:18-alpine`、`127.0.0.1:55432->5432`；2026-11-10 号主拍板停掉后现取 `Exited (0)`（卷保留、数据不丢），用前须单独请示 `docker start jpqm-pg18`。另有 `bailu-naming-redis`／`bailu-naming-mysql`（与本项目无关，不动）。没有 `docker compose` 起的 `jp_qualification_media-postgres-1`。⚠ `.env` 里的 `DATABASE_URL` 仍指向 `localhost:5432`（compose 库、并不存在）⇒ 跑任何库侧命令必须**显式**带 `DATABASE_URL='postgresql://postgres@127.0.0.1:55432/qualification_media'`，别靠 `.env` 默认值。
+- **本机库现态（2026-11-10 现取，容器停之前）＝夹具档**：`sources` 45／`snapshots` 31／`facts` 982（takken 16／gyoseishoshi 15／it-passport 2／FE 11／bookkeeping 863／fp 75）／`candidate_facts` 994 全 approved、pending 0／`reviews` 994 全 approve／`change_events` 994（statistics_update 805／system_change 96／schedule_change 25／application_deadline 19／fee_change 15／application_open 13／eligibility_change 11／result_date 8／exam_date 2）／`schema_migrations` 21。能跑 `verify:all`、`ci:fixture` 面与门禁复算（起容器后），**不能**回答开发库的 `reviews`／`snapshots`／被拒候选（开发库已丢失，历史读数见交接单 §3，均标注为历史值）。⚠ 这是「按夹具清洗过的库」，不是带审核历史的开发库。
+- 容器起停：`docker start jpqm-pg18`／`docker stop jpqm-pg18` 属基础设施变更，需单独授权；容器 2026-11-10 已停，**下一轮跑 `verify:all`／`ci:fixture:verify`／库侧计数前，先把「起容器」当一步单独请示**。上一轮建的 `%TEMP%` 临时 PG 集群已被这个容器取代，只在 Docker 再坏时按交接单 §6 重建（⚠ PG 二进制**不能放中文路径**，否则 `initdb` 报 `FATAL: invalid byte sequence for encoding "UTF8": 0xd7 0xd4`）。
 - 采集器的网络坑：`.env` 的 `NO_PROXY` 含 `[::1]`，httpx 0.28.1 会抛 `InvalidURL: Invalid port: ':1]'` ⇒ 跑 collector 要 `env -u NO_PROXY -u no_proxy …` 剥掉再传 `DATABASE_URL`。
 - 审核通道：`POST /internal/reviews/{candidate_id}` 只认 `x-reviewer-id` 头（值取 `ADMIN_REVIEWER_ID`，见 `apps/admin/src/server.ts:15`），`?reviewer=` 是只读降级；curl 判据前先确认 **3001** 没被残留进程占着（上一轮实测 `taskkill //PID <pid> //F` 后只剩 TIME_WAIT）。
-- 测试面：**规范读数＝`npx vitest run --dir tests --pool=threads --poolOptions.threads.singleThread`，2026-11-10 现取 12 文件／120 用例**（比上一轮 109 多的 11 条来自 FE 停考适配器与公开层标签）。⚠ 必须在**仓库根**跑：Bash 的 cwd 跨命令保留，`cd services/collector` 之后再跑会在收集器目录里报「No test files found」。仓库根的 `npm run test`（`vitest run tests`）里 `tests` 是**子串过滤**，会把 `var/wt-docs25` 的测试一起扫进来；裸 `npx vitest run` 会扫 `scripts/*.test.mjs` 的 node:test 文件、报「No test suite found」假 FAIL。跑前确认 **4100** 端口没被占（否则 `tests/public-api.test.ts` 抛 `EADDRINUSE`）。本机**没有 `pnpm`**，README／CI 里的 `pnpm …` 一律换 `npm run …`。
+- 测试面：**规范读数＝`npx vitest run --dir tests --pool=threads --poolOptions.threads.singleThread`，2026-11-10 现取 13 文件／124 用例**（109→120 的 11 条来自 FE 停考适配器与公开层标签；120→124 是 #65 的 3 条＋#66 的 1 条，均在 `tests/rollback-event.test.ts`）。⚠ 必须在**仓库根**跑：Bash 的 cwd 跨命令保留，`cd services/collector` 之后再跑会在收集器目录里报「No test files found」。仓库根的 `npm run test`（`vitest run tests`）里 `tests` 是**子串过滤**，会把 `var/wt-docs25` 的测试一起扫进来；裸 `npx vitest run` 会扫 `scripts/*.test.mjs` 的 node:test 文件、报「No test suite found」假 FAIL。跑前确认 **4100** 端口没被占（否则 `tests/public-api.test.ts` 抛 `EADDRINUSE`）。本机**没有 `pnpm`**，README／CI 里的 `pnpm …` 一律换 `npm run …`。
 - pytest：2026-11-10 已跑全量 `npm run test:python`（`pytest services/collector/tests services/parser/tests`，两目录必须同传）＝**161 passed**，与本机 CI 同值；报数前仍要现取（FE 轮曾只跑契约那个文件的 11 条）。
 - 不依赖库的本地自检＝`npm run format:check`／`npm run typecheck`／`npm run build`、`npm run lint` 需补 `--ignore-pattern "Python/**"`（裸跑只红在未跟踪 `Python/` 的 `flamegraph.js` parse error，按铁律不删不提交）、聚焦 vitest、`npm run test:verify-gate`（**10** 条纯函数断言）。
 - ⚠ **worktree 在 `var/` 下时 `format:check` 会假绿**：从仓库根对 `var/wt-docsNN/...` 跑 prettier 被根 `.prettierignore` 第 4 行的 `var/` 整段跳过、回「All matched files use Prettier code style!」（#49 那轮因此让 CI 红在 `format:check`）。正确做法＝`cd var/wt-docsNN` 后用相对 glob：`node ../../node_modules/prettier/bin/prettier.cjs --write "docs/**/*.md" README.md` 再 `--check …`；给交接单 §2 表加行后必须先 `--write`，否则表格重排会让检查转红。
@@ -63,7 +63,7 @@ gh pr list --state open --json number,headRefName,headRefOid,mergeable,mergeStat
 ## 5. 该读的权威文档（口径不写在本文）
 
 - `docs/transition-handoff.md`＝时点快照＋铁律全文＋§6 可复跑判据命令（含库丢失后的恢复命令组）＋§7 GitHub 通路＋§8 审核通道操作口径。
-- `docs/data-gate-semantics.md`＝门禁／判级／溯源／三级授权／鉴权总口径（§6 批准链、§8.1 三态术语、§9 baseline 与夹具维护的现态读数、§10 回归命令表）。§10 已于 2026-11-10 刷新为本机全量实测读数（#62：vitest 120／12、pytest 161、gate 10/10、夹具 982、`data:staleness` 行），本页 §3 与之同源。
+- `docs/data-gate-semantics.md`＝门禁／判级／溯源／三级授权／鉴权总口径（§6 批准链、§8.1 三态术语、§9 baseline 与夹具维护的现态读数、§10 回归命令表）。§10 已于 2026-11-10 刷新为本机全量实测读数（现为 #66 后：vitest 13／124、pytest 161、gate 10/10、夹具 982、`data:staleness` 行），本页 §3 与之同源。
 - 各资格契约：`docs/bookkeeping-source-contract.md`、`docs/gyoseishoshi-source-contract.md`、`docs/fundamental-it-engineer-source-contract.md`、`docs/it-passport-source-contract.md`、`docs/fp-source-contract.md`；宅建没有独立契约文件，阶段闭环与 `source:takken:retio-exam` 登记说明在 `docs/stage1-takken.md`。
 - `docs/product-design.md`＝SEO／页面收录契约（18.2 参数筛选页 `noindex,follow`、`:1081` Sitemap 只放可索引 200 正式页；#45 起 sitemap＝状态门＋按内容，空栏目页 `noindex` 且不收；#46 起 `/updates/?page=` 与筛选页 `noindex,follow`、sitemap 仍只收 `/updates/`；#48 起首页工具卡为真链接、主な資格 6 项、非法 ICS 直连走站内 404／错误页）。
 - `docs/stage-log.md`＝逐轮交付读数（每轮一段，含踩坑），要「上一轮到底做了什么」看这里而不是看本文。

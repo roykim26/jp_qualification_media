@@ -1,5 +1,14 @@
 # 阶段记录与剩余问题
 
+## 2026-11-10（#65／#66 收尾轮）：两笔回滚代码轮的合并与 CI 读数落账＋`jpqm-pg18` 容器已停（零抓取／零入库／零批准／零迁移／零库写／零代码改动／零判级面改动）
+
+- 轮前现取：main＝origin/main＝**`8cfe3d6`**（#66 合并点）、`gh pr list --state open` **0 条**、本地只有 `main`、远端只有 `refs/heads/main`、`git rev-list --merges --count main` **0**；`docker ps -a --filter name=jpqm` 现取 `jpqm-pg18`＝`Exited (0)`（号主「1、停」授权的停容器已生效，卷保留、数据不丢）。
+- 两笔代码轮的合并读数：#65 `63cede7`（5 文件 117/27＝`services/api/src/release.ts` 40/5＋`tests/rollback-event.test.ts` 45/0＋`data-gate-semantics` 13/13＋`next-round-ticket` 8/9＋本文件 11/0；PR run `42764640952`／job `129658129666`）、#66 `8cfe3d6`（5 文件 84/54＝`release.ts` 27/21＋测试 40/26＋`data-gate-semantics` 3/3＋`next-round-ticket` 4/4＋本文件 10/0；PR run `42765631578`／job `129661346217`）；CI 四条＝#65 vitest **13 文件／123 用例**、#66 **13 文件／124 用例**，pytest **161 passed**、`test:verify-gate` **10/0**、`verify:all` **6/0**。同批落账的 #64（`885a523`，4 文件 23/11，纯文档，run `42762551467`／job `129651451254`）CI 仍为 120／12。三次 main push run `42762797980`／`42764961140`／`42765950927` 与各自 PR 侧同值且 success。
+- 本机复跑（本轮；容器停之前跑的库侧项沿用上一轮，停后只跑不依赖库的）：`npx vitest run --dir tests --pool=threads --poolOptions.threads.singleThread` ⇒ **13 文件／124 用例全过**（本轮再跑一次确认，与 #66 合并时同值）；`npm run test:verify-gate` ⇒ **10 pass／0 fail**；`npm run format:check` ⇒ EXIT=0。库侧 `verify:all`／`ci:fixture:verify`／库侧计数本轮**未跑**＝容器已停，文档里相应读数一律注明「停之前的现取」（上一轮实测 6/6、EXIT=0、982／982／982／29），要复核先单独请示 `docker start jpqm-pg18`。
+- 文档改动＝**5 个文件、纯文档**：`docs/transition-handoff.md`（文头 CI 列表补 #64／#65／#66 与其 main push run、§2 表补三行、§3 标题与 CI 段换到 #66 且本机 vitest 改 13／124、§3 首段补「容器已停」、§3 末段把「仍开放＝`release.ts:93`」改成已收口、§4 首段末态改 `8cfe3d6`＋十六条已删分支＋本轮分支 `docs-round31-sync`、§4 待办 6 同步、§5 库现态条改为 2026-11-10 读数）；`README.md`（交接指针补 #64／#65／#66、vitest 13／124、容器已停、main SHA→`8cfe3d6`）；`docs/next-round-ticket.md`（§0 末态与在途、§2 删「容器去留」并新增「已停」一条、§3 库侧与测试面读数、§5 §10 描述）；`docs/data-gate-semantics.md`（§10 引言加「容器已停、读数取自停之前」注记）；`docs/stage-log.md`（本段）。numstat 见合并后回读。
+- 坑：① 容器停掉后 `verify:all`／`ci:fixture:verify`／任何库侧计数都跑不了，文档必须写清读数时点，否则下一轮会把「停之前的 982」当现态；② 交接单 §2 表加行后 prettier 会整表重排，`--write` 后再 `--check` 才是真绿（#49 的假绿事故同族）。
+- 下一步（各需单独授权）：① 本轮 commit→push→开 PR→CI 复验→squash merge→删分支；② 新范畴（ITP 适配器、宅建统计多来源、FE 附件提取）；③ 清理 `var/wt-docs25`；④ 要看库先 `docker start jpqm-pg18`。
+
 ## 2026-11-10（回滚页标签小轮）：回滚事件的 `affected_pages` 改取事实自己的 `qualification_id`（零抓取／零入库／零批准／零迁移／零库写／零判级面改动）
 
 - 轮前现取：main＝origin/main＝**`63cede7`**（#65 回滚事件分类小轮合并点）、open PR **0 条**、本地只有 `main`；库侧 982 条事实（takken 16，其余 966 条为非宅建）。范围＝上一轮的相邻发现（同一 INSERT 的 `affected_pages` 常量）。
