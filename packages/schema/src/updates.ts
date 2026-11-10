@@ -38,6 +38,7 @@ const updateFactLabelPrefixes: readonly [string, string][] = [
   ['exam_schedule', '試験日程'],
   ['exam_date', '試験日'],
   ['result_date', '合格発表'],
+  ['suspension_period', '実施休止期間'],
   ['fee', '受験料・手数料'],
   ['payment_deadline_rule', '支払期限'],
   ['payment_method', '支払い方法'],

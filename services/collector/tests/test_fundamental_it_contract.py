@@ -114,3 +114,63 @@ def test_fundamental_it_cbt_page_extracts_only_unambiguous_delivery_fields():
         ("exam_schedule", "year_round"),
     ]
     assert all("合格発表" not in item.evidence_text for item in candidates)
+
+
+def test_fundamental_it_cbt_page_extracts_planned_suspension_period():
+    html = """<main>
+    <p>情報セキュリティマネジメント試験（SG）、基本情報技術者試験（FE）は、CBT（Computer Based Testing）方式により実施しています。</p>
+    <p>システムリプレースのため、2026年12月28日から試験実施を一時休止することとしています。一時休止後の試験再開は、2027年1月下旬を予定しています。</p>
+    <p>令和5年度から年間を通じてCBT方式で随時試験を実施しています。</p>
+    </main>"""
+    candidates, issues = extract_candidates(
+        snapshot_from_html("source:fundamental-it:cbt", html, synthetic=False)
+    )
+    assert not issues
+    by_key = {candidate.fact_key: candidate for candidate in candidates}
+    suspension = by_key["suspension_period"]
+    assert suspension.normalized_value == {
+        "startsOn": "2026-12-28",
+        "resumesFrom": "2027-01-late",
+    }
+    assert suspension.display_value == "2026年12月28日～2027年1月下旬（予定）実施休止"
+    assert suspension.value_type == "json"
+    assert suspension.risk_level == "high"
+    assert "2026年12月28日から試験実施を一時休止" in suspension.evidence_text
+    assert "2027年1月下旬を予定" in suspension.evidence_text
+
+
+def test_fundamental_it_suspension_period_keeps_month_part_unrounded():
+    html = """<main>
+    <p>情報セキュリティマネジメント試験（SG）、基本情報技術者試験（FE）は、CBT（Computer Based Testing）方式により実施しています。</p>
+    <p>システムリプレースのため、2027年1月5日から試験実施を一時休止することとしています。一時休止後の試験再開は、2027年2月中旬を予定しています。</p>
+    </main>"""
+    candidates, _ = extract_candidates(
+        snapshot_from_html("source:fundamental-it:cbt", html, synthetic=False)
+    )
+    by_key = {candidate.fact_key: candidate for candidate in candidates}
+    assert by_key["suspension_period"].normalized_value == {
+        "startsOn": "2027-01-05",
+        "resumesFrom": "2027-02-mid",
+    }
+
+
+def test_fundamental_it_suspension_period_requires_both_sentences_and_planned_resume():
+    base = """<main>
+    <p>情報セキュリティマネジメント試験（SG）、基本情報技術者試験（FE）は、CBT（Computer Based Testing）方式により実施しています。</p>
+    <p>令和5年度から年間を通じてCBT方式で随時試験を実施しています。</p>
+    %s
+    </main>"""
+    without_planned_resume = base % (
+        "<p>システムリプレースのため、2026年12月28日から試験実施を一時休止することとしています。一時休止後の試験再開は、2027年1月下旬としています。</p>"
+    )
+    without_resume_sentence = base % (
+        "<p>システムリプレースのため、2026年12月28日から試験実施を一時休止することとしています。</p>"
+    )
+    for html in (without_planned_resume, without_resume_sentence):
+        candidates, _ = extract_candidates(
+            snapshot_from_html("source:fundamental-it:cbt", html, synthetic=False)
+        )
+        assert [candidate.fact_key for candidate in candidates] == [
+            "exam_method",
+            "exam_schedule",
+        ]
