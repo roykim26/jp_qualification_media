@@ -42,6 +42,7 @@ def test_fundamental_it_source_plan_is_explicit_and_https_only():
         "source:fundamental-it:cbt",
         "source:fundamental-it:syllabus",
         "source:fundamental-it:statistics-fe",
+        "source:fundamental-it:ipa-fee",
     }
     assert all(item["canonical_url"].startswith("https://") for item in source_plan())
 
@@ -59,6 +60,9 @@ def test_statistics_page_yields_no_fabricated_candidates():
 
 def test_fundamental_it_source_boundary_rejects_unregistered_hosts():
     assert is_registered_source_url("https://www.ipa.go.jp/shiken/kubun/fe.html")
+    assert is_registered_source_url(
+        "https://www.ipa.go.jp/shiken/mousikomi/schedule.html"
+    )
     assert not is_registered_source_url("http://www.ipa.go.jp/shiken/kubun/fe.html")
     assert not is_registered_source_url("https://example.com/fe.html")
 
@@ -174,3 +178,34 @@ def test_fundamental_it_suspension_period_requires_both_sentences_and_planned_re
             "exam_method",
             "exam_schedule",
         ]
+
+
+def test_fundamental_it_fee_page_uses_category_level_amount():
+    html = """<html><head><title>スケジュール、手数料など | 試験情報 | IPA</title></head><body>
+    <p>合格発表日、合格証書発送日などはこちらをご覧ください。</p>
+    <p>受験手数料 7,500円（情報処理技術者試験は消費税込み。情報処理安全確保支援士試験は非課税。）です。</p>
+    </body></html>"""
+    candidates, issues = extract_candidates(
+        snapshot_from_html("source:fundamental-it:ipa-fee", html, synthetic=False)
+    )
+    assert not issues
+    assert [
+        (candidate.fact_key, candidate.normalized_value, candidate.value_type)
+        for candidate in candidates
+    ] == [("fee", "7500", "integer")]
+    assert candidates[0].risk_level == "high"
+    assert candidates[0].status == "pending_review"
+    assert candidates[0].synthetic is False
+    assert "受験手数料" in candidates[0].evidence_text
+
+
+def test_fundamental_it_fee_page_without_amount_yields_no_candidate():
+    candidates, issues = extract_candidates(
+        snapshot_from_html(
+            "source:fundamental-it:ipa-fee",
+            "<html><head><title>スケジュール、手数料など | IPA</title></head><body><p>手数料は改定されました。</p></body></html>",
+            synthetic=False,
+        )
+    )
+    assert candidates == []
+    assert [issue.code for issue in issues] == ["structure_changed"]

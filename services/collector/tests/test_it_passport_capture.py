@@ -53,7 +53,7 @@ def test_capture_report_is_capture_only(monkeypatch, tmp_path: Path):
 
     monkeypatch.setattr(module, "SafeFetcher", FakeFetcher)
     report = capture_registered_sources(tmp_path)
-    assert report["source_count"] == 3
+    assert report["source_count"] == len(module.IT_PASSPORT_SOURCES)
     assert report["candidate_ingest"] == "not_run"
     assert len(list(tmp_path.glob("*.html"))) == 1
     assert (tmp_path / "capture-report.json").exists()

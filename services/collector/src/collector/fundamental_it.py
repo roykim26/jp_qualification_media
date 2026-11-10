@@ -33,6 +33,11 @@ FUNDAMENTAL_IT_SOURCES = {
         "canonical_url": "https://www.ipa.go.jp/shiken/reports/toukei_fe.html",
         "allowed_domain": "www.ipa.go.jp",
     },
+    # Shared 情報処理技術者試験 fee page; the 7,500円 statement is category-level.
+    "source:fundamental-it:ipa-fee": {
+        "canonical_url": "https://www.ipa.go.jp/shiken/mousikomi/schedule.html",
+        "allowed_domain": "www.ipa.go.jp",
+    },
 }
 
 
@@ -91,9 +96,44 @@ def extract_candidates(snapshot: FundamentalITSnapshot) -> tuple[list[Fundamenta
         candidates.extend(_extract_exam_page(snapshot))
     if snapshot.source_id == "source:fundamental-it:cbt":
         candidates.extend(_extract_cbt_page(snapshot))
+    if snapshot.source_id == "source:fundamental-it:ipa-fee":
+        candidates.extend(_extract_fee_page(snapshot))
     if not candidates:
         return [], (FundamentalITParseIssue("structure_changed", "no supported official fields found"),)
     return candidates, ()
+
+
+def _extract_fee_page(snapshot: FundamentalITSnapshot) -> list[FundamentalITFactCandidate]:
+    """Read the shared 情報処理技術者試験 fee statement, including FE.
+
+    The amount is stated for 情報処理技術者試験 as a category; FE is one of
+    those exams, so no per-exam price is inferred.  A missing statement yields
+    no candidate.
+    """
+    soup = BeautifulSoup(snapshot.html, "html.parser")
+    title = soup.title.get_text(" ", strip=True) if soup.title else ""
+    if "スケジュール" not in title:
+        return []
+    text = soup.get_text(" ", strip=True).translate(
+        str.maketrans("０１２３４５６７８９（）", "0123456789()")
+    )
+    match = re.search(r"受験手数料\s*7,500円\([^)]*\)", text)
+    if not match:
+        return []
+    evidence = match.group(0)
+    return [
+        FundamentalITFactCandidate(
+            "fee",
+            "7500",
+            "7,500円",
+            snapshot.source_id,
+            snapshot.content_hash,
+            risk_level="high",
+            synthetic=snapshot.synthetic,
+            evidence_text=evidence,
+            value_type="integer",
+        )
+    ]
 
 
 def _extract_exam_page(snapshot: FundamentalITSnapshot) -> list[FundamentalITFactCandidate]:
