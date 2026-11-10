@@ -124,6 +124,7 @@ export type RollbackResult = {
   toRevisionId: string;
   eventId: string;
   eventCreated: boolean;
+  wouldCreateEvent: boolean;
   dryRun: boolean;
   operatorId: string;
   reason: string;
@@ -225,6 +226,7 @@ export async function rollbackApprovedFact(
         toRevisionId,
         eventId: event.id,
         eventCreated: false,
+        wouldCreateEvent: Boolean(inserted.rowCount),
         dryRun: true,
         ...audit,
       };
@@ -236,6 +238,7 @@ export async function rollbackApprovedFact(
       toRevisionId,
       eventId: event.id,
       eventCreated: Boolean(inserted.rowCount),
+      wouldCreateEvent: Boolean(inserted.rowCount),
       dryRun: false,
       ...audit,
     };

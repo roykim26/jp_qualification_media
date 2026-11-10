@@ -89,6 +89,20 @@ async function currentFactState(databaseUrl: string, factId: string) {
   }
 }
 
+async function revisionState(databaseUrl: string, revisionId: string) {
+  const client = new Client({ connectionString: databaseUrl });
+  await client.connect();
+  try {
+    const result = await client.query(
+      `SELECT display_value, verified_at FROM fact_revisions WHERE id=$1`,
+      [revisionId],
+    );
+    return result.rows[0] ?? null;
+  } finally {
+    await client.end();
+  }
+}
+
 async function main() {
   let args: RollbackArgs;
   try {
@@ -115,6 +129,12 @@ async function main() {
       ...(args.dryRun ? { dryRun: true } : {}),
     });
     const after = await currentFactState(databaseUrl, args.factId);
+    // A dry run rolls the transaction back, so the fact row still points at the
+    // old revision. Read the target revision directly instead of pretending the
+    // unchanged row is the rollback result.
+    const target = result.dryRun
+      ? await revisionState(databaseUrl, result.toRevisionId)
+      : after;
     console.log(
       JSON.stringify(
         {
@@ -130,16 +150,18 @@ async function main() {
           },
           to: {
             revisionId: result.toRevisionId,
-            displayValue: after?.display_value ?? null,
-            verifiedAt: after?.verified_at ?? null,
+            displayValue: target?.display_value ?? null,
+            verifiedAt: target?.verified_at ?? null,
           },
-          pageShowsRolledBackValue:
-            result.dryRun ||
-            (after?.current_revision_id === result.toRevisionId &&
-              Boolean(after?.display_value)),
+          // null on a dry run: nothing was committed, so no page check applies.
+          pageShowsRolledBackValue: result.dryRun
+            ? null
+            : after?.current_revision_id === result.toRevisionId &&
+              Boolean(after?.display_value),
           changeEvent: {
             id: result.eventId,
             created: result.eventCreated,
+            wouldCreate: result.wouldCreateEvent,
           },
           operatorId: result.operatorId,
           reason: result.reason,

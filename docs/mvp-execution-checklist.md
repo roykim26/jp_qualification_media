@@ -8,7 +8,7 @@
 
 - [ ] 核心事实与分范围验收：IT Passport 的费用、条件、考试结构；FE 的费用、条件、评分标准及字段映射；簿记三级核心字段。FP 首发保持日本 FP 协会 2/3 级和金财 1 级已覆盖范围，页面明确范围，不暗示全覆盖。
 - [x] 比较、详情和历史数据展示：按机构、等级、科目、方式区分，显示年度、确认时间和来源；已有评分字段进入正确栏目。
-- [ ] 可审计事实回滚：受保护的本机命令、明确目标版本、操作人和理由、事务测试、真实库演练。
+- [x] 可审计事实回滚：受保护的本机命令、明确目标版本、操作人和理由、事务测试、真实库演练。
 - [ ] 生产 API 只读权限：运行账号与迁移管理账号分离，授权脚本幂等，真实库验证写操作被拒绝。
 
 ## P1：持续运营与近期补齐
@@ -46,4 +46,6 @@
 - 簿记三级按现有官方快照离线新增科目、时长、题数上限、合格标准及成绩发布规则。专项测试 40 项通过；保存的真实快照（哈希 `8ee5ec56…`）重算为 6 候选、0 issue，未入库、未批准。
 - IT Passport／FE 的其他核心字段缺少本地官方明细证据，真实新采集、入库、批准以及数据库启动验证保留待授权；不以夹具补齐。先推进独立的 P0 展示修正。
 - 2026-11-10 验收（本机 Chrome 无头 + fixture 预览，只读）：比较页 1280px 与 390px 下页面横向溢出均为 0；390px 下比较表在容器内横向滚动（可视 356px / 内容 760px，`overflow-x:auto`）；2 件选取时 11 条数值各自带机构・级别・科目・方式、年度与确认来源标签；0/1 件选取均显示「2件以上」引导态；点击「比較する」实际跳转到 `?qualifications=bookkeeping,fp` 并渲染表格。资格页面：`scoring_method` 归入「合格基準」，`practical_subject`／`interview_count` 归入「科目・出題内容」；详情页 11 个来源折叠块均可展开并显示官方链接、快照 ID 与确认状态；簿记合格率页 18 个历史数值按等级分组且逐项带来源。截图与读数在仓库外 `var/mvp-accept-*.png` 与 `var/mvp-accept-report.json`。
-- P0-3 回滚命令已实现：`npm run rollback:fact -- --fact-id=<id> --operator=<name> --reason="…" [--to-revision=<id>] [--dry-run] --confirm=<fact-id>`。操作人与理由经校验后写入 `change_events.operator_id/reason`（迁移 0021）；`--confirm` 必须原样复述事实 ID，`--dry-run` 在事务内执行后 ROLLBACK，`--to-revision` 只接受该事实的历史批准版本；回滚后读取当前版本与页面可见值并输出 JSON。参数与守卫用例 8 项（vitest 合计 139 项）通过，CLI 无参数／缺 confirm／短理由／无库退出码实测为 2。真实库事务演练与 `verify:all` 需先启动本机数据库，留待授权后补。
+- P0-3 回滚命令已实现：`npm run rollback:fact -- --fact-id=<id> --operator=<name> --reason="…" [--to-revision=<id>] [--dry-run] --confirm=<fact-id>`。操作人与理由经校验后写入 `change_events.operator_id/reason`（迁移 0021）；`--confirm` 必须原样复述事实 ID，`--dry-run` 在事务内执行后 ROLLBACK，`--to-revision` 只接受该事实的历史批准版本；回滚后读取当前版本与页面可见值并输出 JSON。参数与守卫用例 8 项（vitest 合计 139 项）通过，CLI 无参数／缺 confirm／短理由／无库退出码实测为 2。
+- 2026-11-10 P0-3 真实库演练（本机 `jpqm-pg18`@55432）：迁移 0021 应用后 `schema_migrations` 21→22，只新增两个可空列；对 FE `exam_schedule` 事实先 `--dry-run`（events 994、当前版本均未变），再带 `--confirm` 真实回滚，新事件带 `operator_id=rehearsal-local`、理由与 `affected_pages=["qualification:fundamental-it-engineer"]`，`/shikaku/fundamental-it-engineer/` 页面由「年間を通じて随時実施」变为回滚目标旧值；随后再次回滚恢复原版本。演练产生的 2 条事件已删除，计数回到 facts 982／revisions 994／events 994／pending 0。演练中修正 dry-run 报告：`to` 改为显示目标版本真值，`pageShowsRolledBackValue` 在 dry-run 为 `null`，并新增 `wouldCreate` 区分「将写入」与「已写入」。复跑 `verify:all` 6/6、pytest 171、vitest 139、format／lint／typecheck 全绿。
+- 已知边界：簿记 `applicants`／`examinees`／`pass_rate`／`passed` 在同一 `exam_year` 下存在多个场次候选（如 2006 年的 112/113/114），而事实维度没有 `exam_session`，默认「上一批准版本」可能取到另一场次的数值。回滚这类事实应显式 `--to-revision`；按场次隔离需把 `exam_session` 纳入这些事实的维度，属于数据模型变更，未在本轮处理。
