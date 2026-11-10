@@ -47,7 +47,7 @@ class FundamentalITSnapshot:
 @dataclass(frozen=True)
 class FundamentalITFactCandidate:
     fact_key: str
-    normalized_value: str
+    normalized_value: str | dict[str, str]
     display_value: str
     source_id: str
     source_snapshot_id: str
@@ -171,7 +171,60 @@ def _extract_cbt_page(snapshot: FundamentalITSnapshot) -> list[FundamentalITFact
             snapshot.content_hash, risk_level="medium", synthetic=snapshot.synthetic,
             evidence_text="令和5年度から年間を通じてCBT方式で随時試験を実施しています。",
         ))
+    suspension = _extract_suspension_period(snapshot, text)
+    if suspension is not None:
+        candidates.append(suspension)
     return candidates
+
+
+_SUSPENSION_START = re.compile(r"(\d{4})年(\d{1,2})月(\d{1,2})日から試験実施を一時休止")
+_SUSPENSION_RESUME = re.compile(r"試験再開は、?(\d{4})年(\d{1,2})月(上旬|中旬|下旬)を予定")
+_RESUME_PERIODS = {"上旬": "early", "中旬": "mid", "下旬": "late"}
+
+
+def _sentence_at(text: str, index: int) -> str:
+    left = text.rfind("。", 0, index) + 1
+    right = text.find("。", index)
+    if right == -1:
+        return text[left:].strip()
+    return text[left:right + 1].strip()
+
+
+def _extract_suspension_period(
+    snapshot: FundamentalITSnapshot, text: str
+) -> FundamentalITFactCandidate | None:
+    """Record the repair suspension only when both dates are stated and planned.
+
+    The notice says the suspension starts on a concrete day and that the resume
+    is planned for late January; neither is inferred.  A missing sentence, an
+    unstated year, or a resume without 「予定」 yields no candidate.
+    """
+    start = _SUSPENSION_START.search(text)
+    resume = _SUSPENSION_RESUME.search(text)
+    if not start or not resume:
+        return None
+    start_year, start_month, start_day = (int(part) for part in start.groups())
+    if not 1 <= start_month <= 12 or not 1 <= start_day <= 31:
+        return None
+    start_date = f"{start_year:04d}-{start_month:02d}-{start_day:02d}"
+    resume_year, resume_month, resume_part = int(resume.group(1)), int(resume.group(2)), resume.group(3)
+    if not 1 <= resume_month <= 12:
+        return None
+    start_sentence = _sentence_at(text, start.start())
+    resume_sentence = _sentence_at(text, resume.start())
+    if not start_sentence or not resume_sentence:
+        return None
+    return FundamentalITFactCandidate(
+        "suspension_period",
+        {"startsOn": start_date, "resumesFrom": f"{resume_year:04d}-{resume_month:02d}-{_RESUME_PERIODS[resume_part]}"},
+        f"{start_year}年{start_month}月{start_day}日～{resume_year}年{resume_month}月{resume_part}（予定）実施休止",
+        snapshot.source_id,
+        snapshot.content_hash,
+        risk_level="high",
+        synthetic=snapshot.synthetic,
+        evidence_text=f"{start_sentence}{resume_sentence}",
+        value_type="json",
+    )
 
 
 def fetch_fundamental_it_snapshot(fetcher: SafeFetcher, source_id: str) -> FundamentalITSnapshot | None:

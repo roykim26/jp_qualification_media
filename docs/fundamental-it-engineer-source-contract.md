@@ -25,35 +25,37 @@ FE 自令和 5 年度起全年以 CBT 随时实施，没有「统一考试日 + 
   - 「実施方式・実施時期」且文本含「CBT方式」⇒ `exam_method=CBT` + `exam_schedule=year_round`；
   - `h4` 标题必须是「科目A」或「科目B」，在该科目块内读「試験時間／出題形式／出題数・解答数」⇒ 产出 `exam_subject_a_*` 与 `exam_subject_b_*` 八条事实（`_time`、`_format`、`_question_count`、`_answer_count`）。
 - `cbt` 页与情報セキュリティマネジメント考试共用，页内是**逐月场次表**：没有「场次」这一维度就无法把某一行归属到单一年度事实，因此适配器只产出两句无歧义的共用陈述（`exam_method`、`exam_schedule`），**刻意不产出** `application_rule`、`booking_window`、`venue_rule`、`exam_date`、`result_date`。
-- 风险分级：走 `[data-fact-key]` 路径时，`application_rule`/`application_deadline`/`exam_date`/`fee`/`eligibility` 固定 `high`，其余 `medium`；`_extract_exam_page()` 与 `_extract_cbt_page()` 产出的字段固定 `medium`。
+- `cbt` 页若同时出现「システムリプレースのため、{YYYY}年M月D日から試験実施を一時休止」与「試験再開は、{YYYY}年M月(上旬|中旬|下旬)を予定」⇒ 产出 `suspension_period`（`value_type=json`，`risk=high`，`exam_year=2026`，`{"startsOn":…,"resumesFrom":…}`；下旬保留为 `late`，**不折算成具体日**）。任一句缺失、或恢复句没有「予定」⇒ 不产。方案与拍板见 `docs/work-package-h-suspension-fact-proposal.md`。
+- 风险分级：走 `[data-fact-key]` 路径时，`application_rule`/`application_deadline`/`exam_date`/`fee`/`eligibility` 固定 `high`，其余 `medium`；`_extract_exam_page()` 与 `_extract_cbt_page()` 产出的字段固定 `medium`（`suspension_period` 例外，固定 `high`）。
 
-## 当前已批准事实（2026 年度，10 条）
+## 当前已批准事实（2026 年度，11 条）
 
-全部绑定真实官方快照（`snapshots.synthetic=false`，HTTP 200，`retrieved_at_jst` 为 2026-09-23）。
+全部绑定真实官方快照（`snapshots.synthetic=false`，HTTP 200）：10 条科目字段来自 `exam` 页快照 `7e349607`，`exam_method`／`exam_schedule`／`suspension_period` 来自 `cbt` 页快照 `7bf47930`；两次采集的 `retrieved_at_jst` 均为 2026-11-09（`cbt` 页更新日为 2026-11-05）。
 
-| fact_key                        | normalized_value         | value_type | 来源   |
-| ------------------------------- | ------------------------ | ---------- | ------ |
-| `exam_method`                   | `CBT`                    | text       | `cbt`  |
-| `exam_schedule`                 | `year_round`             | text       | `cbt`  |
-| `exam_subject_a_time`           | `90`                     | integer    | `exam` |
-| `exam_subject_a_format`         | `多肢選択式（四肢択一）` | text       | `exam` |
-| `exam_subject_a_question_count` | `60`                     | integer    | `exam` |
-| `exam_subject_a_answer_count`   | `60`                     | integer    | `exam` |
-| `exam_subject_b_time`           | `100`                    | integer    | `exam` |
-| `exam_subject_b_format`         | `多肢選択式`             | text       | `exam` |
-| `exam_subject_b_question_count` | `20`                     | integer    | `exam` |
-| `exam_subject_b_answer_count`   | `20`                     | integer    | `exam` |
+| fact_key                        | normalized_value                                         | value_type | 来源   |
+| ------------------------------- | -------------------------------------------------------- | ---------- | ------ |
+| `exam_method`                   | `CBT`                                                    | text       | `cbt`  |
+| `exam_schedule`                 | `year_round`                                             | text       | `cbt`  |
+| `exam_subject_a_time`           | `90`                                                     | integer    | `exam` |
+| `exam_subject_a_format`         | `多肢選択式（四肢択一）`                                 | text       | `exam` |
+| `exam_subject_a_question_count` | `60`                                                     | integer    | `exam` |
+| `exam_subject_a_answer_count`   | `60`                                                     | integer    | `exam` |
+| `exam_subject_b_time`           | `100`                                                    | integer    | `exam` |
+| `exam_subject_b_format`         | `多肢選択式`                                             | text       | `exam` |
+| `exam_subject_b_question_count` | `20`                                                     | integer    | `exam` |
+| `exam_subject_b_answer_count`   | `20`                                                     | integer    | `exam` |
+| `suspension_period`             | `{"startsOn":"2026-12-28","resumesFrom":"2027-01-late"}` | json       | `cbt`  |
 
-所有 10 条的 `provider_id`、`exam_level_id`、`exam_component`、`delivery_mode`、`payment_method` 均为 `NULL` —— 这一点直接决定门禁行为，见下节。
+所有 11 条的 `provider_id`、`exam_level_id`、`exam_component`、`delivery_mode`、`payment_method` 均为 `NULL` —— 这一点直接决定门禁行为，见下节。
 
 ## 门禁告警：6/6 通过 ≠ FE 字段完整
 
-`scripts/verify-lib.mjs` 的 `evaluateCoverage()` 对 `conditional` 的处理是：**先用维度筛出该年度该维度的事实，若一条都没筛到就整条 requirement 跳过**。FE 现有 10 条事实的 `delivery_mode` 是 `NULL`，而契约三条 requirement 的维度都是 `{deliveryMode: "cbt"}`，因此三条全部被跳过。
+`scripts/verify-lib.mjs` 的 `evaluateCoverage()` 对 `conditional` 的处理是：**先用维度筛出该年度该维度的事实，若一条都没筛到就整条 requirement 跳过**。FE 现有 11 条事实的 `delivery_mode` 是 `NULL`，而契约三条 requirement 的维度都是 `{deliveryMode: "cbt"}`，因此三条全部被跳过。
 
-本机复算判据（2026-10-09，直接调用 `scripts/verify-lib.mjs` 导出的 `evaluateCoverage('fundamental-it-engineer', facts, 2026)`，事实数组用现有 10 个 fact_key，其余字段同现状）：
+本机复算判据（2026-10-09，直接调用 `scripts/verify-lib.mjs` 导出的 `evaluateCoverage('fundamental-it-engineer', facts, 2026)`，事实数组用当时已有的 10 个 fact_key，其余字段同现状）：
 
 - 现状（`deliveryMode=null`）：`gaps = 0`，门禁 `passed 6/6`、`coverageGaps=[]`、API `verified`。
-- 假如给这 10 条事实补上 `delivery_mode='cbt'`（不新增任何事实）：`gaps = 10`，缺的字段是 `application_rule`、`booking_window`、`venue_rule`、`eligibility`、`fee`、`scoring_method`、`passing_standard`、`exam_time`、`question_count`、`question_format`。
+- 假如给这批事实补上 `delivery_mode='cbt'`（不新增任何事实）：`gaps = 10`，缺的字段是 `application_rule`、`booking_window`、`venue_rule`、`eligibility`、`fee`、`scoring_method`、`passing_standard`、`exam_time`、`question_count`、`question_format`。
 
 由此得出两条必须记住的结论：
 
