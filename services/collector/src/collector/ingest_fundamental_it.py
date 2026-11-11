@@ -57,7 +57,6 @@ def ingest_snapshot(database_url: str, source_id: str, snapshot_path: str | Path
         candidates, issues = extract_candidates(snapshot)
     if snapshot.content_hash != record["content_hash"]:
         raise ValueError("adapter snapshot hash does not match capture report")
-    candidates, issues = extract_candidates(snapshot)
     if issues:
         raise ValueError("snapshot parse failed: " + "; ".join(issue.code for issue in issues))
     snapshot_id = f"snapshot:fundamental-it:{snapshot.content_hash}"
