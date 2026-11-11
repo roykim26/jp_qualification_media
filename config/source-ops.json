@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "patrolIntervalSeconds": 1,
+  "consecutiveFailureThreshold": 3,
+  "sourceBehindDays": 7,
+  "goneStatusCodes": [404, 410]
+}

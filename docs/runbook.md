@@ -205,6 +205,61 @@ EXIT=0。这是「本机没有库」时的正常形态，不代表检查失败�
 - 不参与门禁。结果不进 `release:check`；即使有到期项也仍以 EXIT=0 结束（只有连上库后查询失败才是 EXIT=1），到期项要不要处理由人工判断。
 - 「过期」只是时间阈值，不等于内容已错。是否真需要改，仍以对应 `docs/<qualification>-source-contract.md` 和官方原文为准。
 
+## 来源巡检与落库（patrol）
+
+用途：把全部登记来源统一抓一遍，判定 `unchanged`／`changed`／`failed`／`blocked`，留下连续失败记录。分两步、两次授权：巡检抓取（采集类，不连库）与巡检落库（只写运营表）。来源清单由 `collector.source_registry` 聚合六链现有登记（含 capture-only 证据），不新增 URL。
+
+判定口径：200 同 hash 或 304 → `unchanged`；200 新 hash → `changed`（写快照文件，不产候选）；404/410/网络错误/5xx 重试耗尽/跨域被拒 → `failed`；200 但最终 URL 路径偏离登记路径 → `blocked`（疑似改版，人工定新 URL，不自动改登记）。持久 ETag 缓存在 `var/patrol/cache.json`，304 跨运行生效。
+
+第一步·巡检抓取（需所有者明示授权；只写 `var/patrol/` 与 `var/official-snapshots/<qual>/`，不连库）：
+
+```bash
+PATROL_LIVE_AUTHORIZED=1 PYTHONIOENCODING=utf-8 npm run patrol:sources
+```
+
+只巡个别来源（授权单写明的 id）：
+
+```bash
+PATROL_LIVE_AUTHORIZED=1 PATROL_SOURCE_IDS="source:fundamental-it:cbt-s" PYTHONIOENCODING=utf-8 npm run patrol:sources
+```
+
+判据＝报告 `database_write: not_run`、`candidate_ingest: not_run`；`var/patrol/patrol-report.json` 每来源一条四态结果；`changed` 来源在对应快照目录有新 hash 文件。`NODE_ENV=production` 或缺开关直接拒绝。
+
+第二步·巡检落库（独立授权；只写 `capture_runs`／`snapshots`／`source_checks` 三张运营表，绝不写候选与事实）：
+
+```bash
+DATABASE_URL="postgresql://postgres@127.0.0.1:55432/qualification_media" PATROL_LOCAL_WRITE=1 PYTHONIOENCODING=utf-8 npm run patrol:record
+```
+
+判据＝`status: recorded`、`candidates: 0`、`approval: not_run`；仅 localhost 库。同一条报告重跑，`capture_runs`／`source_checks` 新增为 0（幂等），`snapshots` 按 `(source_id,content_hash)` 对齐。
+
+## 人工日检（ops:daily，只读）
+
+用途：一条只读命令产出当日运营日报，回答「今天先处理什么」。聚合来源健康（最近检查、连续失败、告警级）、到期事实/滞后来源（与 `data:staleness` 同口径）、待审队列、facts 对基线只读比对、巡检覆盖缺口。告警分级：连续失败 ≥3、`blocked`、404/410 单次 → critical；连续失败 1–2、来源 >7 天无成功检查 → warning。阈值在 `config/source-ops.json`。
+
+```bash
+DATABASE_URL="postgresql://postgres@127.0.0.1:55432/qualification_media" npm run ops:daily
+```
+
+判据＝`status: ok`；报告落 `var/ops-reports/<JST日期>.json` 与 `.md`，markdown 置顶「今日需处理」（critical → 待审 → 到期事实）。有 critical 时 EXIT=1，否则 0；未设 `DATABASE_URL` 输出 `not_run`、EXIT=0。全程 `BEGIN READ ONLY`，不写库、不抓取、不发外部请求。不装定时任务、不装外部通知（2026-11-11 所有者拍板）；每日手动跑。
+
+日检流程（约 5 分钟）：跑 `ops:daily` → 读「今日需处理」→ critical/blocked 来源决定是否进入下面的数据更新流程；warning 与到期事实排入复查；待审候选走审核批准授权。
+
+## 官方数据更新流程（SOP）
+
+触发：日报 `changed`/`blocked`/critical、`data:staleness` 到期、官方公告。采集、候选入库、审核批准仍是三次独立授权，逐段需所有者明示；巡检抓取与巡检落库也各算一次授权。
+
+1. 采集授权（明示）→ 对应资格 capture 脚本或 `patrol:sources`。
+2. 离线分析（analyze/precheck，不写库），确认候选与官方原文一致。
+3. 入库授权（明示）→ 对应 ingest 脚本，候选 `pending_review`（第二态，未公开）。
+4. 批准授权（明示）→ admin 以 `x-reviewer-id` 头逐条对照官方原文批准（第三态）。
+5. `npm run build`＋`npm run verify:all` 6/6。
+6. 仅当 facts 计数变化：`baseline:update`＋`ci:fixture:export` 同批，同步 `scripts/verify-ci-fixture.mjs` 四处计数断言与 `scripts/docker-smoke.mjs` 冒烟断言，`ci:fixture:verify` 通过；同一 PR 进 main（见第 9 节口径）。
+7. 全量回归绿 → commit → push（明示）→ PR（明示）→ 合并（「合并」明示）。
+8. `pg_dump` 数据包导出备用。部署暂缓，本流程不执行任何上线动作。
+
+失效分支：`blocked`/404 来源不自动改 `canonical_url`；所有者拍板新 URL 后「代码＋迁移＋文档」同批改（FE cbt-s 先例），再回到第 1 步。
+
 ## 生产部署（VPS，web+API 公开面）
 
 上线范围＝公开站（web）＋公开 API＋PostgreSQL＋Caddy 自动 HTTPS。admin 与采集链不在 VPS 上运行（admin 写侧只有 `x-reviewer-id` 头一种弱鉴权，绝不能暴露公网；采集继续在开发机本机跑）。
