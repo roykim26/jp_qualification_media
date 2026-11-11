@@ -65,6 +65,48 @@ test('coverage gate reports field and dimension gaps even when fact counts are h
   assert.ok(gaps.some((gap) => gap.dimensions.deliveryMode === 'unified'));
 });
 
+test('FE subject facts satisfy component-scoped coverage without renaming', () => {
+  const base = {
+    examYear: 2026,
+    providerId: null,
+    examLevelId: null,
+    paymentMethod: null,
+    deliveryMode: 'cbt',
+    sourceUrl: 'https://www.ipa.go.jp/x',
+    provenanceStatus: 'verified',
+    officialVerifiedAt: '2026-11-10T00:00:00.000Z',
+  };
+  const facts = [
+    ['exam_method', null],
+    ['exam_schedule', null],
+    ['fee', null],
+    ['suspension_period', null],
+    ['exam_subject_a_time', 'subject-a'],
+    ['exam_subject_a_format', 'subject-a'],
+    ['exam_subject_a_question_count', 'subject-a'],
+    ['exam_subject_b_time', 'subject-b'],
+    ['exam_subject_b_format', 'subject-b'],
+    ['exam_subject_b_question_count', 'subject-b'],
+  ].map(([factKey, examComponent]) => ({ ...base, factKey, examComponent }));
+
+  const gaps = evaluateCoverage('fundamental-it-engineer', facts, 2026);
+  assert.deepEqual(
+    gaps.map((gap) => gap.field).sort(),
+    ['eligibility', 'passing_standard', 'scoring_method'].sort(),
+  );
+
+  const misnamed = facts.map((fact) => ({
+    ...fact,
+    factKey: fact.factKey.replace('exam_subject_', 'subject_'),
+  }));
+  const scopedGaps = evaluateCoverage(
+    'fundamental-it-engineer',
+    misnamed,
+    2026,
+  );
+  assert.ok(scopedGaps.some((gap) => gap.field === 'exam_time'));
+});
+
 test('coverage gaps require the partial public status', () => {
   assert.equal(expectedCoverageStatus([]), 'verified');
   assert.equal(

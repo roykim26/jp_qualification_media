@@ -29,6 +29,22 @@ IT_PASSPORT_SOURCES = {
         "canonical_url": "https://www3.jitec.ipa.go.jp/JitesCbt/html/application/applies.html",
         "allowed_domain": "www3.jitec.ipa.go.jp",
     },
+    # Shared 情報処理技術者試験 fee page.  It is registered per qualification so
+    # the fee fact keeps its own provenance instead of borrowing another exam.
+    "source:it-passport:ipa-fee": {
+        "canonical_url": "https://www.ipa.go.jp/shiken/mousikomi/schedule.html",
+        "allowed_domain": "www.ipa.go.jp",
+    },
+    # IT Passport exam structure (method, time, format, question count).
+    "source:it-passport:ipa-exam-detail": {
+        "canonical_url": "https://www.ipa.go.jp/shiken/kubun/ip.html",
+        "allowed_domain": "www.ipa.go.jp",
+    },
+    # JITEC FAQ: eligibility, subject fields and pass criteria in official prose.
+    "source:it-passport:jitec-faq": {
+        "canonical_url": "https://www3.jitec.ipa.go.jp/JitesCbt/html/reference/faq.html",
+        "allowed_domain": "www3.jitec.ipa.go.jp",
+    },
 }
 
 
@@ -57,6 +73,7 @@ class ITPassportFactCandidate:
     status: str = "pending_review"
     synthetic: bool = True
     evidence_text: str | None = None
+    value_type: str = "text"
 
 
 @dataclass(frozen=True)
@@ -160,6 +177,210 @@ def fetch_it_passport_snapshot(
     )
 
 
+def _sentence_at(text: str, index: int) -> str:
+    left = text.rfind("。", 0, index) + 1
+    right = text.find("。", index)
+    if right == -1:
+        return text[left:].strip()
+    return text[left:right + 1].strip()
+
+
+def _candidate(
+    snapshot: ITPassportSnapshot,
+    fact_key: str,
+    normalized_value: str,
+    display_value: str,
+    evidence_text: str,
+    *,
+    risk_level: str,
+    value_type: str = "text",
+) -> ITPassportFactCandidate:
+    return ITPassportFactCandidate(
+        fact_key=fact_key,
+        normalized_value=normalized_value,
+        display_value=display_value,
+        source_id=snapshot.source_id,
+        source_snapshot_id=snapshot.content_hash,
+        risk_level=risk_level,
+        synthetic=snapshot.synthetic,
+        evidence_text=evidence_text,
+        value_type=value_type,
+    )
+
+
+def _extract_fee_page(
+    snapshot: ITPassportSnapshot, title: str, text: str
+) -> tuple[list[ITPassportFactCandidate], tuple[ITPassportParseIssue, ...]]:
+    """Read the shared 情報処理技術者試験 fee statement.
+
+    The page is shared by every 情報処理技術者試験, so the statement is the
+    category-level 7,500円 rule (tax included); it is not an IT-Passport-only
+    number inferred from another page.
+    """
+    if "スケジュール" not in title:
+        return [], (
+            ITPassportParseIssue(
+                "structure_changed", "IPA schedule page title was not recognized"
+            ),
+        )
+    match = re.search(r"受験手数料\s*7,500円\([^)]*\)", text)
+    if not match:
+        return [], (
+            ITPassportParseIssue(
+                "target_fields_missing",
+                "fee page contained no explicit 7,500円 statement",
+            ),
+        )
+    evidence = match.group(0)
+    return [
+        _candidate(
+            snapshot,
+            "fee",
+            "7500",
+            "7,500円",
+            evidence,
+            risk_level="high",
+            value_type="integer",
+        )
+    ], ()
+
+
+def _extract_exam_detail_page(
+    snapshot: ITPassportSnapshot, title: str, text: str
+) -> tuple[list[ITPassportFactCandidate], tuple[ITPassportParseIssue, ...]]:
+    """Read only the explicitly labelled IT Passport delivery and structure block."""
+    if "ITパスポート試験" not in title:
+        return [], (
+            ITPassportParseIssue(
+                "structure_changed", "IPA IT Passport detail title was not recognized"
+            ),
+        )
+    candidates: list[ITPassportFactCandidate] = []
+    method = re.search(r"実施方式・実施時期\s*CBT方式により随時実施", text)
+    if method:
+        candidates.append(
+            _candidate(
+                snapshot,
+                "exam_method",
+                "CBT",
+                "CBT方式により随時実施",
+                method.group(0),
+                risk_level="medium",
+            )
+        )
+    structure = re.search(
+        r"試験時間\s*(\d+)分\s*出題形式\s*(.+?)\s*出題数\s*(\d+)問", text
+    )
+    if structure:
+        minutes, question_format, question_count = structure.groups()
+        # _normalize_digits() converts full-width parentheses for stable
+        # matching; restore the official display form.
+        question_format = question_format.replace("(", "（").replace(")", "）")
+        evidence = structure.group(0)
+        candidates.extend(
+            [
+                _candidate(
+                    snapshot,
+                    "exam_time",
+                    minutes,
+                    f"試験時間 {minutes}分",
+                    evidence,
+                    risk_level="medium",
+                    value_type="integer",
+                ),
+                _candidate(
+                    snapshot,
+                    "question_format",
+                    question_format,
+                    question_format,
+                    evidence,
+                    risk_level="medium",
+                ),
+                _candidate(
+                    snapshot,
+                    "question_count",
+                    question_count,
+                    f"出題数 {question_count}問",
+                    evidence,
+                    risk_level="medium",
+                    value_type="integer",
+                ),
+            ]
+        )
+    if not candidates:
+        return [], (
+            ITPassportParseIssue(
+                "target_fields_missing",
+                "IT Passport detail page contained no supported structure fields",
+            ),
+        )
+    return candidates, ()
+
+
+def _extract_faq_page(
+    snapshot: ITPassportSnapshot, title: str, text: str
+) -> tuple[list[ITPassportFactCandidate], tuple[ITPassportParseIssue, ...]]:
+    """Read eligibility, subject fields and pass criteria from the JITEC FAQ."""
+    if "ITパスポート試験" not in title or "FAQ" not in title:
+        return [], (
+            ITPassportParseIssue(
+                "structure_changed", "JITEC IT Passport FAQ title was not recognized"
+            ),
+        )
+    candidates: list[ITPassportFactCandidate] = []
+    eligibility = re.search(r"受験資格は特段ありません。", text)
+    if eligibility:
+        candidates.append(
+            _candidate(
+                snapshot,
+                "eligibility",
+                "受験資格は特段ありません",
+                "受験資格は特段ありません",
+                eligibility.group(0),
+                risk_level="high",
+            )
+        )
+    subjects = re.search(
+        r"ストラテジ系\(経営全般\)[、､]マネジメント系\(IT管理\)[、､]テクノロジ系\(IT技術\)の3つの分野",
+        text,
+    )
+    if subjects:
+        candidates.append(
+            _candidate(
+                snapshot,
+                "exam_subjects",
+                "ストラテジ系、マネジメント系、テクノロジ系",
+                "ストラテジ系、マネジメント系、テクノロジ系",
+                subjects.group(0),
+                risk_level="medium",
+            )
+        )
+    passing = re.search(
+        r"合格基準を満たすには、総合評価点が600点以上であるとともに、"
+        r"すべての分野別評価点が300点以上である必要があります。",
+        text,
+    )
+    if passing:
+        candidates.append(
+            _candidate(
+                snapshot,
+                "passing_standard",
+                "総合評価点600点以上かつ全分野別評価点300点以上",
+                "総合評価点600点以上・分野別評価点300点以上",
+                _sentence_at(text, passing.start()),
+                risk_level="high",
+            )
+        )
+    if not candidates:
+        return [], (
+            ITPassportParseIssue(
+                "target_fields_missing",
+                "JITEC FAQ contained no supported eligibility, subject or pass criteria",
+            ),
+        )
+    return candidates, ()
+
+
 def extract_real_page_candidates(
     snapshot: ITPassportSnapshot,
 ) -> tuple[list[ITPassportFactCandidate], tuple[ITPassportParseIssue, ...]]:
@@ -170,6 +391,7 @@ def extract_real_page_candidates(
     """
     soup = BeautifulSoup(snapshot.html, "html.parser")
     title = soup.title.get_text(" ", strip=True) if soup.title else ""
+    text = _normalize_digits(soup.get_text(" ", strip=True))
     if snapshot.source_id == "source:it-passport:ipa-exam":
         if "試験情報" not in title:
             return [], (
@@ -178,6 +400,12 @@ def extract_real_page_candidates(
                 ),
             )
         return [], ()
+    if snapshot.source_id == "source:it-passport:ipa-fee":
+        return _extract_fee_page(snapshot, title, text)
+    if snapshot.source_id == "source:it-passport:ipa-exam-detail":
+        return _extract_exam_detail_page(snapshot, title, text)
+    if snapshot.source_id == "source:it-passport:jitec-faq":
+        return _extract_faq_page(snapshot, title, text)
     if "ITパスポート試験" not in title:
         return [], (
             ITPassportParseIssue(
@@ -187,24 +415,20 @@ def extract_real_page_candidates(
     if snapshot.source_id != "source:it-passport:jitec-application":
         return [], ()
 
-    text = _normalize_digits(soup.get_text(" ", strip=True))
     candidates: list[ITPassportFactCandidate] = []
     change_rule = re.search(
         r"受験申込内容\(試験会場、受験日時\)の変更は、試験日の3日前まで",
         text,
     )
     if change_rule:
-        evidence = change_rule.group(0)
         candidates.append(
-            ITPassportFactCandidate(
-                fact_key="application_change_deadline_rule",
-                normalized_value="P3D_BEFORE_EXAM",
-                display_value="試験日の3日前まで変更可能",
-                source_id=snapshot.source_id,
-                source_snapshot_id=snapshot.content_hash,
+            _candidate(
+                snapshot,
+                "application_change_deadline_rule",
+                "P3D_BEFORE_EXAM",
+                "試験日の3日前まで変更可能",
+                change_rule.group(0),
                 risk_level="high",
-                synthetic=snapshot.synthetic,
-                evidence_text=evidence,
             )
         )
     opening = re.search(
@@ -212,17 +436,14 @@ def extract_real_page_candidates(
         text,
     )
     if opening:
-        evidence = opening.group(0)
         candidates.append(
-            ITPassportFactCandidate(
-                fact_key="application_open_2026_may_sessions",
-                normalized_value="2026-03-24T21:30:00+09:00",
-                display_value="2026年3月24日21:30以降",
-                source_id=snapshot.source_id,
-                source_snapshot_id=snapshot.content_hash,
+            _candidate(
+                snapshot,
+                "application_open_2026_may_sessions",
+                "2026-03-24T21:30:00+09:00",
+                "2026年3月24日21:30以降",
+                opening.group(0),
                 risk_level="high",
-                synthetic=snapshot.synthetic,
-                evidence_text=evidence,
             )
         )
     if not candidates:

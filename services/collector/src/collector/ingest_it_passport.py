@@ -63,13 +63,14 @@ def ingest_fixture(
                 cursor.execute(
                     """INSERT INTO candidate_facts
                     (id, qualification_id, exam_year, fact_key, value_type, normalized_value, display_value, status, risk_level, source_id, source_snapshot_id, synthetic)
-                    VALUES (%s, %s, %s, %s, 'text', %s::jsonb, %s, %s, %s, %s, %s, true)
+                    VALUES (%s, %s, %s, %s, %s::fact_value_type, %s::jsonb, %s, %s, %s, %s, %s, true)
                     ON CONFLICT DO NOTHING""",
                     (
                         candidate_id,
                         QUALIFICATION_ID,
                         exam_year,
                         candidate.fact_key,
+                        candidate.value_type,
                         json.dumps(candidate.normalized_value, ensure_ascii=False),
                         candidate.display_value,
                         candidate.status,

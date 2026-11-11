@@ -37,10 +37,28 @@ function validCanonicalHttpsUrl(url, allowedDomain) {
 
 const provenanceCoverageFields = ['source_url', 'official_verified_at'];
 
-function satisfiesCoverageField(fact, field) {
+const componentFieldSuffixes = {
+  exam_time: 'time',
+  question_count: 'question_count',
+  question_format: 'format',
+};
+
+function satisfiesCoverageField(fact, field, dimensions = {}) {
   if (field === 'source_url')
     return Boolean(fact.sourceUrl) && fact.provenanceStatus === 'verified';
   if (field === 'official_verified_at') return Boolean(fact.officialVerifiedAt);
+  const suffix = componentFieldSuffixes[field];
+  if (suffix) {
+    // FE names subject facts exam_subject_{a|b}_time rather than exam_time_subject_a.
+    const components = Array.isArray(dimensions.examComponent)
+      ? dimensions.examComponent
+      : [dimensions.examComponent];
+    for (const component of components) {
+      const match = /^subject-([ab])$/.exec(component ?? '');
+      if (match && fact.factKey === `exam_subject_${match[1]}_${suffix}`)
+        return true;
+    }
+  }
   const factKey = fact.factKey;
   return (
     factKey === field ||
@@ -72,7 +90,11 @@ export function evaluateCoverage(slug, facts, examYear) {
     if (requirement.requiredLevel === 'conditional' && scoped.length === 0)
       continue;
     for (const field of requirement.fields) {
-      if (!scoped.some((fact) => satisfiesCoverageField(fact, field)))
+      if (
+        !scoped.some((fact) =>
+          satisfiesCoverageField(fact, field, requirement.dimensions),
+        )
+      )
         gaps.push({
           field,
           dimensions: requirement.dimensions,

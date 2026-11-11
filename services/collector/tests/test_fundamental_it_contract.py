@@ -42,6 +42,9 @@ def test_fundamental_it_source_plan_is_explicit_and_https_only():
         "source:fundamental-it:cbt",
         "source:fundamental-it:syllabus",
         "source:fundamental-it:statistics-fe",
+        "source:fundamental-it:ipa-fee",
+        "source:fundamental-it:cbt-s",
+        "source:fundamental-it:youkou-pdf",
     }
     assert all(item["canonical_url"].startswith("https://") for item in source_plan())
 
@@ -59,6 +62,9 @@ def test_statistics_page_yields_no_fabricated_candidates():
 
 def test_fundamental_it_source_boundary_rejects_unregistered_hosts():
     assert is_registered_source_url("https://www.ipa.go.jp/shiken/kubun/fe.html")
+    assert is_registered_source_url(
+        "https://www.ipa.go.jp/shiken/mousikomi/schedule.html"
+    )
     assert not is_registered_source_url("http://www.ipa.go.jp/shiken/kubun/fe.html")
     assert not is_registered_source_url("https://example.com/fe.html")
 
@@ -174,3 +180,87 @@ def test_fundamental_it_suspension_period_requires_both_sentences_and_planned_re
             "exam_method",
             "exam_schedule",
         ]
+
+
+def test_fundamental_it_fee_page_uses_category_level_amount():
+    html = """<html><head><title>スケジュール、手数料など | 試験情報 | IPA</title></head><body>
+    <p>合格発表日、合格証書発送日などはこちらをご覧ください。</p>
+    <p>受験手数料 7,500円（情報処理技術者試験は消費税込み。情報処理安全確保支援士試験は非課税。）です。</p>
+    </body></html>"""
+    candidates, issues = extract_candidates(
+        snapshot_from_html("source:fundamental-it:ipa-fee", html, synthetic=False)
+    )
+    assert not issues
+    assert [
+        (candidate.fact_key, candidate.normalized_value, candidate.value_type)
+        for candidate in candidates
+    ] == [("fee", "7500", "integer")]
+    assert candidates[0].risk_level == "high"
+    assert candidates[0].status == "pending_review"
+    assert candidates[0].synthetic is False
+    assert "受験手数料" in candidates[0].evidence_text
+
+
+def test_fundamental_it_fee_page_without_amount_yields_no_candidate():
+    candidates, issues = extract_candidates(
+        snapshot_from_html(
+            "source:fundamental-it:ipa-fee",
+            "<html><head><title>スケジュール、手数料など | IPA</title></head><body><p>手数料は改定されました。</p></body></html>",
+            synthetic=False,
+        )
+    )
+    assert candidates == []
+    assert [issue.code for issue in issues] == ["structure_changed"]
+
+
+def test_fundamental_it_cbt_s_page_reads_eligibility_and_pass_criteria():
+    html = """<html><head><title>【CBT】基本情報技術者試験（FE） | CBT-Solutions</title></head><body>
+    <table><tr><th>試験区分</th><td>■基本情報技術者試験（FE）</td></tr>
+    <tr><th>受験資格</th><td>どなたでも受験可能</td></tr>
+    <tr><th>合格基準</th><td>各科目の評価点が基準点（600点）以上の場合に合格です。</td></tr></table>
+    </body></html>"""
+    candidates, issues = extract_candidates(
+        snapshot_from_html("source:fundamental-it:cbt-s", html, synthetic=False)
+    )
+    assert not issues
+    by_key = {candidate.fact_key: candidate for candidate in candidates}
+    assert by_key["eligibility"].normalized_value == "どなたでも受験可能"
+    assert by_key["eligibility"].risk_level == "high"
+    assert by_key["passing_standard"].normalized_value == "各科目の評価点が基準点（600点）以上"
+    assert by_key["passing_standard"].risk_level == "high"
+    assert "600点" in by_key["passing_standard"].evidence_text
+
+
+def test_fundamental_it_cbt_s_page_rejects_other_exams_and_missing_rows():
+    other = """<html><head><title>【CBT】情報セキュリティマネジメント試験（SG）</title></head><body>
+    <table><tr><th>受験資格</th><td>どなたでも受験可能</td></tr></table></body></html>"""
+    candidates, issues = extract_candidates(
+        snapshot_from_html("source:fundamental-it:cbt-s", other, synthetic=False)
+    )
+    assert candidates == []
+    assert [issue.code for issue in issues] == ["structure_changed"]
+
+    missing = """<html><head><title>【CBT】基本情報技術者試験（FE）</title></head><body>
+    <table><tr><th>受験資格</th><td>どなたでも受験可能</td></tr></table></body></html>"""
+    candidates, issues = extract_candidates(
+        snapshot_from_html("source:fundamental-it:cbt-s", missing, synthetic=False)
+    )
+    assert [candidate.fact_key for candidate in candidates] == ["eligibility"]
+
+
+def test_fundamental_it_subject_facts_carry_cbt_component_dimensions():
+    html = """<main>
+    <div class="def-list --side"><dt>実施方式・実施時期</dt><dd>CBT方式により随時実施</dd></div>
+    <h4>科目A</h4><div><div class="def-list --side"><dt>試験時間</dt><dd>90分</dd></div></div>
+    <h4>科目B</h4><div><div class="def-list --side"><dt>試験時間</dt><dd>100分</dd></div></div>
+    </main>"""
+    candidates, issues = extract_candidates(
+        snapshot_from_html("source:fundamental-it:exam", html, synthetic=False)
+    )
+    assert not issues
+    by_key = {candidate.fact_key: candidate for candidate in candidates}
+    assert by_key["exam_subject_a_time"].delivery_mode == "cbt"
+    assert by_key["exam_subject_a_time"].exam_component == "subject-a"
+    assert by_key["exam_subject_b_time"].exam_component == "subject-b"
+    assert by_key["exam_method"].delivery_mode == "cbt"
+    assert by_key["exam_method"].exam_component is None

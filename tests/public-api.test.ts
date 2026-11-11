@@ -40,30 +40,50 @@ describe('public qualification read path', () => {
     expect(JSON.stringify(view)).not.toContain('displayValue');
   });
 
-  it('distinguishes an unmapped component field from uncollected data', () => {
+  it('maps FE subject facts onto the component coverage fields', () => {
     const qualification = launchQualifications.find(
       (item) => item.slug === 'fundamental-it-engineer',
     )!;
+    const base = {
+      qualificationSlug: 'fundamental-it-engineer' as const,
+      examLevelId: null,
+      examComponent: 'subject-a',
+      deliveryMode: 'cbt',
+      examYear: new Date().getFullYear(),
+      status: 'approved' as const,
+      riskLevel: 'medium' as const,
+      sourceId: 'source:fundamental-it:exam',
+      sourceSnapshotId: 'snapshot:official',
+      synthetic: false,
+      verifiedAt: '2026-08-11T00:00:00.000Z',
+    };
     const view = buildPublicQualificationView(qualification, [
       {
-        qualificationSlug: 'fundamental-it-engineer',
-        examLevelId: null,
-        examComponent: 'subject-a',
-        deliveryMode: 'cbt',
-        examYear: new Date().getFullYear(),
+        ...base,
         factKey: 'exam_subject_a_time',
         valueType: 'integer',
         normalizedValue: 90,
         displayValue: '90分',
-        status: 'approved',
-        riskLevel: 'medium',
-        sourceId: 'source:fundamental-it:exam',
-        sourceSnapshotId: 'snapshot:official',
-        synthetic: false,
-        verifiedAt: '2026-08-11T00:00:00.000Z',
+      },
+      {
+        ...base,
+        factKey: 'exam_subject_a_format',
+        valueType: 'text',
+        normalizedValue: '多肢選択式',
+        displayValue: '多肢選択式',
+      },
+      {
+        ...base,
+        factKey: 'exam_subject_a_question_count',
+        valueType: 'integer',
+        normalizedValue: 60,
+        displayValue: '60問',
       },
     ]);
-    expect(view.missingReasons.exam_time).toBe('mapping_error');
+    expect(view.missingReasons.exam_time).toBeUndefined();
+    expect(view.missingReasons.question_format).toBeUndefined();
+    expect(view.missingReasons.question_count).toBeUndefined();
+    expect(view.status).toBe('partially_announced');
   });
 
   it('passes field-specific missing reasons into comparison cells', () => {

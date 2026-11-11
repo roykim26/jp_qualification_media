@@ -78,7 +78,18 @@ function matchesRequirement(
   });
 }
 
+const componentFieldSuffixes: Record<string, string> = {
+  exam_time: 'time',
+  question_count: 'question_count',
+  question_format: 'format',
+};
+
 function satisfiesRequirementField(factKey: string, field: string) {
+  // FE names subject facts exam_subject_{a|b}_time rather than
+  // exam_time_subject_a; keep this in step with scripts/verify-lib.mjs.
+  const suffix = componentFieldSuffixes[field];
+  if (suffix && new RegExp(`^exam_subject_[ab]_${suffix}$`).test(factKey))
+    return true;
   return (
     factKey === field ||
     factKey.startsWith(`${field}_`) ||

@@ -146,6 +146,20 @@ describe('data coverage contract', () => {
       new Set(['not_applicable']),
     );
     expect(levels('fp', 'scoring_method')).toEqual(new Set(['not_applicable']));
+    // FE CBT has no year-wide application window or venue rule, so those
+    // three fields are graded not_applicable while the rest stays conditional.
+    expect(levels('fundamental-it-engineer', 'application_rule')).toEqual(
+      new Set(['not_applicable']),
+    );
+    expect(levels('fundamental-it-engineer', 'booking_window')).toEqual(
+      new Set(['not_applicable']),
+    );
+    expect(levels('fundamental-it-engineer', 'venue_rule')).toEqual(
+      new Set(['not_applicable']),
+    );
+    expect(levels('fundamental-it-engineer', 'eligibility')).toEqual(
+      new Set(['conditional']),
+    );
     // 統一試験 does publish its per-subject 合格基準, so only the network
     // variant is graded not_applicable.
     expect(levels('bookkeeping', 'passing_standard')).toEqual(

@@ -4,7 +4,7 @@ Only explicitly marked fields are accepted in fixtures. No concrete CBT dates,
 fees, or eligibility are inferred from general IPA prose.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from hashlib import sha256
 import re
 from urllib.parse import urlsplit
@@ -33,6 +33,23 @@ FUNDAMENTAL_IT_SOURCES = {
         "canonical_url": "https://www.ipa.go.jp/shiken/reports/toukei_fe.html",
         "allowed_domain": "www.ipa.go.jp",
     },
+    # Shared 情報処理技術者試験 fee page; the 7,500円 statement is category-level.
+    "source:fundamental-it:ipa-fee": {
+        "canonical_url": "https://www.ipa.go.jp/shiken/mousikomi/schedule.html",
+        "allowed_domain": "www.ipa.go.jp",
+    },
+    # CBT operator portal: eligibility and pass criteria for the CBT delivery.
+    # The former /cbt/fe/ page now 301s to the corporate top; the FE page lives
+    # under the examinee portal and returns 200 without redirects.
+    "source:fundamental-it:cbt-s": {
+        "canonical_url": "https://www.cbt-s.com/examinee/examination/fe",
+        "allowed_domain": "www.cbt-s.com",
+    },
+    # 試験要綱 PDF: the only official statement that FE scoring uses IRT.
+    "source:fundamental-it:youkou-pdf": {
+        "canonical_url": "https://www.ipa.go.jp/shiken/syllabus/rcu1hd00000141gq-att/youkou_ver5_6.pdf",
+        "allowed_domain": "www.ipa.go.jp",
+    },
 }
 
 
@@ -56,6 +73,8 @@ class FundamentalITFactCandidate:
     synthetic: bool = True
     evidence_text: str | None = None
     value_type: str = "text"
+    delivery_mode: str | None = "cbt"
+    exam_component: str | None = None
 
 
 @dataclass(frozen=True)
@@ -91,9 +110,95 @@ def extract_candidates(snapshot: FundamentalITSnapshot) -> tuple[list[Fundamenta
         candidates.extend(_extract_exam_page(snapshot))
     if snapshot.source_id == "source:fundamental-it:cbt":
         candidates.extend(_extract_cbt_page(snapshot))
+    if snapshot.source_id == "source:fundamental-it:ipa-fee":
+        candidates.extend(_extract_fee_page(snapshot))
+    if snapshot.source_id == "source:fundamental-it:cbt-s":
+        candidates.extend(_extract_cbt_s_page(snapshot))
     if not candidates:
         return [], (FundamentalITParseIssue("structure_changed", "no supported official fields found"),)
-    return candidates, ()
+    return [replace(candidate, exam_component=_subject_component(candidate.fact_key)) for candidate in candidates], ()
+
+
+def _subject_component(fact_key: str) -> str | None:
+    match = re.match(r"exam_subject_([ab])_", fact_key)
+    return f"subject-{match.group(1)}" if match else None
+
+
+def _extract_cbt_s_page(snapshot: FundamentalITSnapshot) -> list[FundamentalITFactCandidate]:
+    """Read eligibility and pass criteria from the CBT operator portal.
+
+    Only the two rows IPA does not publish are taken; subject timing and
+    question counts stay with the IPA exam page.
+    """
+    soup = BeautifulSoup(snapshot.html, "html.parser")
+    title = soup.title.get_text(" ", strip=True) if soup.title else ""
+    if "基本情報技術者試験" not in title:
+        return []
+    rows = {}
+    for row in soup.select("tr"):
+        header = row.find("th")
+        value = row.find("td")
+        if header and value:
+            rows.setdefault(header.get_text(" ", strip=True), value.get_text(" ", strip=True))
+    candidates: list[FundamentalITFactCandidate] = []
+    eligibility = rows.get("受験資格", "")
+    if eligibility == "どなたでも受験可能":
+        candidates.append(
+            FundamentalITFactCandidate(
+                "eligibility", eligibility, eligibility, snapshot.source_id,
+                snapshot.content_hash, risk_level="high",
+                synthetic=snapshot.synthetic, evidence_text=eligibility,
+            )
+        )
+    passing = rows.get("合格基準", "")
+    match = re.search(r"各科目の評価点が基準点（600点）以上の場合に合格です。", passing)
+    if match:
+        candidates.append(
+            FundamentalITFactCandidate(
+                "passing_standard",
+                "各科目の評価点が基準点（600点）以上",
+                "各科目の評価点が600点以上",
+                snapshot.source_id,
+                snapshot.content_hash,
+                risk_level="high",
+                synthetic=snapshot.synthetic,
+                evidence_text=match.group(0),
+            )
+        )
+    return candidates
+
+
+def _extract_fee_page(snapshot: FundamentalITSnapshot) -> list[FundamentalITFactCandidate]:
+    """Read the shared 情報処理技術者試験 fee statement, including FE.
+
+    The amount is stated for 情報処理技術者試験 as a category; FE is one of
+    those exams, so no per-exam price is inferred.  A missing statement yields
+    no candidate.
+    """
+    soup = BeautifulSoup(snapshot.html, "html.parser")
+    title = soup.title.get_text(" ", strip=True) if soup.title else ""
+    if "スケジュール" not in title:
+        return []
+    text = soup.get_text(" ", strip=True).translate(
+        str.maketrans("０１２３４５６７８９（）", "0123456789()")
+    )
+    match = re.search(r"受験手数料\s*7,500円\([^)]*\)", text)
+    if not match:
+        return []
+    evidence = match.group(0)
+    return [
+        FundamentalITFactCandidate(
+            "fee",
+            "7500",
+            "7,500円",
+            snapshot.source_id,
+            snapshot.content_hash,
+            risk_level="high",
+            synthetic=snapshot.synthetic,
+            evidence_text=evidence,
+            value_type="integer",
+        )
+    ]
 
 
 def _extract_exam_page(snapshot: FundamentalITSnapshot) -> list[FundamentalITFactCandidate]:

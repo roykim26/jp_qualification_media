@@ -111,15 +111,27 @@ def ingest_analysis(
                 for candidate in candidates:
                     if candidate["status"] != "pending_review":
                         raise ValueError("only pending_review candidates may be ingested")
-                    if candidate["risk_level"] != "high":
-                        raise ValueError("real IT Passport candidates must be high risk")
+                    # P0-1 adds medium-risk structural facts (exam method, time,
+                    # question format/count, subject fields) next to the high-risk
+                    # fee, eligibility, pass criteria and application dates.  The
+                    # adapter names the risk and value type per candidate; ingest
+                    # must not flatten them back to high/text.
+                    if candidate["risk_level"] not in {"high", "medium"}:
+                        raise ValueError("real IT Passport candidates must be high or medium risk")
                     if candidate["synthetic"] is not False:
                         raise ValueError("real candidate must have synthetic=false")
-                    value_type = (
-                        "datetime"
-                        if candidate["fact_key"].startswith("application_open_")
-                        else "text"
-                    )
+                    value_type = candidate["value_type"]
+                    if value_type not in {
+                        "date",
+                        "datetime",
+                        "money",
+                        "integer",
+                        "decimal",
+                        "text",
+                        "boolean",
+                        "json",
+                    }:
+                        raise ValueError(f"unsupported candidate value_type: {value_type}")
                     candidate_id = (
                         f"candidate:it-passport:{content_hash}:{candidate['fact_key']}"
                     )
@@ -129,7 +141,7 @@ def ingest_analysis(
                          normalized_value, display_value, evidence_text, status,
                          risk_level, source_id, source_snapshot_id, synthetic)
                         VALUES (%s, %s, %s, %s, %s, %s::jsonb, %s, %s,
-                                'pending_review', 'high', %s, %s, false)
+                                'pending_review', %s, %s, %s, false)
                         ON CONFLICT DO NOTHING""",
                         (
                             candidate_id,
@@ -140,6 +152,7 @@ def ingest_analysis(
                             json.dumps(candidate["normalized_value"], ensure_ascii=False),
                             candidate["display_value"],
                             candidate["evidence_text"],
+                            candidate["risk_level"],
                             source_result["source_id"],
                             snapshot_id,
                         ),
