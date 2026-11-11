@@ -82,6 +82,34 @@ pnpm release:check
 
 采集、候选入库、审核批准是三次独立授权，逐段需要项目所有者明示批准，抓取授权不包含后两者。各资格的入口脚本与环境变量开关记录在对应的 `docs/<qualification>-source-contract.md`，总则见 `docs/data-gate-semantics.md` 第 8 节。
 
+## 生产 API 只读账号
+
+公开 API 只读，不能复用迁移、seed、采集入库和审核用的管理员账号。分离分三层：
+
+- 迁移 `0025_api_readonly_role.sql` 创建 `qualification_api_ro`（`NOLOGIN`），授予库连接、schema 使用、现有表与后续新表的 `SELECT`，并显式收回写权限。
+- `pnpm db:provision-api-role` 用管理员连接把该角色改为可登录并设置口令；口令只从 `API_DB_PASSWORD` 读取，不写进迁移或仓库。
+- `pnpm db:verify-readonly` 用该只读账号连真实库，证明读得到、写被拒（SQLSTATE `42501`）。
+
+账号分工：`DATABASE_URL` 继续给迁移、seed、采集入库与审核；API 运行读取 `API_DATABASE_URL`。本地不设 `API_DATABASE_URL` 时回退到 `DATABASE_URL`；`NODE_ENV=production` 时缺少 `API_DATABASE_URL` 直接拒绝启动。
+
+首次开通或轮换口令（PowerShell，整条复制）：
+
+```powershell
+$env:DATABASE_URL="postgresql://qualification_dev:qualification_dev@127.0.0.1:5432/qualification_media"; $env:API_DB_PASSWORD="本机口令"; npm run db:migrate; npm run db:provision-api-role -- --confirm=PROVISION_API_DB_ROLE
+```
+
+成功输出 `status: ok`、`login: true`。脚本只允许 localhost；角色不存在时提示先跑 `db:migrate`；重复执行会重新对齐授权，口令轮换也走同一条命令。
+
+验证写操作确实被拒绝：
+
+```powershell
+$env:API_DATABASE_URL="postgresql://qualification_api_ro:本机口令@127.0.0.1:5432/qualification_media"; npm run db:verify-readonly
+```
+
+判据：`status` 为 `ok`、`currentUser` 为 `qualification_api_ro`、`role` 的 `superuser`／`createRole`／`createDb` 均为 `false`、`write` 的 `insert`／`update`／`delete`／`create_table` 全部为 `denied`，且 `read` 能数出事实与来源。任一项为 `allowed`、`error:<其他 SQLSTATE>` 或退出码非 0 都算失败。口令含 `@`、`:`、`/` 等字符时需按 URL 编码写进连接串。
+
+CI 在 `release-gate` 的迁移与夹具恢复之后，用 CI 专用口令开通角色并跑同一验证，再执行 `release:check`。
+
 ## 事实与来源过期检查（只读）
 
 用途：按每条事实的 `verified_at` 年龄和来源的最近快照时间，列出「该重新核对哪些事实、哪些来源该重新抓」，用来决定下一轮复查先看哪个资格、哪个字段。它只输出清单，不判断内容对错，也不改任何数据。

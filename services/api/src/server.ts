@@ -60,12 +60,12 @@ app.get<{ Querystring: { q?: string } }>(
   }),
 );
 app.get('/api/v1/facts', async () => ({
-  data: await readApprovedFacts(config.databaseUrl),
+  data: await readApprovedFacts(config.apiDatabaseUrl),
 }));
 app.get<{ Querystring: { year?: string; qualification?: string } }>(
   '/api/v1/calendar',
   async (request) => {
-    const facts = await readApprovedFacts(config.databaseUrl);
+    const facts = await readApprovedFacts(config.apiDatabaseUrl);
     const year = request.query.year ? Number(request.query.year) : undefined;
     const events = buildPublicCalendarEvents(
       launchQualifications,
@@ -88,7 +88,10 @@ app.get<{
   const year = Number(request.params.year);
   if (!qualification || !Number.isInteger(year))
     return reply.code(404).send({ error: 'not found' });
-  const facts = await readApprovedFacts(config.databaseUrl, qualification.slug);
+  const facts = await readApprovedFacts(
+    config.apiDatabaseUrl,
+    qualification.slug,
+  );
   const events = buildPublicCalendarEvents([qualification], facts).filter(
     (event) =>
       event.examYear === year &&
@@ -125,7 +128,7 @@ app.get<{
   if (request.query.type && !type)
     return reply.code(404).send({ error: 'not found' });
   const facts = await readApprovedFacts(
-    config.databaseUrl,
+    config.apiDatabaseUrl,
     qualification?.slug,
   );
   const events = buildPublicCalendarEvents(
@@ -156,7 +159,7 @@ app.get<{ Querystring: { qualifications?: string; q?: string } }>(
         .split(',')
         .map((slug) => slug.trim()),
     );
-    const facts = await readApprovedFacts(config.databaseUrl);
+    const facts = await readApprovedFacts(config.apiDatabaseUrl);
     const views = await Promise.all(
       slugs.map(async (slug) => {
         const qualification = launchQualifications.find(
@@ -166,7 +169,7 @@ app.get<{ Querystring: { qualifications?: string; q?: string } }>(
         return buildPublicQualificationView(
           qualification,
           facts.filter((fact) => fact.qualificationSlug === slug),
-          await readPendingFactCoverage(config.databaseUrl, slug),
+          await readPendingFactCoverage(config.apiDatabaseUrl, slug),
         );
       }),
     );
@@ -191,7 +194,7 @@ app.get<{
   const limit = boundedQueryInteger(request.query.limit, 100, 1, 100);
   const offset = boundedQueryInteger(request.query.offset, 0, 0, 1_000_000);
   const updates = await readPublicUpdates(
-    config.databaseUrl,
+    config.apiDatabaseUrl,
     request.query.qualification,
     { limit, offset },
   );
@@ -206,12 +209,12 @@ app.get('/api/v1/qualifications/takken', async () => {
     (item) => item.slug === 'takken',
   );
   if (!qualification) return { error: 'not found' };
-  if (config.databaseUrl) {
-    const facts = await readApprovedFacts(config.databaseUrl, 'takken');
+  if (config.apiDatabaseUrl) {
+    const facts = await readApprovedFacts(config.apiDatabaseUrl, 'takken');
     return buildPublicQualificationView(
       qualification,
       facts,
-      await readPendingFactCoverage(config.databaseUrl, 'takken'),
+      await readPendingFactCoverage(config.apiDatabaseUrl, 'takken'),
     );
   }
   return buildPublicQualificationView(qualification, []);
@@ -224,13 +227,13 @@ app.get<{ Params: { slug: string } }>(
     );
     if (!qualification) return reply.code(404).send({ error: 'not found' });
     const facts = await readApprovedFacts(
-      config.databaseUrl,
+      config.apiDatabaseUrl,
       qualification.slug,
     );
     return buildPublicQualificationView(
       qualification,
       facts,
-      await readPendingFactCoverage(config.databaseUrl, qualification.slug),
+      await readPendingFactCoverage(config.apiDatabaseUrl, qualification.slug),
     );
   },
 );
