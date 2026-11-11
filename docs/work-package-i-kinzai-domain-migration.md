@@ -1,6 +1,6 @@
 # 工作包 I：kinzai FP 域名迁移（products.kinzai.or.jp）授权单
 
-状态：**待拍板**。2026-11-11 起草（P1-1 巡检发现 B 的专用工作包）。所有者本轮已拍板「立专用工作包，下轮做」；本单只登记证据与方案，**本轮不改 FP 代码、不改库、不实抓**。下一轮执行前须对 §2 的决策点逐条拍板。
+状态：**已拍板并实施（代码＋迁移＋测试＋文档同批）**。2026-11-11 起草，2026-11-12 执行。所有者已逐条拍板 D1／D2／D4／D5；D3 经唯一索引证据修订为「退役空登记」（见 §2）。本轮已改 FP 代码、写迁移 0028、重写测试、同步文档；**迁移 0028 应用到本机库、实抓、候选入库、审核批准均未触发，各须单独授权**；commit／push 待所有者明示。
 
 前置阅读：`docs/handover-p1-ops-findings.md` §B、`docs/fp-source-contract.md`（如存在）、`docs/work-package-f-live-capture-authorization.md`（授权口径先例）。
 
@@ -52,7 +52,7 @@
 
 - **D1 白名单扩张（安全决策）**：把 `products.kinzai.or.jp` 加入 FP kinzai 侧允许域。范围**仅限 kinzai provider 的来源**，不是全局放宽；jafp 侧仍只允许 `www.jafp.or.jp`。域名仍是 kinzai 官方（一般社団法人金融財政事情研究会）所有，属同一主体的站点改版，不是第三方域。
 - **D2 登记 8 条新 URL**：按 §1.2 表更新 `FP_SOURCES` 与库内 `sources.canonical_url`＋`allowed_domain`（迁移落点见 §6）。
-- **D3 schedule 双登记保留**：`kinzai-schedule` 与 `kinzai-schedule-2026` 指向同一新 URL，**两条都保留**。先例＝FE/IT Passport 的 `ipa-fee` 同 URL 双登记（迁移 0022 已把唯一性改为「同一资格下同一 URL 唯一」）。理由：10 条已批准事实的出处挂在 `kinzai-schedule-2026`，合并会断出处链；双登记让年度日程事实与总日程页各自持有快照。
+- **D3 schedule 双登记 → 修订为退役空登记（2026-11-12 所有者拍板）**：原拟「两条都保留」，但执行前只读复核发现迁移 0022 的 `UNIQUE(canonical_url, qualification_id)` 禁止同资格同 URL 双登记——`kinzai-schedule` 与 `kinzai-schedule-2026` 同属 `qualification:fp`，收敛到同一新 URL `/exam-fp/schedule/` 会撞唯一索引；`ipa-fee` 先例是跨资格（it-passport vs fundamental-it），不适用。证据：`kinzai-schedule` 0 事实／0 快照／0 候选，仅 1 条巡检 `source_checks`；10 条已批准日程事实全挂在 `kinzai-schedule-2026`。所有者选择**选项 1：退役空登记＋删除行**——`FP_SOURCES` 移除 `kinzai-schedule`（13→12），迁移 0028 先删其 `source_checks` 行再删 `sources` 行，`kinzai-schedule-2026` 迁新 URL 保住出处链，库内 `sources` 52→51，无 schema 变更。
 - **D4 faq capture-only 退役**：FAQ 页已废止（301 回顶层页，无独立内容）。从 `DIRECTLY_CITED_CAPTURE_SOURCES` 移除 `capture-only:fp:kinzai-fp-faq`；旧官方快照 `var/official-snapshots/fp/kinzai-fp-faq.html` **保留作证据，不删**。faq 不在库内，无迁移动作。
 - **D5 适配器重写与 URL 变更同批（强制）**：只改 URL 不重写适配器会造成**静默错解**（§3 实测），比巡检 failed 更危险。本工作包不允许「先改 URL 下轮再修适配器」的拆批。
 
@@ -96,10 +96,11 @@
 3. `capture_fp.py` `DIRECTLY_CITED_CAPTURE_SOURCES`：按 D4 移除 faq 条目。
 4. `fp.py` 四个提取器按 §4 重写。
 5. `source_registry.py`／巡检无需改：FP 域从 `FP_SOURCES` 派生，巡检读库内 `sources`。
+6. **（执行轮补充，超出原 §5 枚举，已向所有者标记）** `apps/web/src/render.ts` 的 FP 官方来源链接列表含 6 条 kinzai 旧 URL（home／1-academic／1-practical／2／3／eligibility，无 schedule），是同一域名迁移在 Web UI 的硬编码副本，按 D2 同一映射换新（`products.kinzai.or.jp/exam-fp/…`）。无 Web 测试断言这些 URL，部署暂缓故无实时用户影响。JS 测试夹具 `tests/fixtures/fp-ui-stress.ts`（4 条 mock sourceUrl）与 `scripts/verify-lib.test.mjs:258`（`provenanceStatus:'fixture'`）是合成压测/夹具数据、非登记断言；`scripts/backfill-fp-provenance.mjs` 是历史 localhost 溯源脚本（faq 快照按 D4 保留）——三者本轮**刻意不动**，属范围外。
 
-## 6. 迁移落点（下一轮，编号顺延 0028）
+## 6. 迁移落点（0028，已写，应用待授权）
 
-8 条 `UPDATE sources SET canonical_url='<新>', allowed_domain='products.kinzai.or.jp' WHERE id='<id>' AND canonical_url='<旧>'`——旧值守卫保证幂等（重跑零 Applied）。faq 不在库，无动作；不新增不删除行，`sources` 总数不变。`seed.ts` 的 fp 映射已存在，无需改。**迁移应用到本机库须单独授权**（与代码 commit 分开）。
+7 条 `UPDATE sources SET canonical_url='<新>', allowed_domain='products.kinzai.or.jp' WHERE id='<id>' AND canonical_url='<旧>'`（home／1-academic／1-practical／2／3／eligibility／schedule-2026）——旧值守卫保证幂等（重跑零 Applied）。按修订 D3 退役 `kinzai-schedule`：先 `DELETE FROM source_checks WHERE source_id='source:fp:kinzai-schedule'` 再 `DELETE FROM sources WHERE id=… AND canonical_url='https://www.kinzai.or.jp/ginou/fp/nittei-fp'`（FK 安全：2026-11-12 只读复核 candidate_facts／snapshots／source_scopes／conflicts 均 0 引用）。faq 不在库，无动作。`sources` 52→51。`seed.ts` 的 fp 映射按 id 前缀绑定，无需改。**迁移应用到本机库须单独授权**（与代码 commit 分开）；截至 2026-11-12 已应用 0000–0027 共 28 个，0028 未应用。
 
 ## 7. 测试影响面
 
@@ -131,3 +132,11 @@ push／开 PR／「合并」各须明示措辞；部署暂缓，不在本单范�
 ## 11. 范围外
 
 jafp 5 条来源不动；不新增事实字段；FE 合格率（`statistics-fe` 附件 PDF）属另一工作包；簿记 URL 漂移已由迁移 0026 闭合，与本单无关。
+
+## 12. 执行轮读数（2026-11-12，离线，可复跑）
+
+- **pytest**：`PYTHONIOENCODING=utf-8 services/collector/.venv/Scripts/python.exe -m pytest -p no:cacheprovider --basetemp=.pytest-basetemp services/collector/tests services/parser/tests -q` ⇒ **218 passed**（上一轮 214，净 +4；含新增 td→th 回归、legacy td fail-safe、practical 缺证据句 fail-safe 用例）。
+- **vitest**：`npx vitest run --dir tests --pool=threads --poolOptions.threads.singleThread` ⇒ **15 文件／139 用例**（`npm test` 含 `var/wt-*` 旧 worktree 副本虚增到 42／387，报数以 --dir tests 为准）。**verify-gate** `npm run test:verify-gate` ⇒ **40 pass／0 fail**。**typecheck** 通过。**format:check**「All matched files use Prettier code style!」（render.ts＋2 md 先 --write 复检 unchanged）。
+- **提取器离线复核**：新调查页 27 候选／0 issue（8+7+2+10），对 27 条已批准基线 23 不变／4 变化（schedule 实技 2027-02 窗口）／0 缺失／0 多余；home／2／3 报 `structure_changed`（设计）。旧官方磁盘：academic 安全失败 0、practical 7／eligibility 2／schedule 10 仍解析且 19 值与基线逐字一致。
+- **只读 DB 现态**：`sources` 52、`facts` 994、`pending_review` 0、已应用迁移 28（0000–0027）、kinzai 8 行仍旧域；`kinzai-schedule` FK 引用仅 `source_checks` 1 条（candidate_facts／snapshots／source_scopes／conflicts 均 0）。
+- **尚未触发**：迁移 0028 应用、实抓、候选入库、审核批准、commit／push（各须单独授权）。

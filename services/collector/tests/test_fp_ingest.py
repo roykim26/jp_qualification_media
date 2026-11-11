@@ -10,7 +10,7 @@ SOURCE_ID = "source:fp:jafp-2-3-outline"
 SOURCE_URL = "https://www.jafp.or.jp/exam/outline/"
 
 # Pages the FP adapter cannot read any contracted field out of (2026-10-11 只读
-# 预演：磁盘快照逐条解析，这七个全部报 structure_changed)。They stay out of
+# 预演：磁盘快照逐条解析，这六个全部报 structure_changed)。They stay out of
 # INGEST_SOURCES on purpose — ingest_snapshot() aborts on any parse issue.
 UNPARSED_FP_SOURCES = (
     "source:fp:jafp-home",
@@ -19,7 +19,6 @@ UNPARSED_FP_SOURCES = (
     "source:fp:kinzai-home",
     "source:fp:kinzai-2",
     "source:fp:kinzai-3",
-    "source:fp:kinzai-schedule",
 )
 
 
@@ -135,7 +134,7 @@ def test_fp_capture_record_reads_the_merged_report(monkeypatch, tmp_path: Path):
             "status_code": 200,
             "attempts": 1,
             "captured_at": "2026-09-22T13:23:59.182453+00:00",
-            "url": "https://www.kinzai.or.jp/ginou/fp/1kyu/gaku.html",
+            "url": "https://products.kinzai.or.jp/exam-fp/1kyu-gakka/",
             "content_hash": sha256(b"kinzai bytes").hexdigest(),
             "snapshot_path": str(other),
         },

@@ -7,6 +7,7 @@ import os
 from datetime import datetime, timezone
 from hashlib import sha256
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from collector.capture_report import write_capture_report
 from collector.fp import FP_SOURCES
@@ -22,11 +23,6 @@ DIRECTLY_CITED_CAPTURE_SOURCES = {
         "https://www.jafp.or.jp/exam/app/howto/files/outline.pdf?v=202607010900",
         "jafp",
         ".pdf",
-    ),
-    "capture-only:fp:kinzai-fp-faq": (
-        "https://www.kinzai.or.jp/ginou/fp/faq",
-        "kinzai",
-        ".html",
     ),
 }
 
@@ -64,7 +60,7 @@ def capture_registered_sources(
     selected_sources = selected_capture_sources(source_ids)
     results: list[dict[str, object]] = []
     for source_id, (url, provider, suffix) in selected_sources.items():
-        host = "www.jafp.or.jp" if provider == "jafp" else "www.kinzai.or.jp"
+        host = urlsplit(url).hostname or ""
         fetcher = SafeFetcher(SourcePolicy(source_id, frozenset({host})))
         try:
             fetched = fetcher.fetch(url)

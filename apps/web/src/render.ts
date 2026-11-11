@@ -505,32 +505,32 @@ const officialSourcesBySlug: Record<
     },
     {
       name: '金融財政事情研究会 FP技能検定',
-      url: 'https://www.kinzai.or.jp/ginou/fp/',
+      url: 'https://products.kinzai.or.jp/exam-fp/',
       scope: '金融財政事情研究会が実施するFP技能検定の公式入口',
     },
     {
       name: '金財 1級学科試験要綱',
-      url: 'https://www.kinzai.or.jp/ginou/fp/1kyu/g_apply.html',
+      url: 'https://products.kinzai.or.jp/exam-fp/1kyu-gakka/',
       scope: '1級学科の時間、出題形式、問題数、合格基準、手数料',
     },
     {
       name: '金財 1級実技試験要綱',
-      url: 'https://www.kinzai.or.jp/ginou/fp/1kyu/j_apply.html',
+      url: 'https://products.kinzai.or.jp/exam-fp/1kyu-jitsugi/',
       scope: '1級資産相談業務の面接方式、合格基準、手数料',
     },
     {
       name: '金財 2級試験要綱',
-      url: 'https://www.kinzai.or.jp/ginou/fp/2kyu/index.html',
+      url: 'https://products.kinzai.or.jp/exam-fp/2kyu/',
       scope: '2級学科・実技CBTの公式要綱',
     },
     {
       name: '金財 3級試験要綱',
-      url: 'https://www.kinzai.or.jp/ginou/fp/3kyu/index.html',
+      url: 'https://products.kinzai.or.jp/exam-fp/3kyu/',
       scope: '3級学科・実技CBTの公式要綱',
     },
     {
       name: '金財 受検資格',
-      url: 'https://www.kinzai.or.jp/ginou/fp/sikaku.html',
+      url: 'https://products.kinzai.or.jp/exam-fp/eligibility/',
       scope: '各級・科目の受検資格',
     },
   ],

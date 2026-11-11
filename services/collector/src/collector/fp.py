@@ -14,14 +14,17 @@ FP_SOURCES = {
     "source:fp:jafp-1-outline": ("https://www.jafp.or.jp/exam/outline/1fp/index.shtml", "jafp"),
     "source:fp:jafp-schedule": ("https://www.jafp.or.jp/exam/schedule/", "jafp"),
     "source:fp:jafp-2-3-application": ("https://www.jafp.or.jp/exam/app/3fp.shtml", "jafp"),
-    "source:fp:kinzai-home": ("https://www.kinzai.or.jp/ginou/fp/", "kinzai"),
-    "source:fp:kinzai-1-academic": ("https://www.kinzai.or.jp/ginou/fp/1kyu/g_apply.html", "kinzai"),
-    "source:fp:kinzai-1-practical": ("https://www.kinzai.or.jp/ginou/fp/1kyu/j_apply.html", "kinzai"),
-    "source:fp:kinzai-2": ("https://www.kinzai.or.jp/ginou/fp/2kyu/index.html", "kinzai"),
-    "source:fp:kinzai-3": ("https://www.kinzai.or.jp/ginou/fp/3kyu/index.html", "kinzai"),
-    "source:fp:kinzai-eligibility": ("https://www.kinzai.or.jp/ginou/fp/sikaku.html", "kinzai"),
-    "source:fp:kinzai-schedule": ("https://www.kinzai.or.jp/ginou/fp/nittei-fp", "kinzai"),
-    "source:fp:kinzai-schedule-2026": ("https://www.kinzai.or.jp/fp/nittei-fp/48581.html", "kinzai"),
+    "source:fp:kinzai-home": ("https://products.kinzai.or.jp/exam-fp/", "kinzai"),
+    "source:fp:kinzai-1-academic": ("https://products.kinzai.or.jp/exam-fp/1kyu-gakka/", "kinzai"),
+    "source:fp:kinzai-1-practical": ("https://products.kinzai.or.jp/exam-fp/1kyu-jitsugi/", "kinzai"),
+    "source:fp:kinzai-2": ("https://products.kinzai.or.jp/exam-fp/2kyu/", "kinzai"),
+    "source:fp:kinzai-3": ("https://products.kinzai.or.jp/exam-fp/3kyu/", "kinzai"),
+    "source:fp:kinzai-eligibility": ("https://products.kinzai.or.jp/exam-fp/eligibility/", "kinzai"),
+    # The official site merged the annual schedule page into the single schedule
+    # page.  kinzai-schedule (0 facts, evidence-only) was retired because the
+    # per-qualification UNIQUE(canonical_url, qualification_id) forbids two FP
+    # sources sharing one URL; kinzai-schedule-2026 keeps the 10 approved facts.
+    "source:fp:kinzai-schedule-2026": ("https://products.kinzai.or.jp/exam-fp/schedule/", "kinzai"),
 }
 LEVELS = {"1", "2", "3"}
 PROVIDERS = {"jafp", "kinzai"}
@@ -266,10 +269,10 @@ def _extract_kinzai_1_academic(snapshot: FPSnapshot, soup: BeautifulSoup) -> lis
     time_heading, format_heading, fee_heading = soup.select_one("#exam-time"), soup.select_one("#exam-format"), soup.select_one("#exam-fee")
     if not time_heading or not format_heading or not fee_heading:
         return []
-    table = format_heading.find_next("table")
-    if not table:
+    format_table, time_table, fee_p = format_heading.find_next("table"), time_heading.find_next("table"), fee_heading.find_next("p")
+    if not format_table or not time_table or not fee_p:
         return []
-    format_text = table.get_text(" ", strip=True)
+    format_text = format_table.get_text(" ", strip=True)
     # A CBT applicant portal is not evidence that the assessment itself is
     # CBT.  Prefer the explicit form in the exam-format table, which keeps the
     # 2026 level-1 academic written assessment in its PBT dimension.
@@ -279,49 +282,99 @@ def _extract_kinzai_1_academic(snapshot: FPSnapshot, soup: BeautifulSoup) -> lis
         delivery_mode, exam_method = "cbt", "CBT"
     else:
         return []
+    # Parse the duration from the #exam-time table (150分 × 2) instead of a
+    # hardcoded constant, so a future change is read rather than assumed.
+    time_text = time_table.get_text(" ", strip=True)
+    minutes = [int(_digits(value)) for value in re.findall(r"（([0-9０-９]+)分）", time_text)]
+    if not minutes:
+        return []
+    total_minutes = sum(minutes)
+    time_display = f"基礎編{minutes[0]}分・応用編{minutes[1]}分（合計{total_minutes}分）" if len(minutes) == 2 else f"合計{total_minutes}分"
+    # The migrated page moved the 基礎編/応用編 row labels from td into th and
+    # dropped the 合格基準 cell on the 応用編 row.  Read the label from the first
+    # cell regardless of tag, then the remaining td cells positionally.
+    sections: dict[str, list[str]] = {}
+    passing_text = ""
+    for row in format_table.select("tr"):
+        cells = row.find_all(["th", "td"], recursive=False)
+        if not cells:
+            continue
+        label = cells[0].get_text(" ", strip=True)
+        if label not in ("基礎編", "応用編"):
+            continue
+        values = [cell.get_text(" ", strip=True) for cell in cells[1:] if cell.name == "td"]
+        if len(values) < 2:
+            return []
+        sections[label] = values
+        if len(values) >= 3 and values[2]:
+            passing_text = values[2]
+    if set(sections) != {"基礎編", "応用編"} or not passing_text:
+        return []
+    pass_match, total_match = re.search(r"([0-9０-９]+)点以上", passing_text), re.search(r"([0-9０-９]+)点満点", passing_text)
+    if not pass_match or not total_match:
+        return []
+    passing_standard = f"{int(_digits(pass_match.group(1)))}/{int(_digits(total_match.group(1)))}"
+    fee_text = fee_p.get_text(" ", strip=True)
+    amount = re.sub(r"\D", "", fee_text)
+    if not amount:
+        return []
     result = [
         _candidate(snapshot, "exam_method", exam_method, exam_method, "kinzai", "1", "academic", delivery_mode, evidence=format_text),
-        _candidate(snapshot, "exam_time", "300", "基礎編150分・応用編150分（合計300分）", "kinzai", "1", "academic", delivery_mode, "integer"),
-        _candidate(snapshot, "passing_standard", "120/200", "120点以上（200点満点）", "kinzai", "1", "academic", delivery_mode),
+        _candidate(snapshot, "exam_time", str(total_minutes), time_display, "kinzai", "1", "academic", delivery_mode, "integer", time_text),
+        _candidate(snapshot, "passing_standard", passing_standard, passing_text, "kinzai", "1", "academic", delivery_mode, evidence=passing_text),
     ]
-    for row in table.select("tr")[1:]:
-        cells = [cell.get_text(" ", strip=True) for cell in row.select("td")]
-        if len(cells) < 3:
-            continue
-        section, form, count = cells[:3]
-        component = "academic:basic" if section == "基礎編" else "academic:applied"
-        result.append(_candidate(snapshot, "question_format", form, form, "kinzai", "1", component, delivery_mode, evidence=" / ".join(cells)))
-        result.append(_candidate(snapshot, "question_count", re.sub(r"\D", "", count), count, "kinzai", "1", component, delivery_mode, "integer", " / ".join(cells)))
-    fee_text = fee_heading.find_next("p").get_text(" ", strip=True)
-    amount = re.sub(r"\D", "", fee_text)
+    for label, component in (("基礎編", "academic:basic"), ("応用編", "academic:applied")):
+        values = sections[label]
+        form, count = values[0], values[1]
+        evidence = " / ".join([label, *values])
+        result.append(_candidate(snapshot, "question_format", form, form, "kinzai", "1", component, delivery_mode, evidence=evidence))
+        result.append(_candidate(snapshot, "question_count", re.sub(r"\D", "", count), count, "kinzai", "1", component, delivery_mode, "integer", evidence))
     result.append(_candidate(snapshot, "fee", amount, fee_text, "kinzai", "1", "academic", delivery_mode, "money"))
     return result
 
 
 def _extract_kinzai_1_practical(snapshot: FPSnapshot, soup: BeautifulSoup) -> list[FPFactCandidate]:
-    format_heading, fee_heading = soup.select_one("#syutudai"), soup.select_one("#exam-fee")
+    format_heading, fee_heading = soup.select_one("#exam-format"), soup.select_one("#exam-fee")
     if not format_heading or not fee_heading:
         return []
-    assessment_heading = soup.select_one("#exam-format")
-    assessment_block = assessment_heading.find_next("ul", class_="list") if assessment_heading else None
-    subject_line = next(
-        (
-            item.get_text(" ", strip=True)
-            for item in soup.select("li")
-            if "資産相談業務" in item.get_text(" ", strip=True)
-        ),
-        soup.select_one("h1").get_text(" ", strip=True) if soup.select_one("h1") else "",
-    )
-    assessment_text = assessment_block.get_text(" ", strip=True) if assessment_block else ""
-    fee_text = fee_heading.find_next("p").get_text(" ", strip=True)
+    assessment_block = format_heading.find_next("ul")
+    if assessment_block is None or assessment_block.find_previous(["h2", "h3", "h4"]) is not format_heading:
+        return []
+    li_texts = [item.get_text(" ", strip=True) for item in assessment_block.select("li")]
+    # Every fact is anchored to a published evidence sentence.  If any sentence
+    # is missing the page has changed shape: fail safe rather than infer the
+    # high-risk interview count / duration / passing standard.
+    count_sentence = next((text for text in li_texts if "回行います" in text), "")
+    time_sentence = next((text for text in li_texts if "所要時間は約" in text), "")
+    method_sentence = next((text for text in li_texts if "対面の口述試験" in text), "")
+    passing_sentence = next((text for text in li_texts if "点満点" in text and "点以上" in text), "")
+    oral_string = soup.find(string=lambda value: value and "口頭試問方式" in value)
+    subject_node = next((node for node in soup.select("h1, h2, h3") if "資産相談業務" in node.get_text(" ", strip=True)), None) or next((node for node in soup.select("li") if "資産相談業務" in node.get_text(" ", strip=True)), None)
+    fee_p = fee_heading.find_next("p")
+    if not (count_sentence and time_sentence and method_sentence and passing_sentence and oral_string and subject_node and fee_p):
+        return []
+    count_match = re.search(r"([0-9０-９]+)回行います", count_sentence)
+    # li[4] also carries 約15分 (the case-study handout lead time); anchor the
+    # per-interview duration to 所要時間は約 so the 15 is never mistaken for it.
+    time_match = re.search(r"所要時間は約([0-9０-９]+)分", time_sentence)
+    pass_match, total_match = re.search(r"([0-9０-９]+)点以上", passing_sentence), re.search(r"([0-9０-９]+)点満点", passing_sentence)
+    fee_text = fee_p.get_text(" ", strip=True)
+    amount = re.sub(r"\D", "", fee_text)
+    if not (count_match and time_match and pass_match and total_match and amount):
+        return []
+    interview_count = int(_digits(count_match.group(1)))
+    interview_minutes = int(_digits(time_match.group(1)))
+    passing_standard = f"{int(_digits(pass_match.group(1)))}/{int(_digits(total_match.group(1)))}"
+    oral_text = str(oral_string).strip()
+    subject_text = subject_node.get_text(" ", strip=True)
     return [
-        _candidate(snapshot, "practical_subject", "asset_consulting", "資産相談業務", "kinzai", "1", "practical:asset-consulting", "interview", evidence=subject_line),
-        _candidate(snapshot, "exam_method", "interview", "対面の口述試験", "kinzai", "1", "practical:asset-consulting", "interview", evidence=assessment_text),
-        _candidate(snapshot, "interview_count", "2", "面接2回", "kinzai", "1", "practical:asset-consulting", "interview", "integer", assessment_text),
-        _candidate(snapshot, "exam_time", "12", "各面接 約12分", "kinzai", "1", "practical:asset-consulting", "interview", "integer", assessment_text),
-        _candidate(snapshot, "question_format", "oral", "口頭試問方式", "kinzai", "1", "practical:asset-consulting", "interview"),
-        _candidate(snapshot, "passing_standard", "120/200", "200点満点で120点以上", "kinzai", "1", "practical:asset-consulting", "interview"),
-        _candidate(snapshot, "fee", re.sub(r"\D", "", fee_text), fee_text, "kinzai", "1", "practical:asset-consulting", "interview", "money"),
+        _candidate(snapshot, "practical_subject", "asset_consulting", "資産相談業務", "kinzai", "1", "practical:asset-consulting", "interview", evidence=subject_text),
+        _candidate(snapshot, "exam_method", "interview", "対面の口述試験", "kinzai", "1", "practical:asset-consulting", "interview", evidence=method_sentence),
+        _candidate(snapshot, "interview_count", str(interview_count), f"面接{interview_count}回", "kinzai", "1", "practical:asset-consulting", "interview", "integer", count_sentence),
+        _candidate(snapshot, "exam_time", str(interview_minutes), f"各面接 約{interview_minutes}分", "kinzai", "1", "practical:asset-consulting", "interview", "integer", time_sentence),
+        _candidate(snapshot, "question_format", "oral", "口頭試問方式", "kinzai", "1", "practical:asset-consulting", "interview", evidence=oral_text),
+        _candidate(snapshot, "passing_standard", passing_standard, f"{total_match.group(1)}点満点で{pass_match.group(1)}点以上", "kinzai", "1", "practical:asset-consulting", "interview", evidence=passing_sentence),
+        _candidate(snapshot, "fee", amount, fee_text, "kinzai", "1", "practical:asset-consulting", "interview", "money"),
     ]
 
 
@@ -332,8 +385,8 @@ def _extract_kinzai_2026_schedule(snapshot: FPSnapshot, soup: BeautifulSoup) -> 
     occurrences are stored as a JSON-text sequence.  The public calendar
     expands every ISO date in that sequence into separate calendar/ICS events.
     """
-    academic = soup.select_one("h2#g")
-    practical = soup.select_one("h2#j")
+    academic = next((node for node in soup.select("h2") if node.get_text(" ", strip=True) == "1級学科試験"), None)
+    practical = next((node for node in soup.select("h2") if node.get_text(" ", strip=True) == "1級実技試験"), None)
     if not academic or not practical:
         return []
 
@@ -413,7 +466,7 @@ def _extract_kinzai_eligibility(snapshot: FPSnapshot, soup: BeautifulSoup) -> li
     Their delivery modes are fixed by the corresponding registered 1級 outlines;
     no eligibility text is reused for another level or provider.
     """
-    heading = soup.select_one("h2#aaa")
+    heading = soup.select_one("#aaa")
     table = heading.find_next("table") if heading else None
     if not table:
         return []

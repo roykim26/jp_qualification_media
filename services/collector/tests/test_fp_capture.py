@@ -1,3 +1,5 @@
+from urllib.parse import urlsplit
+
 import pytest
 
 from collector.capture_fp import (
@@ -28,13 +30,19 @@ def test_jafp_outline_pdf_is_capture_only_not_an_ingestion_source():
     assert suffix == ".pdf"
 
 
-def test_kinzai_faq_is_capture_only_not_an_ingestion_source():
-    source_id = "capture-only:fp:kinzai-fp-faq"
-    url, provider, suffix = DIRECTLY_CITED_CAPTURE_SOURCES[source_id]
+def test_kinzai_faq_capture_only_source_is_retired():
+    # D4: the FAQ page was abolished (301 back to the exam top page), so it is no
+    # longer a capture-only source.  The old official snapshot is kept as evidence.
+    assert "capture-only:fp:kinzai-fp-faq" not in DIRECTLY_CITED_CAPTURE_SOURCES
 
-    assert url == "https://www.kinzai.or.jp/ginou/fp/faq"
-    assert provider == "kinzai"
-    assert suffix == ".html"
+
+def test_kinzai_capture_sources_use_the_migrated_products_domain():
+    selected = selected_capture_sources(None)
+    kinzai_urls = [url for url, provider, _ in selected.values() if provider == "kinzai"]
+    assert kinzai_urls
+    assert all(urlsplit(url).hostname == "products.kinzai.or.jp" for url in kinzai_urls)
+    # The redundant evidence-only schedule index was retired (revised D3).
+    assert "source:fp:kinzai-schedule" not in selected
 
 
 def test_default_capture_plan_excludes_directly_cited_sources():
