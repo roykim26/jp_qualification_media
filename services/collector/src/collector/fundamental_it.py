@@ -39,8 +39,10 @@ FUNDAMENTAL_IT_SOURCES = {
         "allowed_domain": "www.ipa.go.jp",
     },
     # CBT operator portal: eligibility and pass criteria for the CBT delivery.
+    # The former /cbt/fe/ page now 301s to the corporate top; the FE page lives
+    # under the examinee portal and returns 200 without redirects.
     "source:fundamental-it:cbt-s": {
-        "canonical_url": "https://www.cbt-s.com/cbt/fe/",
+        "canonical_url": "https://www.cbt-s.com/examinee/examination/fe",
         "allowed_domain": "www.cbt-s.com",
     },
     # 試験要綱 PDF: the only official statement that FE scoring uses IRT.

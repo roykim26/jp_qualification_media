@@ -15,7 +15,7 @@ FE 自令和 5 年度起全年以 CBT 随时实施，没有「统一考试日 + 
 | `source:fundamental-it:syllabus`      | `https://www.ipa.go.jp/shiken/syllabus/index.html`                             | `official_syllabus`         | 否，只作大纲证据          |
 | `source:fundamental-it:statistics-fe` | `https://www.ipa.go.jp/shiken/reports/toukei_fe.html`                          | `official_statistics`       | 否，尚未抓取得到内容      |
 | `source:fundamental-it:ipa-fee`       | `https://www.ipa.go.jp/shiken/mousikomi/schedule.html`                         | `official_exam_calendar`    | 是（区分共通受験手数料）  |
-| `source:fundamental-it:cbt-s`         | `https://www.cbt-s.com/cbt/fe/`                                                | `official_cbt_operator`     | 是（受験資格・合格基準）  |
+| `source:fundamental-it:cbt-s`         | `https://www.cbt-s.com/examinee/examination/fe`                                | `official_cbt_operator`     | 是（受験資格・合格基準）  |
 | `source:fundamental-it:youkou-pdf`    | `https://www.ipa.go.jp/shiken/syllabus/rcu1hd00000141gq-att/youkou_ver5_6.pdf` | `official_exam_outline_pdf` | 是（仅 IRT 评分方式一句） |
 
 `source:fundamental-it:statistics-fe` 是工作包 F（历史统计）第一批的采集登记，2026-10-11 **只进了采集侧常量表**：没有对应的 `sources` 迁移、没有快照、没有事实。`extract_candidates()` 对它只会报 `structure_changed`（有用例锁定），授权口径见 `docs/work-package-f-live-capture-authorization.md`。
@@ -100,8 +100,8 @@ FE 自令和 5 年度起全年以 CBT 随时实施，没有「统一考试日 + 
 
 1. `venue_rule`/`booking_window`/`application_rule` 没有年度统一值。2026-11-11 所有者拍板：**维持 `not_applicable`**（契约中单独一行，维度 `deliveryMode=cbt`），不扩 `exam_session` 维度、不逐场次取证；如以后要做，需重新走判级决策。
 2. `eligibility`、`scoring_method`、`passing_standard` 仍为零已批准事实（`fee` 已于 2026-11-10 经审核批准，见上节）。2026-11-11 已拍板登记来源并完成离线解析验证：
-   - `eligibility`（「どなたでも受験可能」）与 `passing_standard`（「各科目の評価点が基準点（600点）以上」）来自 CBT 运营方 `https://www.cbt-s.com/cbt/fe/`，已登记 `source:fundamental-it:cbt-s`；本机离线副本已用真实页面验证解析结果，尚未实抓、入库、批准。
-   - `scoring_method`（IRT）来自 `試験要綱 Ver.5.6` PDF §4(1)，已登记 `source:fundamental-it:youkou-pdf` 并新增最小 `pypdf` 解析；本机 PDF 已验证能提取原文，尚未实抓、入库、批准。
+   - `eligibility`（「どなたでも受験可能」）与 `passing_standard`（「各科目の評価点が基準点（600点）以上」）来自 CBT 运营方 `https://www.cbt-s.com/examinee/examination/fe`，已登记 `source:fundamental-it:cbt-s`；本机离线副本已用真实页面验证解析结果，2026-11-11 已实抓，尚未入库、批准。
+   - `scoring_method`（IRT）来自 `試験要綱 Ver.5.6` PDF §4(1)，已登记 `source:fundamental-it:youkou-pdf` 并新增最小 `pypdf` 解析；本机 PDF 已验证能提取原文，2026-11-11 已实抓，尚未入库、批准。
    - 三项都要按三次授权流程处理，不得用推断值补全。
 3. `syllabus` 来源只作证据，未接入适配器。
 4. 统计类字段（`post_event`）零覆盖，归工作包 F。
