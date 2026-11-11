@@ -11,6 +11,7 @@ import os
 from datetime import datetime, timezone
 from hashlib import sha256
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from collector.capture_report import write_capture_report
 from collector.fundamental_it import FUNDAMENTAL_IT_SOURCES
@@ -71,7 +72,12 @@ def capture_registered_sources(
             }
             if fetched.body is not None and fetched.status in {"ok", "not_modified"}:
                 content_hash = sha256(fetched.body).hexdigest()
-                snapshot_path = root / f"{content_hash}.html"
+                suffix = (
+                    ".pdf"
+                    if urlsplit(source["canonical_url"]).path.lower().endswith(".pdf")
+                    else ".html"
+                )
+                snapshot_path = root / f"{content_hash}{suffix}"
                 if not snapshot_path.exists():
                     snapshot_path.write_bytes(fetched.body)
                 result.update(

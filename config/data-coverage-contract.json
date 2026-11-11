@@ -408,9 +408,6 @@
           "fields": [
             "exam_method",
             "exam_schedule",
-            "application_rule",
-            "booking_window",
-            "venue_rule",
             "eligibility",
             "fee",
             "scoring_method",
@@ -419,6 +416,11 @@
             "official_verified_at"
           ],
           "requiredLevel": "conditional",
+          "dimensions": { "deliveryMode": "cbt" }
+        },
+        {
+          "fields": ["application_rule", "booking_window", "venue_rule"],
+          "requiredLevel": "not_applicable",
           "dimensions": { "deliveryMode": "cbt" }
         },
         {

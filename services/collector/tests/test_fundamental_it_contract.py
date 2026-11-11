@@ -43,6 +43,8 @@ def test_fundamental_it_source_plan_is_explicit_and_https_only():
         "source:fundamental-it:syllabus",
         "source:fundamental-it:statistics-fe",
         "source:fundamental-it:ipa-fee",
+        "source:fundamental-it:cbt-s",
+        "source:fundamental-it:youkou-pdf",
     }
     assert all(item["canonical_url"].startswith("https://") for item in source_plan())
 
@@ -209,3 +211,56 @@ def test_fundamental_it_fee_page_without_amount_yields_no_candidate():
     )
     assert candidates == []
     assert [issue.code for issue in issues] == ["structure_changed"]
+
+
+def test_fundamental_it_cbt_s_page_reads_eligibility_and_pass_criteria():
+    html = """<html><head><title>【CBT】基本情報技術者試験（FE） | CBT-Solutions</title></head><body>
+    <table><tr><th>試験区分</th><td>■基本情報技術者試験（FE）</td></tr>
+    <tr><th>受験資格</th><td>どなたでも受験可能</td></tr>
+    <tr><th>合格基準</th><td>各科目の評価点が基準点（600点）以上の場合に合格です。</td></tr></table>
+    </body></html>"""
+    candidates, issues = extract_candidates(
+        snapshot_from_html("source:fundamental-it:cbt-s", html, synthetic=False)
+    )
+    assert not issues
+    by_key = {candidate.fact_key: candidate for candidate in candidates}
+    assert by_key["eligibility"].normalized_value == "どなたでも受験可能"
+    assert by_key["eligibility"].risk_level == "high"
+    assert by_key["passing_standard"].normalized_value == "各科目の評価点が基準点（600点）以上"
+    assert by_key["passing_standard"].risk_level == "high"
+    assert "600点" in by_key["passing_standard"].evidence_text
+
+
+def test_fundamental_it_cbt_s_page_rejects_other_exams_and_missing_rows():
+    other = """<html><head><title>【CBT】情報セキュリティマネジメント試験（SG）</title></head><body>
+    <table><tr><th>受験資格</th><td>どなたでも受験可能</td></tr></table></body></html>"""
+    candidates, issues = extract_candidates(
+        snapshot_from_html("source:fundamental-it:cbt-s", other, synthetic=False)
+    )
+    assert candidates == []
+    assert [issue.code for issue in issues] == ["structure_changed"]
+
+    missing = """<html><head><title>【CBT】基本情報技術者試験（FE）</title></head><body>
+    <table><tr><th>受験資格</th><td>どなたでも受験可能</td></tr></table></body></html>"""
+    candidates, issues = extract_candidates(
+        snapshot_from_html("source:fundamental-it:cbt-s", missing, synthetic=False)
+    )
+    assert [candidate.fact_key for candidate in candidates] == ["eligibility"]
+
+
+def test_fundamental_it_subject_facts_carry_cbt_component_dimensions():
+    html = """<main>
+    <div class="def-list --side"><dt>実施方式・実施時期</dt><dd>CBT方式により随時実施</dd></div>
+    <h4>科目A</h4><div><div class="def-list --side"><dt>試験時間</dt><dd>90分</dd></div></div>
+    <h4>科目B</h4><div><div class="def-list --side"><dt>試験時間</dt><dd>100分</dd></div></div>
+    </main>"""
+    candidates, issues = extract_candidates(
+        snapshot_from_html("source:fundamental-it:exam", html, synthetic=False)
+    )
+    assert not issues
+    by_key = {candidate.fact_key: candidate for candidate in candidates}
+    assert by_key["exam_subject_a_time"].delivery_mode == "cbt"
+    assert by_key["exam_subject_a_time"].exam_component == "subject-a"
+    assert by_key["exam_subject_b_time"].exam_component == "subject-b"
+    assert by_key["exam_method"].delivery_mode == "cbt"
+    assert by_key["exam_method"].exam_component is None

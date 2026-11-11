@@ -1,6 +1,6 @@
 # 基本情報技術者（FE）：来源登记与字段契约
 
-资格 slug：`fundamental-it-engineer`。主管机关：独立行政法人情報処理推進機構（`institution:ipa`）。允许域名仅 `www.ipa.go.jp`。
+资格 slug：`fundamental-it-engineer`。主管机关：独立行政法人情報処理推進機構（`institution:ipa`）。允许域名：IPA 官方页 `www.ipa.go.jp`，以及 CBT 运营方 `www.cbt-s.com`（2026-11-11 所有者批准，仅用于报考资格与合格标准）。
 
 FE 自令和 5 年度起全年以 CBT 随时实施，没有「统一考试日 + 统一报名窗口」这种年度单值结构，因此契约里三条 requirement 全部是 `conditional` 且带 `deliveryMode`/`examComponent` 维度。**本资格的门禁通过含义与行政書士不同，务必先读「门禁告警」一节。**
 
@@ -8,17 +8,21 @@ FE 自令和 5 年度起全年以 CBT 随时实施，没有「统一考试日 + 
 
 来源由 `packages/db/migrations/0005_fundamental_it_sources.sql` 与 `0022_p0_1_core_fact_sources.sql` 登记，常量表在 `services/collector/src/collector/fundamental_it.py` 的 `FUNDAMENTAL_IT_SOURCES`。
 
-| source_id                             | URL                                                     | source_type                 | 是否产出候选             |
-| ------------------------------------- | ------------------------------------------------------- | --------------------------- | ------------------------ |
-| `source:fundamental-it:exam`          | `https://www.ipa.go.jp/shiken/kubun/fe.html`            | `official_exam_information` | 是（科目结构）           |
-| `source:fundamental-it:cbt`           | `https://www.ipa.go.jp/shiken/mousikomi/cbt_sg_fe.html` | `official_cbt_application`  | 是（仅两句共用陈述）     |
-| `source:fundamental-it:syllabus`      | `https://www.ipa.go.jp/shiken/syllabus/index.html`      | `official_syllabus`         | 否，只作大纲证据         |
-| `source:fundamental-it:statistics-fe` | `https://www.ipa.go.jp/shiken/reports/toukei_fe.html`   | `official_statistics`       | 否，尚未抓取得到内容     |
-| `source:fundamental-it:ipa-fee`       | `https://www.ipa.go.jp/shiken/mousikomi/schedule.html`  | `official_exam_calendar`    | 是（区分共通受験手数料） |
+| source_id                             | URL                                                                            | source_type                 | 是否产出候选              |
+| ------------------------------------- | ------------------------------------------------------------------------------ | --------------------------- | ------------------------- |
+| `source:fundamental-it:exam`          | `https://www.ipa.go.jp/shiken/kubun/fe.html`                                   | `official_exam_information` | 是（科目结构）            |
+| `source:fundamental-it:cbt`           | `https://www.ipa.go.jp/shiken/mousikomi/cbt_sg_fe.html`                        | `official_cbt_application`  | 是（仅两句共用陈述）      |
+| `source:fundamental-it:syllabus`      | `https://www.ipa.go.jp/shiken/syllabus/index.html`                             | `official_syllabus`         | 否，只作大纲证据          |
+| `source:fundamental-it:statistics-fe` | `https://www.ipa.go.jp/shiken/reports/toukei_fe.html`                          | `official_statistics`       | 否，尚未抓取得到内容      |
+| `source:fundamental-it:ipa-fee`       | `https://www.ipa.go.jp/shiken/mousikomi/schedule.html`                         | `official_exam_calendar`    | 是（区分共通受験手数料）  |
+| `source:fundamental-it:cbt-s`         | `https://www.cbt-s.com/cbt/fe/`                                                | `official_cbt_operator`     | 是（受験資格・合格基準）  |
+| `source:fundamental-it:youkou-pdf`    | `https://www.ipa.go.jp/shiken/syllabus/rcu1hd00000141gq-att/youkou_ver5_6.pdf` | `official_exam_outline_pdf` | 是（仅 IRT 评分方式一句） |
 
 `source:fundamental-it:statistics-fe` 是工作包 F（历史统计）第一批的采集登记，2026-10-11 **只进了采集侧常量表**：没有对应的 `sources` 迁移、没有快照、没有事实。`extract_candidates()` 对它只会报 `structure_changed`（有用例锁定），授权口径见 `docs/work-package-f-live-capture-authorization.md`。
 
 `ipa-fee` 与 IT Passport 的 `source:it-passport:ipa-fee` 指向同一官方页。两者各登记一条 source、各自保存快照，使 FE 的费用事实拥有自己的来源；因此 `sources.canonical_url` 从全局唯一改为「同一资格下同一 URL 唯一」（迁移 `0022_p0_1_core_fact_sources.sql`）。
+
+`cbt-s` 与 `youkou-pdf` 由迁移 `0023_fe_operator_and_outline_sources.sql` 登记。`cbt-s` 是 IPA 指定的 CBT 运营方门户，域名 `www.cbt-s.com` 超出原先「仅 `www.ipa.go.jp`」的 FE 允许域；这是一次性所有者决策（2026-11-11），不是适配器自行放宽。`youkou-pdf` 仍属 `www.ipa.go.jp`，快照保存 PDF 原始字节。
 
 `sources.qualification_id` 由 `packages/db/src/seed.ts` 统一绑定（2026-10-11 本机与 CI 空库均为 100% 已绑定；`source:fundamental-it:*` 映射到 slug `fundamental-it-engineer`），不在迁移里写。
 
@@ -30,7 +34,10 @@ FE 自令和 5 年度起全年以 CBT 随时实施，没有「统一考试日 + 
 - `cbt` 页与情報セキュリティマネジメント考试共用，页内是**逐月场次表**：没有「场次」这一维度就无法把某一行归属到单一年度事实，因此适配器只产出两句无歧义的共用陈述（`exam_method`、`exam_schedule`），**刻意不产出** `application_rule`、`booking_window`、`venue_rule`、`exam_date`、`result_date`。
 - `cbt` 页若同时出现「システムリプレースのため、{YYYY}年M月D日から試験実施を一時休止」与「試験再開は、{YYYY}年M月(上旬|中旬|下旬)を予定」⇒ 产出 `suspension_period`（`value_type=json`，`risk=high`，`exam_year=2026`，`{"startsOn":…,"resumesFrom":…}`；下旬保留为 `late`，**不折算成具体日**）。任一句缺失、或恢复句没有「予定」⇒ 不产。方案与拍板见 `docs/work-package-h-suspension-fact-proposal.md`。
 - `ipa-fee` 页标题必须含「スケジュール」，只匹配「受験手数料 7,500円(…消費税込み…)」原文 ⇒ 产出 `fee`（`value_type=integer`，`risk=high`，`normalized_value=7500`），证据保留完整括注。该金额是「情報処理技術者試験」区分共通值，不是 FE 专属报价；页面没有明确金额 ⇒ 不产候选、报 `structure_changed`。
-- 风险分级：走 `[data-fact-key]` 路径时，`application_rule`/`application_deadline`/`exam_date`/`fee`/`eligibility` 固定 `high`，其余 `medium`；`_extract_exam_page()` 与 `_extract_cbt_page()` 产出的字段固定 `medium`（`suspension_period` 例外，固定 `high`）。`_extract_fee_page()` 固定 `high`。
+- `cbt-s` 页标题必须含「基本情報技術者試験」，只读表格行「受験資格」=「どなたでも受験可能」⇒ `eligibility`（high），以及「合格基準」匹配「各科目の評価点が基準点（600点）以上の場合に合格です。」⇒ `passing_standard`（high，normalized 为「各科目の評価点が基準点（600点）以上」）。其他考试页或缺少对应行 ⇒ 不产该字段；整页无候选 ⇒ `structure_changed`。
+- `youkou-pdf` 用 `pypdf` 抽取全文，去掉空白后只匹配「基本情報技術者試験においてはIRT（ItemResponseTheory：項目応答理論）に基づいて解答結果から評価点を算出する。」⇒ `scoring_method`（`normalized_value=IRT`，`display_value=IRT（項目応答理論）`，medium）。找不到该句 ⇒ `structure_changed`，不做推断。
+- 所有 FE 候选默认 `delivery_mode='cbt'`；`exam_subject_{a|b}_*` 自动带 `exam_component='subject-a'|'subject-b'`，其余 FE 事实的 `exam_component` 为 `NULL`。入库写入这两列，与迁移 `0024_fe_cbt_dimensions_backfill.sql` 的回填口径一致。
+- 风险分级：走 `[data-fact-key]` 路径时，`application_rule`/`application_deadline`/`exam_date`/`fee`/`eligibility` 固定 `high`，其余 `medium`；`_extract_exam_page()` 与 `_extract_cbt_page()` 产出的字段固定 `medium`（`suspension_period` 例外，固定 `high`）。`_extract_fee_page()` 固定 `high`；`_extract_cbt_s_page()` 的资格与合格标准固定 `high`；PDF 的 `scoring_method` 固定 `medium`。
 
 ## 当前已批准事实（2026 年度，12 条）
 
@@ -51,7 +58,7 @@ FE 自令和 5 年度起全年以 CBT 随时实施，没有「统一考试日 + 
 | `suspension_period`             | `{"startsOn":"2026-12-28","resumesFrom":"2027-01-late"}` | json       | `cbt`     |
 | `fee`                           | `7500`                                                   | integer    | `ipa-fee` |
 
-所有 12 条的 `provider_id`、`exam_level_id`、`exam_component`、`delivery_mode`、`payment_method` 均为 `NULL` —— 这一点直接决定门禁行为，见下节。
+所有 12 条的 `provider_id`、`exam_level_id`、`exam_component`、`delivery_mode`、`payment_method` 均为 `NULL` —— 这一点直接决定门禁行为，见下节。2026-11-11 已拍板回填 `delivery_mode='cbt'`／科目维度，迁移 `0024_fe_cbt_dimensions_backfill.sql` 已就绪但**尚未应用**；本文其余读数仍是回填前状态，应用后会另行落账。
 
 ## 2026-11-10 P0-1 费用事实（已批准）
 
@@ -76,27 +83,26 @@ FE 自令和 5 年度起全年以 CBT 随时实施，没有「统一考试日 + 
 
 由此得出两条必须记住的结论：
 
-1. FE 目前**没有**真正满足契约要求的 `fee`/`eligibility`/`passing_standard` 等字段，是通过「维度不匹配 ⇒ 跳过」拿到 0 缺口的。汇报覆盖率时不得把 FE 说成字段齐备。
-2. 即便按科目维度重打事实，`exam_subject_a_time` 这类 fact_key 也**不满足**前缀匹配规则（`satisfiesCoverageField` 要求 `factKey === field` 或 `factKey.startsWith(field + '_')`，即需要 `exam_time_subject_a` 这种命名才能闭合 `exam_time`）。所以「补 `delivery_mode`」这件事必须与「fact_key 命名口径 + `exam_component` 维度填法」一起决策，属于判级/契约改动 ⇒ **需项目所有者确认后再动**，不得由实现侧自行翻转。
+1. FE 目前**没有**真正满足契约要求的 `eligibility`/`passing_standard`/`scoring_method` 字段，是通过「维度不匹配 ⇒ 跳过」拿到 0 缺口的。汇报覆盖率时不得把 FE 说成字段齐备。
+2. 即便按科目维度重打事实，`exam_subject_a_time` 这类 fact_key 也**不满足**前缀匹配规则（`satisfiesCoverageField` 要求 `factKey === field` 或 `factKey.startsWith(field + '_')`）。2026-11-11 所有者拍板：保留键名，改由 `verify-lib.mjs` 的科目映射闭合；回填维度后复算 `gaps = 3`（eligibility、passing_standard、scoring_method），三项关闭后为 0。`application_rule`／`booking_window`／`venue_rule` 已拆为 `not_applicable`，不再参与缺口计算。
 
 ## 采集、入库、批准是三次独立授权
 
-| 阶段 | 入口                        | 授权开关                                                        | 写什么                                                                                                                                                       |
-| ---- | --------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 采集 | `capture_fundamental_it.py` | `FUNDAMENTAL_IT_LIVE_AUTHORIZED=1`                              | 只写 `var/official-snapshots/fundamental-it/<sha256>.html` 与 `capture-report.json`（按 `source_id` 合并，共用 `collector/capture_report.py`，不再整份覆盖） |
-| 入库 | `ingest_fundamental_it.py`  | `FUNDAMENTAL_IT_LOCAL_WRITE=1` + localhost 库 + 非 `production` | `capture_runs`、`snapshots`（含 `original_url`/`http_status`/`retrieved_at_jst`）、`source_checks`、`candidate_facts`（`pending_review`）                    |
-| 批准 | `apps/admin/src/server.ts`  | 请求头 `x-reviewer-id`                                          | `reviews`、`fact_revisions`、`facts`、`change_events`                                                                                                        |
+| 阶段 | 入口                        | 授权开关                                                        | 写什么                                                                                                                                                                           |
+| ---- | --------------------------- | --------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 采集 | `capture_fundamental_it.py` | `FUNDAMENTAL_IT_LIVE_AUTHORIZED=1`                              | 只写 `var/official-snapshots/fundamental-it/<sha256>.html`（PDF 来源写 `.pdf`）与 `capture-report.json`（按 `source_id` 合并，共用 `collector/capture_report.py`，不再整份覆盖） |
+| 入库 | `ingest_fundamental_it.py`  | `FUNDAMENTAL_IT_LOCAL_WRITE=1` + localhost 库 + 非 `production` | `capture_runs`、`snapshots`（含 `original_url`/`http_status`/`retrieved_at_jst`）、`source_checks`、`candidate_facts`（`pending_review`）                                        |
+| 批准 | `apps/admin/src/server.ts`  | 请求头 `x-reviewer-id`                                          | `reviews`、`fact_revisions`、`facts`、`change_events`                                                                                                                            |
 
 入库前有 `capture_record()` 四重校验：报告里该来源必须 `status=ok` 且 `status_code=200`；报告中的 `snapshot_path` 必须与入库路径解析后一致；报告必须同时带 `content_hash` 与 `captured_at`；文件原始字节的 sha256 必须等于报告的 `content_hash`（适配器解析出的哈希还会再与报告比对一次）。任一条不符即抛错、零写入。快照文件名用内容哈希，天然保留历史版本。
 
 ## 已知剩余项
 
-1. `venue_rule`/`booking_window`/`application_rule` 需要一个「场次/月份」维度才能安全归属，现有契约维度（`deliveryMode`、`examComponent`）表达不了；要么扩维度，要么维持规则型说明并显式判为不适用 —— 属产品决策。
-2. `eligibility`、`scoring_method`、`passing_standard` 仍为零已批准事实（`fee` 已于 2026-11-10 经审核批准，见上节）。2026-11-10 的取证结论：
-   - `fee`：已在 `ipa-fee` 页找到明确金额，候选经审核批准，已是正式事实。
-   - `eligibility`（「どなたでも受験可能」）与 `passing_standard`（「各科目 600 点以上」）只在 CBT 运营方 CBT-Solutions 的 `https://www.cbt-s.com/` 页面出现，不在当前 FE 允许域名 `www.ipa.go.jp` 内。要事实化必须先决定是否把运营方域名登记为来源；IPA 自身页面未发现同义稳定表述。
-   - `scoring_method`（IRT）只在 `試験要綱 Ver.5.6` PDF 中公布，当前适配器不解析 PDF。新增 PDF 解析属于新能力，不能用推断值替代。
-   - 这三项都要按三次授权流程处理，不得用推断值补全。
+1. `venue_rule`/`booking_window`/`application_rule` 没有年度统一值。2026-11-11 所有者拍板：**维持 `not_applicable`**（契约中单独一行，维度 `deliveryMode=cbt`），不扩 `exam_session` 维度、不逐场次取证；如以后要做，需重新走判级决策。
+2. `eligibility`、`scoring_method`、`passing_standard` 仍为零已批准事实（`fee` 已于 2026-11-10 经审核批准，见上节）。2026-11-11 已拍板登记来源并完成离线解析验证：
+   - `eligibility`（「どなたでも受験可能」）与 `passing_standard`（「各科目の評価点が基準点（600点）以上」）来自 CBT 运营方 `https://www.cbt-s.com/cbt/fe/`，已登记 `source:fundamental-it:cbt-s`；本机离线副本已用真实页面验证解析结果，尚未实抓、入库、批准。
+   - `scoring_method`（IRT）来自 `試験要綱 Ver.5.6` PDF §4(1)，已登记 `source:fundamental-it:youkou-pdf` 并新增最小 `pypdf` 解析；本机 PDF 已验证能提取原文，尚未实抓、入库、批准。
+   - 三项都要按三次授权流程处理，不得用推断值补全。
 3. `syllabus` 来源只作证据，未接入适配器。
 4. 统计类字段（`post_event`）零覆盖，归工作包 F。
 

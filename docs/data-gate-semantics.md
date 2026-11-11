@@ -30,6 +30,8 @@
 
 任何维度补打、fact_key 改名或 requirement 维度调整，都要先用这条判据复算，再决定动数据。
 
+2026-11-11 所有者拍板 FE 口径后，上述数字已过期：`application_rule`／`booking_window`／`venue_rule` 从 conditional 拆出并标 `not_applicable`（CBT 无年度统一窗口），`exam_subject_{a|b}_*` 保留原名并由 `satisfiesCoverageField()` 按 `examComponent=subject-a|subject-b` 映射到 `exam_time`／`question_count`／`question_format`。同批复算：补上 `delivery_mode='cbt'` 与科目维度、且 eligibility／passing_standard／scoring_method 仍为零事实时，`gaps = 3`（就是这三项）；三项关闭后 `gaps = 0`。维度回填由迁移 `0024_fe_cbt_dimensions_backfill.sql` 完成，只动 FE 2026 非合成已批准事实。
+
 ## 4. 字段与 fact_key 的匹配规则
 
 `satisfiesCoverageField()`：
@@ -39,7 +41,7 @@
 - `source_url` 不看 fact_key，要求该事实的溯源状态为 `verified`；
 - `official_verified_at` 只看该事实有审核时间投影。
 
-因此用 `application_open_rule`、`*_deadline_rule`、`*_online`、`*_postal`、`exam_dates` 这类子键即可闭合缺口，**不必改契约**。反过来，`exam_subject_a_time` 这种「后缀式」命名不满足 `exam_time_` 前缀规则，不能指望它闭合 `exam_time`。
+因此用 `application_open_rule`、`*_deadline_rule`、`*_online`、`*_postal`、`exam_dates` 这类子键即可闭合缺口，**不必改契约**。反过来，`exam_subject_a_time` 这种「后缀式」命名不满足 `exam_time_` 前缀规则；FE 由 2026-11-11 新增的科目维度映射单独处理（见 §3 末段），其他资格仍按前缀规则。
 
 ## 5. 溯源三态
 

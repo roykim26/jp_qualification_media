@@ -11,6 +11,8 @@ from urllib.parse import urlsplit
 import psycopg
 
 from collector.fundamental_it import extract_candidates, snapshot_from_html
+from collector.youkou_pdf import extract_candidates as extract_pdf_candidates
+from collector.youkou_pdf import snapshot_from_pdf
 
 
 QUALIFICATION_ID = "qualification:fundamental-it-engineer"
@@ -42,11 +44,17 @@ def ingest_snapshot(database_url: str, source_id: str, snapshot_path: str | Path
     if urlsplit(database_url).hostname not in {"localhost", "127.0.0.1"}:
         raise RuntimeError("Fundamental IT ingest only permits localhost database hosts")
     path = Path(snapshot_path).resolve()
-    if SNAPSHOT_ROOT not in path.parents or path.suffix.lower() != ".html":
-        raise ValueError("snapshot_path must be an HTML file below var/official-snapshots/fundamental-it")
+    if SNAPSHOT_ROOT not in path.parents or path.suffix.lower() not in {".html", ".pdf"}:
+        raise ValueError("snapshot_path must be an HTML or PDF file below var/official-snapshots/fundamental-it")
     record = capture_record(source_id, path)
-    # The capture report validates the raw bytes before parsing their UTF-8 text.
-    snapshot = snapshot_from_html(source_id, path.read_bytes().decode("utf-8"), synthetic=False)
+    # The capture report validates the raw bytes before any text extraction.
+    raw = path.read_bytes()
+    if path.suffix.lower() == ".pdf":
+        snapshot = snapshot_from_pdf(raw, synthetic=False)
+        candidates, issues = extract_pdf_candidates(snapshot)
+    else:
+        snapshot = snapshot_from_html(source_id, raw.decode("utf-8"), synthetic=False)
+        candidates, issues = extract_candidates(snapshot)
     if snapshot.content_hash != record["content_hash"]:
         raise ValueError("adapter snapshot hash does not match capture report")
     candidates, issues = extract_candidates(snapshot)
@@ -80,12 +88,13 @@ def ingest_snapshot(database_url: str, source_id: str, snapshot_path: str | Path
                  snapshot_id, captured_at, record["status_code"]))
             for candidate in candidates:
                 cursor.execute("""INSERT INTO candidate_facts
-                    (id,qualification_id,exam_year,fact_key,value_type,normalized_value,display_value,evidence_text,status,risk_level,source_id,source_snapshot_id,synthetic)
-                    VALUES (%s,%s,%s,%s,%s,%s::jsonb,%s,%s,'pending_review',%s,%s,%s,false)
+                    (id,qualification_id,exam_year,fact_key,value_type,normalized_value,display_value,evidence_text,status,risk_level,delivery_mode,exam_component,source_id,source_snapshot_id,synthetic)
+                    VALUES (%s,%s,%s,%s,%s,%s::jsonb,%s,%s,'pending_review',%s,%s,%s,%s,%s,false)
                     ON CONFLICT DO NOTHING""",
                     (f"candidate:fundamental-it:{snapshot.content_hash}:{candidate.fact_key}", QUALIFICATION_ID, exam_year,
                      candidate.fact_key, candidate.value_type, json.dumps(candidate.normalized_value, ensure_ascii=False),
-                     candidate.display_value, candidate.evidence_text, candidate.risk_level, source_id, snapshot_id))
+                     candidate.display_value, candidate.evidence_text, candidate.risk_level,
+                     candidate.delivery_mode, candidate.exam_component, source_id, snapshot_id))
                 inserted += cursor.rowcount
     return {"status": "inserted", "snapshots": 1, "candidates": inserted, "approval": "not_run"}
 
