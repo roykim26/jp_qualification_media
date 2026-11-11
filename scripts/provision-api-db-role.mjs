@@ -43,9 +43,10 @@ try {
     console.error(`${role} is missing; run npm run db:migrate first.`);
     process.exitCode = 1;
   } else {
+    // ALTER ROLE is a utility statement, so it rejects bind parameters; escape
+    // the password as a SQL literal instead. The role name is a fixed constant.
     await client.query(
-      `ALTER ROLE ${role} WITH LOGIN NOSUPERUSER NOCREATEROLE NOCREATEDB NOBYPASSRLS PASSWORD $1`,
-      [password],
+      `ALTER ROLE ${role} WITH LOGIN NOSUPERUSER NOCREATEROLE NOCREATEDB NOBYPASSRLS PASSWORD ${client.escapeLiteral(password)}`,
     );
     // Re-assert the grants so a second run converges instead of drifting.
     await client.query(`
