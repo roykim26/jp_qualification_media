@@ -55,32 +55,6 @@ function docker(args, { input, allowFailure = false } = {}) {
   });
 }
 
-function runNode(args, env = {}) {
-  return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, args, {
-      cwd: repoRoot,
-      env: { ...process.env, ...env },
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-    let stdout = '';
-    let stderr = '';
-    child.stdout.setEncoding('utf8');
-    child.stderr.setEncoding('utf8');
-    child.stdout.on('data', (chunk) => (stdout += chunk));
-    child.stderr.on('data', (chunk) => (stderr += chunk));
-    child.on('error', reject);
-    child.on('close', (code) => {
-      if (code === 0) resolve({ stdout: stdout.trim(), stderr: stderr.trim() });
-      else
-        reject(
-          new Error(
-            `node ${args.join(' ')} exited with ${code}: ${stderr.trim() || stdout.trim()}`,
-          ),
-        );
-    });
-  });
-}
-
 function expect(condition, message) {
   if (!condition) throw new Error(message);
 }
@@ -170,8 +144,7 @@ async function main() {
   console.log('building the production image');
   await docker(['build', '--file', 'Dockerfile', '--tag', image, '.']);
 
-  const [dbPort, apiPort, webPort] = await freePorts(3);
-  const hostDatabaseUrl = `postgresql://${dbUser}:${dbPassword}@127.0.0.1:${dbPort}/${dbName}`;
+  const [apiPort, webPort] = await freePorts(2);
 
   await docker(['network', 'create', network]);
   await docker([
@@ -181,8 +154,6 @@ async function main() {
     dbContainer,
     '--network',
     network,
-    '-p',
-    `127.0.0.1:${dbPort}:5432`,
     ...envFlags({
       POSTGRES_DB: dbName,
       POSTGRES_USER: dbUser,
@@ -287,20 +258,40 @@ async function main() {
     { input: fixture },
   );
 
-  const readOnlyHostUrl = `postgresql://${readOnlyRole}:${readOnlyPassword}@127.0.0.1:${dbPort}/${dbName}`;
   const readOnlyContainerUrl = `postgresql://${readOnlyRole}:${readOnlyPassword}@${dbContainer}:5432/${dbName}`;
   await runChecked('the API role is provisioned and cannot write', async () => {
-    const provision = await runNode(
-      ['scripts/provision-api-db-role.mjs', '--confirm=PROVISION_API_DB_ROLE'],
-      { DATABASE_URL: hostDatabaseUrl, API_DB_PASSWORD: readOnlyPassword },
-    );
+    // Run inside the image: it proves the operator scripts ship in the build
+    // and avoids depending on host node_modules in CI.
+    const provision = await docker([
+      'run',
+      '--rm',
+      '--network',
+      network,
+      ...envFlags({
+        DATABASE_URL: databaseUrl,
+        API_DB_PASSWORD: readOnlyPassword,
+      }),
+      image,
+      'node',
+      'scripts/provision-api-db-role.mjs',
+      '--confirm=PROVISION_API_DB_ROLE',
+      '--allow-non-local',
+    ]);
     expect(
       provision.stdout.includes('"status": "ok"'),
       `role provisioning failed: ${provision.stdout || provision.stderr}`,
     );
-    const verify = await runNode(['scripts/verify-api-readonly.mjs'], {
-      API_DATABASE_URL: readOnlyHostUrl,
-    });
+    const verify = await docker([
+      'run',
+      '--rm',
+      '--network',
+      network,
+      ...envFlags({ API_DATABASE_URL: readOnlyContainerUrl }),
+      image,
+      'node',
+      'scripts/verify-api-readonly.mjs',
+      '--allow-non-local',
+    ]);
     const verdict = JSON.parse(verify.stdout);
     expect(
       verdict.status === 'ok' &&
