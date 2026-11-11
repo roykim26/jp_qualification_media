@@ -1,5 +1,14 @@
 # 阶段记录与剩余问题
 
+## 2026-11-12（P1-1 B 落账轮）：`4f45330` commit/push CI 双绿＋本机应用迁移 0028（零抓取／零入库／零批准／零事实增减；sources 52→51）
+
+- 交付＝`4f45330`（11 文件 410 增／115 删：fp.py 域名迁移＋四提取器重写、capture_fp.py host 派生＋faq 退役、render.ts 6 链接、迁移 0028、3 个 py 测试、fp-source-contract／work-package-i／runbook／stage-log）。push `a13959d..4f45330` 直推 main（号主「先授权 1+2，再授权 3」；直推绕过必需 release-gate 检查但 push CI 仍触发）。CI run **`43107570678`** 双 job success（`release-gate` job `130814796243` 1m1s／`docker-smoke` job `130814795719` 33s）⇒ vitest **15 文件／139 用例**、pytest **218 passed**、`test:verify-gate` **40/0**、`verify:all` **6/0**、docker-smoke「restores the **982** approved facts」、CI migrate「Applied **0028_kinzai_domain_migration.sql.**」、CI seed「bound **51** sources」（52→51＝kinzai-schedule 退役）。
+- 迁移应用（号主授权 3）：`npm run db:migrate`＝`tsx packages/db/src/migrate.ts`，`import.meta.url` 解析到**源** `packages/db/migrations/`（0028 已在），故 tsx 路径**无需 cp 进 dist**（cp 仅编译/Docker 路径需要，与 A/C 轮跑法不同）。首次 migrate 恰好 **1 条 Applied**（0028），重跑**零 Applied**（幂等）；seed「Seeded 6 stable qualification records; bound **0** sources」＝全部已绑（0028 不新增来源）。
+- 应用后本机现取：sources **51**、schema_migrations **29**（0000–0028）、facts **994**、pending **0**；`kinzai-schedule` 的 sources 行与 source_checks 行均 **0**（已删）；kinzai **7** 行 allowed_domain＝`products.kinzai.or.jp`、旧域 **0**；7 条 canonical_url 逐字＝`/exam-fp/`（home）、`1kyu-gakka`、`1kyu-jitsugi`、`2kyu`、`3kyu`、`eligibility`、`schedule`。27 条已批准事实出处链 intact（academic 8／practical 7／eligibility 2／schedule-2026 10，经 facts→fact_revisions→candidate_facts join 现取）；迁移后 `verify:all` **6/6 PASS**。
+- 文档同步（本段随附）：work-package-i 状态＋§12、fp-source-contract 迁移节把「0028 未应用」改为已应用＋读数；stage-log 本段。
+- 坑：① tsx db:migrate 读源 migrations 目录、不读 dist——A/C 轮的「先 cp 进 dist」是编译/Docker 跑法，tsx 本机跑不需要，别盲目 cp；② CI seed bound 51 而本机 seed bound 0＝CI 全新库所有来源待绑、本机已绑，两者口径不同别混；③ 0028 的 source_checks DELETE 按 source_id 全删（无 canonical_url 守卫），重跑时该行已不存在故 0 匹配，幂等成立。
+- 下一步（各需单独授权）：① 本落账轮 commit/push（纯文档）；② 实抓（`FP_LIVE_AUTHORIZED=1`＋先备份旧快照）／候选入库／审核批准三次独立授权——预期 27 候选，其中 schedule 实技 4 条 2027-02 窗口为新 pending_review；③ FE 合格率事实化方案稿（工作包 J）。
+
 ## 2026-11-12（P1-1 B 执行轮）：kinzai FP 域名迁移代码＋迁移 0028＋适配器重写＋测试＋文档同批（零抓取／零入库／零批准／零库写；0028 已写未应用；baseline 与 CI 夹具 982 未动；sources 52→51 待迁移应用）
 
 - 轮前现取：main＝**`a13959d`**（A/C 落账＋文档同步点）；容器 `jpqm-pg18` 运行中（卷保留）；库侧 facts **994**／pending **0**／sources **52**／schema_migrations **28**（0000–0027），kinzai 8 行仍旧域 `www.kinzai.or.jp`。所有者已拍板 D1／D2／D4／D5，D3 经唯一索引证据修订为「退役空登记」（选项 1）。

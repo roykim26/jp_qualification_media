@@ -1,6 +1,6 @@
 # 工作包 I：kinzai FP 域名迁移（products.kinzai.or.jp）授权单
 
-状态：**已拍板并实施（代码＋迁移＋测试＋文档同批）**。2026-11-11 起草，2026-11-12 执行。所有者已逐条拍板 D1／D2／D4／D5；D3 经唯一索引证据修订为「退役空登记」（见 §2）。本轮已改 FP 代码、写迁移 0028、重写测试、同步文档；**迁移 0028 应用到本机库、实抓、候选入库、审核批准均未触发，各须单独授权**；commit／push 待所有者明示。
+状态：**已拍板、实施并落地（代码＋迁移＋测试＋文档同批）**。2026-11-11 起草，2026-11-12 执行。所有者已逐条拍板 D1／D2／D4／D5；D3 经唯一索引证据修订为「退役空登记」（见 §2）。本轮已改 FP 代码、写迁移 0028、重写测试、同步文档，并已 commit `4f45330`＋push 直推 main（CI run `43107570678` 双绿）＋本机应用 0028（sources 52→51、verify:all 6/6）。**实抓、候选入库、审核批准仍未触发，各须单独授权**。
 
 前置阅读：`docs/handover-p1-ops-findings.md` §B、`docs/fp-source-contract.md`（如存在）、`docs/work-package-f-live-capture-authorization.md`（授权口径先例）。
 
@@ -100,7 +100,7 @@
 
 ## 6. 迁移落点（0028，已写，应用待授权）
 
-7 条 `UPDATE sources SET canonical_url='<新>', allowed_domain='products.kinzai.or.jp' WHERE id='<id>' AND canonical_url='<旧>'`（home／1-academic／1-practical／2／3／eligibility／schedule-2026）——旧值守卫保证幂等（重跑零 Applied）。按修订 D3 退役 `kinzai-schedule`：先 `DELETE FROM source_checks WHERE source_id='source:fp:kinzai-schedule'` 再 `DELETE FROM sources WHERE id=… AND canonical_url='https://www.kinzai.or.jp/ginou/fp/nittei-fp'`（FK 安全：2026-11-12 只读复核 candidate_facts／snapshots／source_scopes／conflicts 均 0 引用）。faq 不在库，无动作。`sources` 52→51。`seed.ts` 的 fp 映射按 id 前缀绑定，无需改。**迁移应用到本机库须单独授权**（与代码 commit 分开）；截至 2026-11-12 已应用 0000–0027 共 28 个，0028 未应用。
+7 条 `UPDATE sources SET canonical_url='<新>', allowed_domain='products.kinzai.or.jp' WHERE id='<id>' AND canonical_url='<旧>'`（home／1-academic／1-practical／2／3／eligibility／schedule-2026）——旧值守卫保证幂等（重跑零 Applied）。按修订 D3 退役 `kinzai-schedule`：先 `DELETE FROM source_checks WHERE source_id='source:fp:kinzai-schedule'` 再 `DELETE FROM sources WHERE id=… AND canonical_url='https://www.kinzai.or.jp/ginou/fp/nittei-fp'`（FK 安全：2026-11-12 只读复核 candidate_facts／snapshots／source_scopes／conflicts 均 0 引用）。faq 不在库，无动作。`sources` 52→51。`seed.ts` 的 fp 映射按 id 前缀绑定，无需改。**迁移应用到本机库须单独授权**（与代码 commit 分开）；2026-11-12 已经授权应用（0000–0028 共 29 个，sources 51，kinzai-schedule 行已删）。
 
 ## 7. 测试影响面
 
@@ -139,4 +139,4 @@ jafp 5 条来源不动；不新增事实字段；FE 合格率（`statistics-fe` 
 - **vitest**：`npx vitest run --dir tests --pool=threads --poolOptions.threads.singleThread` ⇒ **15 文件／139 用例**（`npm test` 含 `var/wt-*` 旧 worktree 副本虚增到 42／387，报数以 --dir tests 为准）。**verify-gate** `npm run test:verify-gate` ⇒ **40 pass／0 fail**。**typecheck** 通过。**format:check**「All matched files use Prettier code style!」（render.ts＋2 md 先 --write 复检 unchanged）。
 - **提取器离线复核**：新调查页 27 候选／0 issue（8+7+2+10），对 27 条已批准基线 23 不变／4 变化（schedule 实技 2027-02 窗口）／0 缺失／0 多余；home／2／3 报 `structure_changed`（设计）。旧官方磁盘：academic 安全失败 0、practical 7／eligibility 2／schedule 10 仍解析且 19 值与基线逐字一致。
 - **只读 DB 现态**：`sources` 52、`facts` 994、`pending_review` 0、已应用迁移 28（0000–0027）、kinzai 8 行仍旧域；`kinzai-schedule` FK 引用仅 `source_checks` 1 条（candidate_facts／snapshots／source_scopes／conflicts 均 0）。
-- **尚未触发**：迁移 0028 应用、实抓、候选入库、审核批准、commit／push（各须单独授权）。
+- **已落地（2026-11-12）**：commit `4f45330`＋push 直推 main，CI run `43107570678` 双绿（vitest 15/139、pytest 218、verify-gate 40/0、verify:all 6/0、docker-smoke 982、CI migrate「Applied 0028」、CI seed bound 51）；本机应用 0028（1 Applied、重跑 0 Applied、seed bound 0、sources 52→51、migrations 29、facts 994、pending 0、kinzai 7 行 products 域、kinzai-schedule 行已删、27 事实出处 intact、verify:all 6/6）。**仍未触发**：实抓、候选入库、审核批准（各须单独授权）。
