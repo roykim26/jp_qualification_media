@@ -10,7 +10,8 @@
   - 2026-11-11 验收依据：本机库 `verify:all` 6/6，六个范围均 `pending=0`、`coverageGaps=[]`；FE 补齐 `eligibility`／`passing_standard`／`scoring_method` 后 `facts` 991→994；CI 夹具与 release baseline 仍为 982，未用夹具冒充实抓。
 - [x] 比较、详情和历史数据展示：按机构、等级、科目、方式区分，显示年度、确认时间和来源；已有评分字段进入正确栏目。
 - [x] 可审计事实回滚：受保护的本机命令、明确目标版本、操作人和理由、事务测试、真实库演练。
-- [ ] 生产 API 只读权限：运行账号与迁移管理账号分离，授权脚本幂等，真实库验证写操作被拒绝。
+- [x] 生产 API 只读权限：运行账号与迁移管理账号分离，授权脚本幂等，真实库验证写操作被拒绝。
+  - 2026-11-11 验收依据：迁移 0025 创建 `qualification_api_ro`；`db:provision-api-role` 连续执行两次均 `status: ok`；`db:verify-readonly` 连本机库（994 facts）时 `insert`／`update`／`delete`／`create_table` 全为 `denied`（`42501`），角色非超管；API 以只读账号启动后 `/health` 正常、IT Passport 返回 `verified`。
 
 ## P1：持续运营与近期补齐
 

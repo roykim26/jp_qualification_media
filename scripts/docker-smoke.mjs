@@ -15,6 +15,8 @@ const webContainer = `jpqm-smoke-web-${runId}`;
 const dbName = 'jpqm_smoke';
 const dbUser = 'jpqm_smoke';
 const dbPassword = 'jpqm_smoke_password';
+const readOnlyRole = 'qualification_api_ro';
+const readOnlyPassword = 'jpqm_smoke_ro_password';
 const databaseUrl = `postgresql://${dbUser}:${dbPassword}@${dbContainer}:5432/${dbName}`;
 const containers = [dbContainer, apiContainer, webContainer];
 
@@ -142,6 +144,8 @@ async function main() {
   console.log('building the production image');
   await docker(['build', '--file', 'Dockerfile', '--tag', image, '.']);
 
+  const [apiPort, webPort] = await freePorts(2);
+
   await docker(['network', 'create', network]);
   await docker([
     'run',
@@ -254,7 +258,49 @@ async function main() {
     { input: fixture },
   );
 
-  const [apiPort, webPort] = await freePorts(2);
+  const readOnlyContainerUrl = `postgresql://${readOnlyRole}:${readOnlyPassword}@${dbContainer}:5432/${dbName}`;
+  await runChecked('the API role is provisioned and cannot write', async () => {
+    // Run inside the image: it proves the operator scripts ship in the build
+    // and avoids depending on host node_modules in CI.
+    const provision = await docker([
+      'run',
+      '--rm',
+      '--network',
+      network,
+      ...envFlags({
+        DATABASE_URL: databaseUrl,
+        API_DB_PASSWORD: readOnlyPassword,
+      }),
+      image,
+      'node',
+      'scripts/provision-api-db-role.mjs',
+      '--confirm=PROVISION_API_DB_ROLE',
+      '--allow-non-local',
+    ]);
+    expect(
+      provision.stdout.includes('"status": "ok"'),
+      `role provisioning failed: ${provision.stdout || provision.stderr}`,
+    );
+    const verify = await docker([
+      'run',
+      '--rm',
+      '--network',
+      network,
+      ...envFlags({ API_DATABASE_URL: readOnlyContainerUrl }),
+      image,
+      'node',
+      'scripts/verify-api-readonly.mjs',
+      '--allow-non-local',
+    ]);
+    const verdict = JSON.parse(verify.stdout);
+    expect(
+      verdict.status === 'ok' &&
+        verdict.currentUser === readOnlyRole &&
+        Object.values(verdict.write).every((value) => value === 'denied'),
+      `read-only verification failed: ${verify.stdout}`,
+    );
+  });
+
   await docker([
     'run',
     '--detach',
@@ -264,7 +310,11 @@ async function main() {
     network,
     '-p',
     `127.0.0.1:${apiPort}:4100`,
-    ...envFlags({ DATABASE_URL: databaseUrl, API_HOST: '0.0.0.0' }),
+    ...envFlags({
+      DATABASE_URL: databaseUrl,
+      API_DATABASE_URL: readOnlyContainerUrl,
+      API_HOST: '0.0.0.0',
+    }),
     image,
     'node',
     'dist/services/api/src/server.js',

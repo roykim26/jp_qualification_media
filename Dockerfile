@@ -18,5 +18,8 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile --prod
 COPY --from=build /app/dist ./dist
 COPY config ./config
+# Operator commands (read-only role provisioning and verification) run inside
+# the deployed api container, so the scripts must ship with the image.
+COPY scripts ./scripts
 EXPOSE 3000 4100
 CMD ["node", "dist/apps/web/src/server.js"]

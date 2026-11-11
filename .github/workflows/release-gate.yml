@@ -56,6 +56,14 @@ jobs:
           pnpm db:seed
       - name: Restore sanitized approved facts
         run: pnpm ci:fixture:restore
+      - name: Provision read-only API role
+        run: pnpm run db:provision-api-role -- --confirm=PROVISION_API_DB_ROLE
+        env:
+          API_DB_PASSWORD: readonly_ci_password
+      - name: Verify the API role cannot write
+        run: pnpm db:verify-readonly
+        env:
+          API_DATABASE_URL: postgresql://qualification_api_ro:readonly_ci_password@127.0.0.1:5432/qualification_media_ci
       - name: Run the same release gate used locally
         run: pnpm release:check
 
