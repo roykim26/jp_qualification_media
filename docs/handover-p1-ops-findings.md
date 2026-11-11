@@ -7,6 +7,14 @@
 - 仓库 `E:\自建程序\jp_qualification_media`，`main` = `1933fd3`（已 push `origin/main`，Release gate CI run `43016104382` success）。工作区干净，仅未跟踪 `Python/` 是旧环境残留，**别删、别提交**。
 - P1-1「来源巡检/失败记录/告警/人工日检/数据更新 SOP」已实现＋真实库演练＋验收勾选，全链闭合（checklist 第 18 项 `[x]`，方案 `docs/p1-source-ops-proposal.md`）。本轮任务是处理巡检正确检出的 **3 类失效来源**，不是新功能。
 
+## 进度更新（2026-11-11 A/C 落账轮）
+
+- **A 已闭合**：号主拍板「批准，同批改」。`bookkeeping.py` 与契约测试改新 URL（去掉 `bookkeeping_contents/` 段），迁移 `0026_bookkeeping_statistics_url_drift.sql`（带旧值守卫的 UPDATE），簿记契约文档同步；随 `bdca005` 进 main。
+- **C 已闭合**：号主拍板「登记」。迁移 `0027_fundamental_it_statistics_source.sql`（INSERT ON CONFLICT DO NOTHING，`official_statistics`，仅证据、不产候选），FE 契约文档同步；随 `bdca005` 进 main。是否供 FE `pass_rate` 事实＝工作包 J 方案稿范畴，另行拍板。
+- `bdca005` 直推 main（号主批准），CI run `43027223116` release-gate／docker-smoke 双绿（vitest 15 文件／139、pytest 214、gate 40/0、verify 6/0、smoke 982、CI seed bound 52）。
+- 本机已应用迁移 0026/0027（2 Applied，复跑 0 Applied），`sources` 51→**52**、`facts` **994** 不变、`pending_review` 0、`verify:all` 6/6。⚠ 下文「本机运行态」节的迁移 26/26、sources 51 为生成时点旧读数。
+- **B → 工作包 I**：离线调查完成（9 条 301 目的地经 saved-page 内链离线核实、旧适配器静默误解析证据现取、新页锚点映射），方案稿 `docs/work-package-i-kinzai-domain-migration.md` 已起草，**待号主拍板 D1～D5**（D1 扩白名单到 `products.kinzai.or.jp` 属安全边界决策）；采集/候选入库/审核批准仍是三次独立授权，重抓前先固化现有快照。
+
 ## 本机运行态（生成时现取，会过期，用前重取）
 
 - 容器 `jpqm-pg18` **运行中**（卷保留；若已停先启动 Docker Desktop 再 `docker start jpqm-pg18`）。连接 `postgresql://postgres@127.0.0.1:55432/qualification_media`（`.env` 库 URL 无效，须显式 55432）；只读口令 `api_ro_local_2026`。

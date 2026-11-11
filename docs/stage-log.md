@@ -1,5 +1,14 @@
 # 阶段记录与剩余问题
 
+## 2026-11-11（P1-1 A/C 落账轮）：`bdca005` commit/push CI 双绿＋本机应用迁移 0026/0027＋文档时点同步（零抓取／零入库／零批准／零事实增减；sources 51→52）
+
+- 交付＝`bdca005`（9 文件 209 增／30 删：A 簿记 URL 漂移代码＋迁移 0026＋契约文档、C 迁移 0027＋FE 契约文档、runbook 判据 28、工作包 I 授权单、上一段 stage-log）。push `adacaec..bdca005` 直推 main（号主按 1→2→3 顺序授权；直推绕过必需检查但 push CI 仍触发）。CI run **`43027223116`** 双 job success（`release-gate` job `130544877605`／`docker-smoke` job `130544877117`）⇒ vitest **15 文件／139 用例**、pytest **214 passed**、`test:verify-gate` **40/0**、`verify:all` **6/0**、docker-smoke「restores the **982** approved facts」、CI seed「bound **52** sources」。
+- 迁移应用（号主单独授权）：本机 `npm run build`（tsc）**不拷 SQL**，dist 缺 migrations 目录 ⇒ 按 Dockerfile L11 同口径 `cp -r packages/db/migrations dist/packages/db/migrations` 后应用。migrate 输出恰好 **2 条 Applied**（0026、0027），重跑**零 Applied**（幂等）；seed「Seeded 6 stable qualification records; bound **3** sources」＝statistics-fe＋`cbt-s`＋`youkou-pdf`（后两条自 0023 登记后未 re-seed，本轮补绑），unbound **0**。
+- 应用后本机现取：facts **994**（takken 16／gyoseishoshi 15／it-passport **10**／FE **15**／bookkeeping 863／fp 75）、pending **0**、sources **52**、schema_migrations **28**、candidate_facts／reviews／change_events 各 **1006**、snapshots **71**、capture_runs **10**、source_checks **60**；迁移后 `verify:all` **6/6 PASS**。facts 994 与 baseline 982 的差 **12**＝FE +4／ITP +8（P0-1 轮事实，baseline 是下限不是相等）。CI bound 52＝本机 52 ⇒ 旧文档「本机多 2 条 capture-only」差值在夹具档恢复后已不存在（faq 不在库内 sources）。
+- 文档同步（本段随附）：`docs/next-round-ticket.md` 就地重写（B 执行轮待 D1～D5 拍板＋FE 方案稿待起草）、`README.md` 指针与计数、`docs/transition-handoff.md` 文头补 2026-11-11 更新注记（正文仍为 #68 时点快照）、`docs/data-gate-semantics.md` §10 读数表与 §11.8 计数、`docs/handover-p1-ops-findings.md` 补处理进度。
+- 坑：① 本机应用迁移必须先拷 SQL 进 dist（tsc 只编译 TS；Dockerfile 有显式 cp 步骤，runbook 的「ENOENT migrations」告警同族）；② seed bound 3 而非 1＝历史欠绑本轮补齐，报数前先查 unbound；③ 交接单/README 的「facts 982」是 baseline 口径，全库现值是 994，两者别混。
+- 下一步（各需单独授权）：① B 执行轮按工作包 I §2 对 D1～D5 逐条拍板（白名单扩张属安全决策），实抓/入库/批准三次独立授权；② FE 合格率事实化方案稿（statistics-fe 附件 PDF，新范畴）；③ 本文档轮的 commit/push 已含在号主「按 1-2-3 顺序执行」授权内。
+
 ## 2026-11-11（P1-1 运营发现处理轮）：A 簿记 URL 漂移同批改＋C statistics-fe 登记＋B kinzai 工作包 I 授权单（零抓取／零入库／零批准／零库写；迁移 0026/0027 已写未应用；baseline 与 CI 夹具 982 未动）
 
 - 轮前现取：main＝**`1933fd3`**（P1-1 闭合点，已 push、CI 双绿）；容器 `jpqm-pg18` 运行中（卷保留）；库侧 facts **994**／pending **0**／sources **51**／schema_migrations **26**。交接单 `docs/handover-p1-ops-findings.md` 已在库（`adacaec`）。所有者拍板：A＝批准同批改、C＝登记、B＝立专用工作包下轮做。
