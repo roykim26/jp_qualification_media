@@ -64,11 +64,12 @@ def test_statistics_page_yields_no_fabricated_candidates():
 
 
 F2_STATISTICS_SOURCES = {
-    # Kept verbatim because the official site itself is inconsistent here: #2/#3
-    # carry a legacy bookkeeping_contents segment and #6 is spelled ca-date.
+    # #2/#3 dropped the legacy bookkeeping_contents segment after the owner
+    # approved the 301-drifted canonical paths on 2026-11-11 (migration 0026);
+    # #6 keeps the official ca-date spelling.
     "source:bookkeeping:candidate-data-class1": "https://www.kentei.ne.jp/bookkeeping/candidate-data/data_class1",
-    "source:bookkeeping:candidate-data-class2": "https://www.kentei.ne.jp/bookkeeping/bookkeeping_contents/candidate-data/data_class2",
-    "source:bookkeeping:candidate-data-class3": "https://www.kentei.ne.jp/bookkeeping/bookkeeping_contents/candidate-data/data_class3",
+    "source:bookkeeping:candidate-data-class2": "https://www.kentei.ne.jp/bookkeeping/candidate-data/data_class2",
+    "source:bookkeeping:candidate-data-class3": "https://www.kentei.ne.jp/bookkeeping/candidate-data/data_class3",
     "source:bookkeeping:candidate-data-class23-net": "https://www.kentei.ne.jp/bookkeeping/candidate-data/data_class2-3",
     "source:bookkeeping:candidate-data-class4": "https://www.kentei.ne.jp/bookkeeping/candidate-data/data_class4",
     "source:bookkeeping:candidate-data-costing": "https://www.kentei.ne.jp/bookkeeping/candidate-data/ca-date",

@@ -31,17 +31,19 @@
 
 ## 工作包 F／F-2 新增的统计来源登记（2026-10-11 采集，2026-10-12 建映射）
 
-| source_id                                       | URL                                                                                    | `source_type`         | 用途                                                                    |
-| ----------------------------------------------- | -------------------------------------------------------------------------------------- | --------------------- | ----------------------------------------------------------------------- |
-| `source:bookkeeping:candidate-data`             | `https://www.kentei.ne.jp/bookkeeping/candidate-data`                                  | `official_statistics` | 受験者データ（近年的各級×実施方式序列）                                 |
-| `source:bookkeeping:candidate-data-class1`      | `https://www.kentei.ne.jp/bookkeeping/candidate-data/data_class1`                      | `official_statistics` | 1 級統一の過去のデータ                                                  |
-| `source:bookkeeping:candidate-data-class2`      | `https://www.kentei.ne.jp/bookkeeping/bookkeeping_contents/candidate-data/data_class2` | `official_statistics` | 2 級統一の過去のデータ（老路径带 `bookkeeping_contents`，官方自身如此） |
-| `source:bookkeeping:candidate-data-class3`      | `https://www.kentei.ne.jp/bookkeeping/bookkeeping_contents/candidate-data/data_class3` | `official_statistics` | 3 級統一の過去のデータ（同上）                                          |
-| `source:bookkeeping:candidate-data-class23-net` | `https://www.kentei.ne.jp/bookkeeping/candidate-data/data_class2-3`                    | `official_statistics` | 2 級与 3 級ネットの過去のデータ（主页两个入口指向同一条 URL）           |
-| `source:bookkeeping:candidate-data-class4`      | `https://www.kentei.ne.jp/bookkeeping/candidate-data/data_class4`                      | `official_statistics` | 簿記初級（2016 年度まで 4 級）の過去のデータ                            |
-| `source:bookkeeping:candidate-data-costing`     | `https://www.kentei.ne.jp/bookkeeping/candidate-data/ca-date`                          | `official_statistics` | 原価計算初級の過去のデータ（路径字面是官方的 `ca-date` 拼写）           |
+| source_id                                       | URL                                                                 | `source_type`         | 用途                                                                               |
+| ----------------------------------------------- | ------------------------------------------------------------------- | --------------------- | ---------------------------------------------------------------------------------- |
+| `source:bookkeeping:candidate-data`             | `https://www.kentei.ne.jp/bookkeeping/candidate-data`               | `official_statistics` | 受験者データ（近年的各級×実施方式序列）                                            |
+| `source:bookkeeping:candidate-data-class1`      | `https://www.kentei.ne.jp/bookkeeping/candidate-data/data_class1`   | `official_statistics` | 1 級統一の過去のデータ                                                             |
+| `source:bookkeeping:candidate-data-class2`      | `https://www.kentei.ne.jp/bookkeeping/candidate-data/data_class2`   | `official_statistics` | 2 級統一の過去のデータ（2026-11-11 改登记 301 漂移后的 canonical 路径，迁移 0026） |
+| `source:bookkeeping:candidate-data-class3`      | `https://www.kentei.ne.jp/bookkeeping/candidate-data/data_class3`   | `official_statistics` | 3 級統一の過去のデータ（同上）                                                     |
+| `source:bookkeeping:candidate-data-class23-net` | `https://www.kentei.ne.jp/bookkeeping/candidate-data/data_class2-3` | `official_statistics` | 2 級与 3 級ネットの過去のデータ（主页两个入口指向同一条 URL）                      |
+| `source:bookkeeping:candidate-data-class4`      | `https://www.kentei.ne.jp/bookkeeping/candidate-data/data_class4`   | `official_statistics` | 簿記初級（2016 年度まで 4 級）の過去のデータ                                       |
+| `source:bookkeeping:candidate-data-costing`     | `https://www.kentei.ne.jp/bookkeeping/candidate-data/ca-date`       | `official_statistics` | 原価計算初級の過去のデータ（路径字面是官方的 `ca-date` 拼写）                      |
 
 这 7 条 2026-10-11 先进了**采集侧**：`BOOKKEEPING_SOURCES` 从 15 涨到 **22**（`capture_bookkeeping.capture_registered_sources()` 接受 `source_ids`／`BOOKKEEPING_CAPTURE_SOURCE_IDS` 收紧到当批）。URL 逐字取自已抓快照正文（`docs/work-package-f-statistics-sources.md` §2、`docs/work-package-f2-bookkeeping-history-capture-authorization.md` §2）。授权口径见 `docs/work-package-f-live-capture-authorization.md` 与 `docs/work-package-f2-bookkeeping-history-capture-authorization.md`。
+
+2026-11-11 例外（P1-1 运营发现，所有者拍板）：`-class2`／`-class3` 登记的老路径被官方 301 到去掉 `bookkeeping_contents/` 段的 canonical 路径，巡检按口径判 `blocked`、不自动改 URL。实抓核验新路径 HTTP 200（同域名白名单内），页面统计表与已批准的 F-2 快照逐字节一致（仅 WordPress emoji 脚本版本号差异），离线适配器各产 289 条候选、值集合与已批准数据完全相同 ⇒ 代码常量、合同测试与 `sources` 登记（迁移 `0026_bookkeeping_statistics_url_drift.sql`）同批改登记新路径；事实、快照、release baseline 与 CI 夹具均不受影响。
 
 ## 统计页的入库映射（2026-10-12 落地并按授权完成入库；2026-10-13 按授权全部批准完毕）
 

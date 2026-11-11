@@ -8,17 +8,17 @@ FE 自令和 5 年度起全年以 CBT 随时实施，没有「统一考试日 + 
 
 来源由 `packages/db/migrations/0005_fundamental_it_sources.sql` 与 `0022_p0_1_core_fact_sources.sql` 登记，常量表在 `services/collector/src/collector/fundamental_it.py` 的 `FUNDAMENTAL_IT_SOURCES`。
 
-| source_id                             | URL                                                                            | source_type                 | 是否产出候选              |
-| ------------------------------------- | ------------------------------------------------------------------------------ | --------------------------- | ------------------------- |
-| `source:fundamental-it:exam`          | `https://www.ipa.go.jp/shiken/kubun/fe.html`                                   | `official_exam_information` | 是（科目结构）            |
-| `source:fundamental-it:cbt`           | `https://www.ipa.go.jp/shiken/mousikomi/cbt_sg_fe.html`                        | `official_cbt_application`  | 是（仅两句共用陈述）      |
-| `source:fundamental-it:syllabus`      | `https://www.ipa.go.jp/shiken/syllabus/index.html`                             | `official_syllabus`         | 否，只作大纲证据          |
-| `source:fundamental-it:statistics-fe` | `https://www.ipa.go.jp/shiken/reports/toukei_fe.html`                          | `official_statistics`       | 否，尚未抓取得到内容      |
-| `source:fundamental-it:ipa-fee`       | `https://www.ipa.go.jp/shiken/mousikomi/schedule.html`                         | `official_exam_calendar`    | 是（区分共通受験手数料）  |
-| `source:fundamental-it:cbt-s`         | `https://www.cbt-s.com/examinee/examination/fe`                                | `official_cbt_operator`     | 是（受験資格・合格基準）  |
-| `source:fundamental-it:youkou-pdf`    | `https://www.ipa.go.jp/shiken/syllabus/rcu1hd00000141gq-att/youkou_ver5_6.pdf` | `official_exam_outline_pdf` | 是（仅 IRT 评分方式一句） |
+| source_id                             | URL                                                                            | source_type                 | 是否产出候选                              |
+| ------------------------------------- | ------------------------------------------------------------------------------ | --------------------------- | ----------------------------------------- |
+| `source:fundamental-it:exam`          | `https://www.ipa.go.jp/shiken/kubun/fe.html`                                   | `official_exam_information` | 是（科目结构）                            |
+| `source:fundamental-it:cbt`           | `https://www.ipa.go.jp/shiken/mousikomi/cbt_sg_fe.html`                        | `official_cbt_application`  | 是（仅两句共用陈述）                      |
+| `source:fundamental-it:syllabus`      | `https://www.ipa.go.jp/shiken/syllabus/index.html`                             | `official_syllabus`         | 否，只作大纲证据                          |
+| `source:fundamental-it:statistics-fe` | `https://www.ipa.go.jp/shiken/reports/toukei_fe.html`                          | `official_statistics`       | 否，附件目录页只作证据（2026-11-11 登记） |
+| `source:fundamental-it:ipa-fee`       | `https://www.ipa.go.jp/shiken/mousikomi/schedule.html`                         | `official_exam_calendar`    | 是（区分共通受験手数料）                  |
+| `source:fundamental-it:cbt-s`         | `https://www.cbt-s.com/examinee/examination/fe`                                | `official_cbt_operator`     | 是（受験資格・合格基準）                  |
+| `source:fundamental-it:youkou-pdf`    | `https://www.ipa.go.jp/shiken/syllabus/rcu1hd00000141gq-att/youkou_ver5_6.pdf` | `official_exam_outline_pdf` | 是（仅 IRT 评分方式一句）                 |
 
-`source:fundamental-it:statistics-fe` 是工作包 F（历史统计）第一批的采集登记，2026-10-11 **只进了采集侧常量表**：没有对应的 `sources` 迁移、没有快照、没有事实。`extract_candidates()` 对它只会报 `structure_changed`（有用例锁定），授权口径见 `docs/work-package-f-live-capture-authorization.md`。
+`source:fundamental-it:statistics-fe` 是工作包 F（历史统计）第一批的采集登记，2026-10-11 只进了采集侧常量表；2026-11-11 所有者拍板补登记进 `sources`（迁移 `0027_fundamental_it_statistics_source.sql`；P1-1 运营发现：巡检抓得到、落账却因未登记被跳过 `skipped_unregistered`）。该页是 IPA 的 FE 统计**附件目录页**（PDF/Excel，最新 `202609_fe_toukei.pdf`），页内零表格；`extract_candidates()` 对它只会报 `structure_changed`（有用例锁定），登记不产候选、不产事实，与 0018 簿记存证统计页的先例一致。FE `pass_rate` 事实属未来工作包（附件解析，checklist「五资格最小合格率内容」）。授权口径见 `docs/work-package-f-live-capture-authorization.md`。
 
 `ipa-fee` 与 IT Passport 的 `source:it-passport:ipa-fee` 指向同一官方页。两者各登记一条 source、各自保存快照，使 FE 的费用事实拥有自己的来源；因此 `sources.canonical_url` 从全局唯一改为「同一资格下同一 URL 唯一」（迁移 `0022_p0_1_core_fact_sources.sql`）。
 

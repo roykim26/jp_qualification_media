@@ -1,5 +1,15 @@
 # 阶段记录与剩余问题
 
+## 2026-11-11（P1-1 运营发现处理轮）：A 簿记 URL 漂移同批改＋C statistics-fe 登记＋B kinzai 工作包 I 授权单（零抓取／零入库／零批准／零库写；迁移 0026/0027 已写未应用；baseline 与 CI 夹具 982 未动）
+
+- 轮前现取：main＝**`1933fd3`**（P1-1 闭合点，已 push、CI 双绿）；容器 `jpqm-pg18` 运行中（卷保留）；库侧 facts **994**／pending **0**／sources **51**／schema_migrations **26**。交接单 `docs/handover-p1-ops-findings.md` 已在库（`adacaec`）。所有者拍板：A＝批准同批改、C＝登记、B＝立专用工作包下轮做。
+- A 批（簿记 class2/class3 同域路径漂移）：`services/collector/src/collector/bookkeeping.py` 与 `tests/test_bookkeeping_contract.py` 两条统计 URL 去掉 `bookkeeping_contents/` 段；新增迁移 `0026_bookkeeping_statistics_url_drift.sql`（两条 UPDATE 带旧值守卫，幂等）；`docs/bookkeeping-source-contract.md` 表行与 F-2 段同步。证据＝旧→新 301 实测、新页 200、统计表与已批准 F-2 数据逐字一致（页面 hash 差异仅 WordPress emoji 脚本 7.1.3→7.1.4）；离线复跑 `_extract_statistics` 每页 **289 候选、0 issue**，值集与批准值相同 ⇒ 不产生新事实。
+- C 批（FE statistics-fe 登记）：新增迁移 `0027_fundamental_it_statistics_source.sql`（INSERT ON CONFLICT DO NOTHING，`official_statistics`，镜像 0018 证据-only 先例）；`docs/fundamental-it-engineer-source-contract.md` 表行改「附件目录页只作证据」并重写 statistics-fe 段；`docs/runbook.md` 迁移判据 26→**28**（末条 `0027_fundamental_it_statistics_source.sql.`）。该页是附件目录（最新 `202609_fe_toukei.pdf`），无提取器、不产候选；FE 合格率事实化属未来工作包。`qualification_id` 由 seed.ts 既有映射绑定，无需改。
+- B 批（只起草、不执行）：新增 `docs/work-package-i-kinzai-domain-migration.md`。证据＝巡检 run `patrol-20261111T105619Z` 9 条 kinzai 全 failed（`host is not allowlisted: products.kinzai.or.jp`，白名单正确行为）；9 条 301 落点表＋调查件内链离线复核；27 条已批准事实依赖 4 条来源（8+7+2+10）；**静默错解实测**＝旧适配器对新 1-academic 页产 6 候选 0 issue 但 `question_count[applied]=120200`、`question_format[applied]=50問`、basic 两条丢失（根因＝行标签 td→th）⇒ 授权单 D5 强制适配器重写与 URL 同批。决策点 D1～D5（白名单扩张／8 新 URL／schedule 双登记保留／faq 退役／同批重写）待下轮拍板；迁移落点 0028（UPDATE canonical_url＋allowed_domain 8 行）。
+- 本机判据（2026-11-11 现取）：全量 `pytest services/collector/tests services/parser/tests` ⇒ **214 passed**（collector 207＋parser 7；簿记契约＋预检 48 条含在内）；`npm run test:verify-gate` ⇒ **40 pass／0 fail**；`DATABASE_URL=…:55432 npm run verify:all` ⇒ **6/6 PASS**（takken／gyoseishoshi／it-passport／fundamental-it-engineer／bookkeeping／fp）；`npm run format:check` ⇒ 三个 md 先 `--write` 后复检「All matched files use Prettier code style!」。vitest／typecheck 本轮未跑（零 TS 改动）。库侧现取仍为 facts **994**／pending **0**／sources **51**／schema_migrations **26**＝0026/0027 **未应用**，等单独授权；迁移文件数 **28**。
+- 坑：① 本机 collector venv 缺 `pypdf`（声明依赖 `pypdf>=5.0`，FE PDF 工作后未同步）⇒ 两个 FE 测试模块收集失败；venv 无 pip，用 `uv pip install --python <venv> pypdf` 补装 7.0.1 后全绿。② parser 测试单独跑会 `No module named 'parser'`，必须按 `test:python` 口径两目录同跑（pythonpath 由 collector pyproject 提供）。③ B 的 td→th 是**静默错解**而非 structure_changed，只改 URL 会把错值送进候选队列——授权单已把它列为强制同批项。④ prettier 会重排 md 表格，`--write` 后再 `--check` 才是真绿。
+- 下一步（各需单独授权）：① commit（A＋C＋B 授权单＋本段）→push→是否开 PR 听明示；② 本机库应用 0026/0027（migrate＋seed，判据＝28 条 Applied、重跑零 Applied、sources 51→52）；③ B 执行轮按工作包 I §2 逐条拍板后开工（实抓/入库/批准三次独立授权）。
+
 ## 2026-11-10（IT Passport 入口页边界落账轮）：#68 的合并与 CI 读数落账＋开工单「ITP 适配器」待办改为已闭合（零抓取／零入库／零批准／零迁移／零库写／零生产代码改动／零判级面改动）
 
 - 轮前现取：main＝origin/main＝**`16ce98a`**（#68 合并点）、`gh pr list --state open` **0 条**、本地只有 `main`、远端只有 `refs/heads/main`、`git rev-list --merges --count main` **0**；工作树只剩未跟踪 `Python/`；`docker ps -a` 现取 `jpqm-pg18`＝`Exited (0)`（卷保留）。

@@ -34,12 +34,14 @@ BOOKKEEPING_SOURCES = {
     # examinee, passed and pass-rate series.  No extractor reads it yet.
     "source:bookkeeping:candidate-data": ("https://www.kentei.ne.jp/bookkeeping/candidate-data", "official_statistics"),
     # Work package F-2: the six per-level history sub-pages linked from
-    # candidate-data.  URLs are verbatim from that snapshot; #2/#3 keep the
-    # legacy bookkeeping_contents segment and #6 keeps the official "ca-date"
-    # spelling.  No extractor reads any of them yet.
+    # candidate-data.  URLs are verbatim from that snapshot; #6 keeps the
+    # official "ca-date" spelling.  #2/#3 originally kept the legacy
+    # bookkeeping_contents segment, but the site 301s it away; the owner
+    # approved registering the drifted canonical paths on 2026-11-11
+    # (P1-1 ops findings, migration 0026).
     "source:bookkeeping:candidate-data-class1": ("https://www.kentei.ne.jp/bookkeeping/candidate-data/data_class1", "official_statistics"),
-    "source:bookkeeping:candidate-data-class2": ("https://www.kentei.ne.jp/bookkeeping/bookkeeping_contents/candidate-data/data_class2", "official_statistics"),
-    "source:bookkeeping:candidate-data-class3": ("https://www.kentei.ne.jp/bookkeeping/bookkeeping_contents/candidate-data/data_class3", "official_statistics"),
+    "source:bookkeeping:candidate-data-class2": ("https://www.kentei.ne.jp/bookkeeping/candidate-data/data_class2", "official_statistics"),
+    "source:bookkeeping:candidate-data-class3": ("https://www.kentei.ne.jp/bookkeeping/candidate-data/data_class3", "official_statistics"),
     "source:bookkeeping:candidate-data-class23-net": ("https://www.kentei.ne.jp/bookkeeping/candidate-data/data_class2-3", "official_statistics"),
     "source:bookkeeping:candidate-data-class4": ("https://www.kentei.ne.jp/bookkeeping/candidate-data/data_class4", "official_statistics"),
     "source:bookkeeping:candidate-data-costing": ("https://www.kentei.ne.jp/bookkeeping/candidate-data/ca-date", "official_statistics"),
