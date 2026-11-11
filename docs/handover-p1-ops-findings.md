@@ -1,0 +1,65 @@
+# 交接：P1-1 运营发现处理（失效来源拍板与改 URL）
+
+生成：2026-11-11。本轮仅落交接文档，未动代码/迁移/库。所有库态/容器态为生成时现取，**下一窗口须重取复核**（交接单与环境结论会过期）。
+
+## 仓库与进度
+
+- 仓库 `E:\自建程序\jp_qualification_media`，`main` = `1933fd3`（已 push `origin/main`，Release gate CI run `43016104382` success）。工作区干净，仅未跟踪 `Python/` 是旧环境残留，**别删、别提交**。
+- P1-1「来源巡检/失败记录/告警/人工日检/数据更新 SOP」已实现＋真实库演练＋验收勾选，全链闭合（checklist 第 18 项 `[x]`，方案 `docs/p1-source-ops-proposal.md`）。本轮任务是处理巡检正确检出的 **3 类失效来源**，不是新功能。
+
+## 本机运行态（生成时现取，会过期，用前重取）
+
+- 容器 `jpqm-pg18` **运行中**（卷保留；若已停先启动 Docker Desktop 再 `docker start jpqm-pg18`）。连接 `postgresql://postgres@127.0.0.1:55432/qualification_media`（`.env` 库 URL 无效，须显式 55432）；只读口令 `api_ro_local_2026`。
+- 迁移 26/26（`packages/db/migrations/0000–0025`）；`facts_approved=994`、`pending_review=0`、`sources=51`；运营表 `capture_runs=10`、`snapshots=71`、`source_checks=60`（含 P1-1 演练巡检记录，保留）。
+- 巡检报告 `var/patrol/patrol-report.json`（`run_id=patrol-20261111T105619Z`，62 来源＝51 changed / 9 failed / 2 blocked）；日报 `var/ops-reports/2026-11-11.{json,md}`。
+
+## 核心口径（务必遵守）
+
+- 失效来源**不自动改 `canonical_url`**；新 URL 须所有者拍板后「**代码＋迁移＋文档**」同批改（先例：FE cbt-s，见 checklist 2026-11-11「FE 补口实抓」条目）。**不猜 URL**。
+- **扩大域名白名单属安全边界决策**，须所有者拍板（`SafeFetcher`/`SourcePolicy` 在 `services/collector/src/collector/http_policy.py`）。
+- 采集、候选入库、审核批准是三次独立授权；push/开 PR 各要一句明示；只有出现「合并」二字才同意合并；**部署仍暂缓，别提部署**。定时任务/外部通知安装前必须确认。
+- 数据边界：不动 release baseline 与 CI 夹具（**982**）；不推断 `eligibility`/`passing_standard`/`scoring_method`；`venue_rule`/`booking_window`/`application_rule` 保持 `not_applicable`；admin 写只认 `x-reviewer-id` 头；`data:staleness` 只读。
+
+## 三项发现（证据现取自 patrol-report.json）
+
+### A.（推荐先做）簿记 2 个历史页 blocked＝路径漂移，同域名，新 URL 已知
+
+- `source:bookkeeping:candidate-data-class2`：登记 `https://www.kentei.ne.jp/bookkeeping/bookkeeping_contents/candidate-data/data_class2` → 实际 `https://www.kentei.ne.jp/bookkeeping/candidate-data/data_class2`（HTTP 200，少了 `bookkeeping_contents/` 段）。
+- `source:bookkeeping:candidate-data-class3`：同模式 `data_class3`。
+- 代码 `services/collector/src/collector/bookkeeping.py`（`BOOKKEEPING_SOURCES`）、`ingest_bookkeeping.py`；登记迁移 `0018_bookkeeping_statistics_sources.sql`。域名 `kentei.ne.jp` 已在白名单。
+- 待拍板：确认新路径 → 改代码 canonical_url ＋ 新迁移 `0026` UPDATE sources ＋ 文档；改前先核新页数据结构是否仍适配（这是合格率统计来源）。三项里最简单。
+
+### B. kinzai FP 9 条 failed＝跳转到未白名单域名
+
+8 条登记 `source:fp:kinzai-*` ＋ 1 条 `capture-only:fp:kinzai-fp-faq`。全部 `www.kinzai.or.jp/...` 301 到 `products.kinzai.or.jp`，白名单拒绝 → failed（**正确行为**）。登记 URL：
+
+| source_id                     | 登记 URL                                              |
+| ----------------------------- | ----------------------------------------------------- |
+| kinzai-home                   | `https://www.kinzai.or.jp/ginou/fp/`                  |
+| kinzai-1-academic             | `https://www.kinzai.or.jp/ginou/fp/1kyu/g_apply.html` |
+| kinzai-1-practical            | `https://www.kinzai.or.jp/ginou/fp/1kyu/j_apply.html` |
+| kinzai-2                      | `https://www.kinzai.or.jp/ginou/fp/2kyu/index.html`   |
+| kinzai-3                      | `https://www.kinzai.or.jp/ginou/fp/3kyu/index.html`   |
+| kinzai-eligibility            | `https://www.kinzai.or.jp/ginou/fp/sikaku.html`       |
+| kinzai-schedule               | `https://www.kinzai.or.jp/ginou/fp/nittei-fp`         |
+| kinzai-schedule-2026          | `https://www.kinzai.or.jp/fp/nittei-fp/48581.html`    |
+| kinzai-fp-faq（capture-only） | `https://www.kinzai.or.jp/ginou/fp/faq`               |
+
+- 代码 `services/collector/src/collector/fp.py`（`FP_SOURCES`）、`capture_fp.py`（`FP_CAPTURE_ONLY`）；登记迁移 `0009_fp_dimensions_and_sources.sql`（schedule 另见 `0016_fp_annual_schedule_sources.sql`）。
+- **新路径未知**（抓取在白名单处即拒，未跟随跳转）。下一步须先查实际新 URL（人工浏览/经授权抓取）再拍板：是否登记 `products.kinzai.or.jp` 新域名 ＋ 改 URL。最复杂，涉及白名单扩张。
+
+### C. statistics-fe changed 但库内未登记
+
+- `source:fundamental-it:statistics-fe`：`https://www.ipa.go.jp/shiken/reports/toukei_fe.html`（HTTP 200，hash `d2178a936311b6e571136fb11d8c4c611c41f59a196c93f0d21d87c4aebf440f`，80686 B）。在代码 `FUNDAMENTAL_IT_SOURCES`（`fundamental_it.py`）且被巡检，但**任何迁移都未登记它**（grep 确认），故 record 跳过（`skipped_unregistered`）。域名 `ipa.go.jp` 已在白名单。
+- 待拍板：是否登记进 `sources`（新迁移 INSERT）使巡检记录可关联；它是 FE 统计页，关联 P1 第 3 项「五资格最小合格率内容／FE 附件解析」，需先定它是否供 FE `pass_rate` 事实、适配器是否产候选。登记属独立决定。
+
+## 建议执行顺序
+
+A（新 URL 已知、同域名）→ C（登记决定）→ B（需查 URL ＋ 白名单决策）。每项：所有者拍板 → 代码＋迁移＋文档同批改 → 离线测试（pytest/verify-gate/vitest/format）→ 真实库演练（另行授权）→ commit/push（各需明示）。
+
+## 本机注意
+
+- 无 pnpm，用 npm；Docker Hub 可能走 IPv6 超时，镜像冒烟交 CI；日文输出前设 `PYTHONIOENCODING=utf-8`；`gh pr create/edit` 用 `--body-file`；`gh` 须在仓库内跑。
+- 实抓时 `httpx 0.28.1` 会把 `NO_PROXY` 中 `[::1]` 当端口解析，用 `NO_PROXY="localhost,127.0.0.1"` 覆盖，**不改代码规避**。
+- 巡检/落库/日检命令：`PATROL_LIVE_AUTHORIZED=1 npm run patrol:sources`（抓取不连库）；`PATROL_LOCAL_WRITE=1 DATABASE_URL=… npm run patrol:record`（仅运营表、localhost、幂等）；`DATABASE_URL=… npm run ops:daily`（只读，含 critical → EXIT 1）。迁移应用方式见 `docs/runbook.md`。
+- 改完代码 Edit 不保证自动 prettier，须显式复检；报测试数先重跑、计数现取。
