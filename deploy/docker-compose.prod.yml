@@ -26,6 +26,7 @@ services:
       API_HOST: 0.0.0.0
       API_PORT: '4100'
       DATABASE_URL: postgresql://qualification_prod:${DB_PASSWORD}@db:5432/qualification_media
+      API_DATABASE_URL: postgresql://qualification_api_ro:${API_DB_PASSWORD}@db:5432/qualification_media
     depends_on:
       db:
         condition: service_healthy

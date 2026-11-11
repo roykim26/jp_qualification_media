@@ -24,8 +24,16 @@ if (!password) {
   process.exit(2);
 }
 const parsedDatabaseUrl = new URL(databaseUrl);
-if (!['localhost', '127.0.0.1'].includes(parsedDatabaseUrl.hostname)) {
-  console.error('Role provisioning only permits a localhost database.');
+// Allow the compose service hostname only when the operator opts in explicitly;
+// the default stays localhost so a dev machine cannot mutate a remote database.
+const allowNonLocal = process.argv.includes('--allow-non-local');
+if (
+  !allowNonLocal &&
+  !['localhost', '127.0.0.1'].includes(parsedDatabaseUrl.hostname)
+) {
+  console.error(
+    'Role provisioning only permits a localhost database; pass --allow-non-local inside the deployment network.',
+  );
   process.exit(2);
 }
 

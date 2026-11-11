@@ -11,8 +11,15 @@ if (!databaseUrl) {
   process.exit(2);
 }
 const parsedDatabaseUrl = new URL(databaseUrl);
-if (!['localhost', '127.0.0.1'].includes(parsedDatabaseUrl.hostname)) {
-  console.error('Read-only verification only permits a localhost database.');
+// Same opt-in as provisioning: default localhost, explicit flag inside compose.
+const allowNonLocal = process.argv.includes('--allow-non-local');
+if (
+  !allowNonLocal &&
+  !['localhost', '127.0.0.1'].includes(parsedDatabaseUrl.hostname)
+) {
+  console.error(
+    'Read-only verification only permits a localhost database; pass --allow-non-local inside the deployment network.',
+  );
   process.exit(2);
 }
 
