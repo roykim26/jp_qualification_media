@@ -106,7 +106,7 @@ FE 自令和 5 年度起全年以 CBT 随时实施，没有「统一考试日 + 
 - 证据：xlsx 快照 `2063cd07`（18040 字节，`ＦＥ!Z10/Z11/Z12/AA12`，脚注「合格率（合格者数／受験者数：％）」，表头「(令和8年10月21日現在)」）；目录页快照 `d2178a93`（80686 字节）。两哈希与阶段 1 探针抓取逐字节一致。`pass_rate` 是**官方印刷值**（分母公式在附件脚注成文，D4 不再需要）。
 - 五条均 `exam_year=2025`、`delivery_mode='cbt'`、risk high；审阅人 `work-package-j-owner-review`（2026-11-12），批准脚本 `var/approve-fe-statistics.mjs`（gitignored）。FE 15→**20**、全库 994→**999**、pending 归 0、`verify:all` 6/6。
 - 推移表内的令和5/6 完整年度数据**未入库**（授权范围只令和7）；令和8 进行中年度被提取器整块跳过。月度附件刷新与历史年度入库各需新授权。
-- baseline/CI 夹具 **982 未动**（本机领先差扩至 17：FE 旧 4＋ITP 8＋本轮 5；另有 kinzai 4 条值差），刷新属另一次 baseline 变更授权。方案与执行记录见 `docs/work-package-j-fe-pass-rate-proposal.md`。
+- baseline/CI 夹具已于 2026-11-12 同批刷为 **999 facts／37 snapshots** 并合并（squash PR #73＝`ef8ce97`）：J 轮时点的本机领先差 17（FE 旧 4＋ITP 8＋本轮 5）与 kinzai **7 条值差**（4 条実技第三场次＋3 条 display 全角空格）全部进夹具。方案与执行记录见 `docs/work-package-j-fe-pass-rate-proposal.md`。
 
 ## 门禁告警：6/6 通过 ≠ FE 字段完整
 
