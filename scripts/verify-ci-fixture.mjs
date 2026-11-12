@@ -6,10 +6,10 @@ const sql = await readFile(
   'utf8',
 );
 assert.match(sql, /^-- Generated sanitized CI fixture\./);
-assert.equal((sql.match(/INSERT INTO facts /g) ?? []).length, 982);
-assert.equal((sql.match(/INSERT INTO candidate_facts /g) ?? []).length, 982);
-assert.equal((sql.match(/INSERT INTO fact_revisions /g) ?? []).length, 982);
-assert.equal((sql.match(/INSERT INTO snapshots /g) ?? []).length, 29);
+assert.equal((sql.match(/INSERT INTO facts /g) ?? []).length, 999);
+assert.equal((sql.match(/INSERT INTO candidate_facts /g) ?? []).length, 999);
+assert.equal((sql.match(/INSERT INTO fact_revisions /g) ?? []).length, 999);
+assert.equal((sql.match(/INSERT INTO snapshots /g) ?? []).length, 37);
 for (const paymentMethod of ['convenience_store', 'pay_easy']) {
   assert.ok(
     sql.includes(`,'${paymentMethod}',`),
