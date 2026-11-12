@@ -42,6 +42,7 @@ describe('shared UI foundation', () => {
     expect(home).toContain('本文へ移動');
     expect(home).toContain('site-header');
     expect(home).toContain('site-footer');
+    expect(home).toContain('footer-brand');
     expect(home).toContain('mobile-bottom-nav');
     expect(home).toContain('試験日程を見る');
     expect(home).toContain('aria-label="資格を検索"');

@@ -68,7 +68,11 @@ function renderOpenGraph(input: DocumentInput, pageUrl?: string): string {
       ? `<meta property="og:description" content="${escapeHtml(input.description)}">`
       : '',
     pageUrl ? `<meta property="og:url" content="${escapeHtml(pageUrl)}">` : '',
-    '<meta name="twitter:card" content="summary">',
+    `<meta property="og:image" content="${escapeHtml(canonicalHref('/images/og-brand.png'))}">`,
+    '<meta property="og:image:width" content="1200">',
+    '<meta property="og:image:height" content="630">',
+    '<meta name="twitter:card" content="summary_large_image">',
+    `<meta name="twitter:image" content="${escapeHtml(canonicalHref('/images/og-brand.png'))}">`,
     `<meta name="twitter:title" content="${escapeHtml(input.title)}">`,
     input.description
       ? `<meta name="twitter:description" content="${escapeHtml(input.description)}">`
@@ -153,7 +157,7 @@ function renderBreadcrumbs(items: BreadcrumbItem[]): string {
 }
 
 function renderFooter(): string {
-  return `<footer class="site-footer"><div class="container"><div class="footer-grid"><section class="footer-group"><h2>資格情報</h2><ul><li><a href="/shikaku/">資格を探す</a></li><li><a href="/schedule/">試験日程</a></li><li><a href="/guide/">資格試験ガイド</a></li></ul></section><section class="footer-group"><h2>データツール</h2><ul><li><a href="/compare/">資格比較</a></li><li><a href="/pass-rate/">合格率データ</a></li></ul></section><section class="footer-group"><h2>運営・方針</h2><ul><li><a href="/about/operator/">運営者情報</a></li><li><a href="/about/sources/">情報源について</a></li><li><a href="/about/editorial-policy/">編集方針・AI方針</a></li><li><a href="/about/ai-policy/">AI利用方針</a></li></ul></section><section class="footer-group"><h2>法務・連絡</h2><ul><li><a href="/about/privacy/">プライバシーポリシー</a></li><li><a href="/about/terms/">利用規約</a></li><li><a href="/about/advertising-policy/">広告・PR方針</a></li><li><a href="/about/contact/">お問い合わせ</a></li><li><a href="/about/corrections/">訂正のご連絡</a></li><li><a href="/updates/">更新情報</a></li></ul></section></div><p class="footer-note">動的事実は、承認済みで公式スナップショットに紐づく内容のみ表示します。日付、費用、制度情報は試験実施機関の最新発表をご確認ください。</p></div></footer>`;
+  return `<footer class="site-footer"><div class="container"><div class="footer-brand"><img src="/images/brand-mark.png" alt="" width="40" height="40"><span class="footer-brand__text">${escapeHtml(siteName)}<small>公式発表を、探しやすく。</small></span></div><div class="footer-grid"><section class="footer-group"><h2>資格情報</h2><ul><li><a href="/shikaku/">資格を探す</a></li><li><a href="/schedule/">試験日程</a></li><li><a href="/guide/">資格試験ガイド</a></li></ul></section><section class="footer-group"><h2>データツール</h2><ul><li><a href="/compare/">資格比較</a></li><li><a href="/pass-rate/">合格率データ</a></li></ul></section><section class="footer-group"><h2>運営・方針</h2><ul><li><a href="/about/operator/">運営者情報</a></li><li><a href="/about/sources/">情報源について</a></li><li><a href="/about/editorial-policy/">編集方針・AI方針</a></li><li><a href="/about/ai-policy/">AI利用方針</a></li></ul></section><section class="footer-group"><h2>法務・連絡</h2><ul><li><a href="/about/privacy/">プライバシーポリシー</a></li><li><a href="/about/terms/">利用規約</a></li><li><a href="/about/advertising-policy/">広告・PR方針</a></li><li><a href="/about/contact/">お問い合わせ</a></li><li><a href="/about/corrections/">訂正のご連絡</a></li><li><a href="/updates/">更新情報</a></li></ul></section></div><p class="footer-note">動的事実は、承認済みで公式スナップショットに紐づく内容のみ表示します。日付、費用、制度情報は試験実施機関の最新発表をご確認ください。</p></div></footer>`;
 }
 
 function renderMobileBottomNav(currentNav: PublicNavKey): string {
