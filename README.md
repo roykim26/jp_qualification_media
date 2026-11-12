@@ -2,7 +2,7 @@
 
 阶段 1 的宅建与 IT Passport 本地闭环已归档；阶段 2 的六资格页面、跨资格日程/比较/更新与 ICS 下载，以及阶段 3 的技术 SEO 基线均已完成。当前不连接生产服务、不生成未审核动态事实。
 
-页面完成不等于数据完成。数据现状：本机库 999 条已批准正式事实（宅建 16／行政書士 15／IT Passport 10／基本情報技術者 20／簿記 863／FP 75；release baseline 与 CI 夹具已于 2026-11-12 同批刷新为 999 facts／37 snapshots，含 kinzai 実技第三场次日期与 3 条 display 空格差），覆盖缺口 0，`pnpm verify:all` 六资格全通过。历史统计类字段：簿記 863 条历年统计事实已批准并接上公开面历年表（工作包 G）；FE 统计五字段已由推移表 xlsx 事实化（工作包 J，令和7完整年度 5 条，迁移 0029；目录页 `statistics-fe` 供方法论证据）；其余资格的合格率等字段仍无已批准事实，其只读调研与候选官方统计页清单见 [docs/work-package-f-statistics-sources.md](docs/work-package-f-statistics-sources.md)。逐资格字段账目见 `docs/<qualification>-source-contract.md`，门禁与授权口径见 [docs/data-gate-semantics.md](docs/data-gate-semantics.md)。
+页面完成不等于数据完成。数据现状：本机库 1007 条已批准正式事实（宅建 16／行政書士 15／IT Passport 10／基本情報技術者 28／簿記 863／FP 75；release baseline 与 CI 夹具已于 2026-11-12 同批刷新为 999 facts／37 snapshots，含 kinzai 実技第三场次日期与 3 条 display 空格差；同日 D2 历史年度轮再批准 FE 统计 8 条后本机领先夹具 8 条，刷新属另一次授权），覆盖缺口 0，`pnpm verify:all` 六资格全通过。历史统计类字段：簿記 863 条历年统计事实已批准并接上公开面历年表（工作包 G）；FE 统计五字段已由推移表 xlsx 事实化（工作包 J，令和7完整年度 5 条，迁移 0029；目录页 `statistics-fe` 供方法论证据；同日 D2 历史年度轮再批准令和5/6 八条，`exam_year` 2023/2024，FE 统计合计 13 条）；其余资格的合格率等字段仍无已批准事实，其只读调研与候选官方统计页清单见 [docs/work-package-f-statistics-sources.md](docs/work-package-f-statistics-sources.md)。逐资格字段账目见 `docs/<qualification>-source-contract.md`，门禁与授权口径见 [docs/data-gate-semantics.md](docs/data-gate-semantics.md)。
 
 ## 本地启动
 
