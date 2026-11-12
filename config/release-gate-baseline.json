@@ -13,12 +13,12 @@
     },
     {
       "slug": "it-passport",
-      "expectedFacts": 2,
+      "expectedFacts": 10,
       "pageContains": "ITパスポート"
     },
     {
       "slug": "fundamental-it-engineer",
-      "expectedFacts": 11,
+      "expectedFacts": 20,
       "pageContains": "基本情報技術者"
     },
     {

@@ -343,7 +343,7 @@ async function main() {
   await waitForUrl(`${apiBase}/api/v1/qualifications/bookkeeping`);
   await waitForUrl(`${webBase}/shikaku/bookkeeping/`);
 
-  await runChecked('the image restores the 982 approved facts', async () => {
+  await runChecked('the image restores the 999 approved facts', async () => {
     const facts = await psql(
       `SELECT count(*) FROM facts f
          JOIN fact_revisions fr ON fr.id=f.current_revision_id
@@ -353,11 +353,11 @@ async function main() {
         WHERE f.status='approved' AND fr.status='approved'
           AND c.status='approved' AND c.synthetic=false`,
     );
-    expect(facts === '982', `expected 982 approved facts, got ${facts}`);
+    expect(facts === '999', `expected 999 approved facts, got ${facts}`);
     const snapshots = await psql('SELECT count(*) FROM snapshots');
     expect(
-      snapshots === '29',
-      `expected 29 fixture snapshots, got ${snapshots}`,
+      snapshots === '37',
+      `expected 37 fixture snapshots, got ${snapshots}`,
     );
   });
 
