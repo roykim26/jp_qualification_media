@@ -15,6 +15,12 @@
 - 本机已应用迁移 0026/0027（2 Applied，复跑 0 Applied），`sources` 51→**52**、`facts` **994** 不变、`pending_review` 0、`verify:all` 6/6。⚠ 下文「本机运行态」节的迁移 26/26、sources 51 为生成时点旧读数。
 - **B → 工作包 I**：离线调查完成（9 条 301 目的地经 saved-page 内链离线核实、旧适配器静默误解析证据现取、新页锚点映射），方案稿 `docs/work-package-i-kinzai-domain-migration.md` 已起草，**待号主拍板 D1～D5**（D1 扩白名单到 `products.kinzai.or.jp` 属安全边界决策）；采集/候选入库/审核批准仍是三次独立授权，重抓前先固化现有快照。
 
+## 进度更新（2026-11-12：B 全闭合＋工作包 J 闭合）
+
+- **B 已全闭合**：号主拍板 D1～D5（D3 修订为退役空登记 `kinzai-schedule`）后，`4f45330` 域名迁移代码＋四提取器重写＋迁移 `0028`（本机已应用，sources 52→51）；随后三次独立授权连走＝7 条 kinzai 实抓（旧快照先固化备份）→4 条产事实页入库 27 候选→admin 批准 27/27（4 条 schedule 实技新值上线，补旧提取器漏抓的第 3 窗口）；同日巡检收尾轮重跑 home/2/3 三条证据页，**7 条 kinzai 最新 source_checks 全 changed/200，原始「9 条 failed」发现全闭合**。逐轮读数见 `docs/stage-log.md` 2026-11-12 三段与 `docs/work-package-i-kinzai-domain-migration.md` §12。
+- **C 的延伸＝工作包 J 已闭合**：FE 统计五字段经推移表 xlsx 事实化（阶段 1 仅采集核读→阶段 2 离线代码→阶段 3＋4 连走），迁移 `0029` 登记 `source:fundamental-it:statistics-suiihyo`；批准 5 条（令和7完整年度：応募 172217／受験 147186／合格 56370／合格率 38.3%＋目录页方法论），FE facts 15→**20**、全库 994→**999**、pending 0、门禁 6/6；`f46c943` 直推 main，CI run `43160584486` 双绿。方案与执行记录见 `docs/work-package-j-fe-pass-rate-proposal.md` §11。
+- **本机现态（2026-11-12）**：迁移 **30**（0000–0029）、sources **52**、facts **999**、pending **0**、candidate_facts/reviews/change_events 各 **1038**、snapshots **80**、capture_runs **17**、source_checks **68**；baseline／CI 夹具仍 **982** 未动（差 17＋kinzai 4 条值差，刷新属另一次 baseline 变更授权）。下文「本机运行态」节的旧读数一律以本段与开工单 §3 为准。
+
 ## 本机运行态（生成时现取，会过期，用前重取）
 
 - 容器 `jpqm-pg18` **运行中**（卷保留；若已停先启动 Docker Desktop 再 `docker start jpqm-pg18`）。连接 `postgresql://postgres@127.0.0.1:55432/qualification_media`（`.env` 库 URL 无效，须显式 55432）；只读口令 `api_ro_local_2026`。

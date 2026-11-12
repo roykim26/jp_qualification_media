@@ -1,6 +1,6 @@
 # 工作包 J：基本情報技術者（FE）合格率事实化方案稿
 
-> **状态：方案稿，待号主拍板。本轮纯离线**——只读契约／适配器／迁移、只读查询本机开发库、只解析已在盘快照（statistics-fe 目录页 `d3d78fa5…`）。**未向任何外部站点发起请求，未写任何库行，未改任何代码。** 下文所有「待抓」「待核」均指需要另行授权的动作，本轮不含任何执行。
+> **状态：已闭合（2026-11-12）**——阶段 1-4 全部执行完毕并经号主逐句授权（「1」→D2/D3/D5 拍板→「同意授权阶段 3＋4 连走」→「提交」→「push」），执行提交 `f46c943` 直推 main、push CI run `43160584486` 双绿，5 条统计事实已批准（FE 15→20、facts 994→999）。**下文 §0–§10 保留为起草时点的方案原文（只作追溯），执行读数与拍板结果见 §11。**
 
 ## 0. 一句话结论
 
@@ -114,6 +114,20 @@ FE 现有 15 条事实（全部 `exam_year=2026`、`delivery_mode=cbt`）：`eli
 - **D4（无官方合格率时）**：留缺，还是按官方成文口径计算并分列？
 - **D5（methodology 同批）**：`statistics_methodology` 是否同批取（目录页两句已在盘，但需改 `structure_changed` 锁定用例）？
 
+## 11. 执行记录（2026-11-12，已闭合）
+
+**拍板结果**：D1=**A（xlsx 推移表）**；D2=**exam_year 取年度起始年**（令和 N→2018+N，令和7→2025，与簿记统计先例一致）；D3=**仅令和7完整年度**（进行中年度整块跳过，令和5/6 在表内但未入库）；D4=**不再需要**（官方印刷合格率存在，分母公式成文在 xlsx oddFooter「合格率（合格者数／受験者数：％）」——修正 §4 第 8 条「目录页未成文」的假设：成文位置在附件脚注）；D5=**methodology 同批**。
+
+**阶段 1（仅采集）实测**：附件已按月滚到 **202609**（§3 时点校正被验证，202608 清单是历史值）；`202609_fe_01_suiihyo.xlsx` 18040B（sha256 `2063cd07…`）、`202609_fe_toukei.pdf` 1234980B（AES 加密、空口令，文本扁平）⇒ A 路线成立。推移表结构：sheet「ＦＥ」A1:AA60，每年度 3 行（応募者数／受験者数／合格者数），4月–3月成对列（数+率），Z/AA=年度合計；行 10-12=令和7（Z10=172217／Z11=147186／Z12=56370／AA12=38.3），行 13-15=令和8 进行中（仅 4-9 月），58-60=累計。表头截止注记「(令和8年10月21日現在)」。
+
+**阶段 2（离线代码）**：`openpyxl>=3.1` 进 pyproject；新提取器 `fe_statistics_xlsx.py`（四重锚定＋完整年度块＋round(x,1) 去浮点尾差＋NFKC 归一月份常量）；阻碍 4/5/6 全修（采集后缀、入库 PDF 路由守卫、白名单）＋registry/patrol/analyze 同批 xlsx 支持；迁移 `0029`；真实字节夹具＋13 条用例（8 条篡改→structure_changed）。
+
+**阶段 3＋4（连走授权）**：0029 应用（1 Applied、seed bound 1）→两来源实抓 2/2 ok/200（哈希与阶段 1 逐字节一致）→入库 `FUNDAMENTAL_IT_ONLY_EXAM_YEAR=2025` 过滤出 **5 条 pending**→admin 批准 **5/5**（`x-reviewer-id=work-package-j-owner-review`，脚本 `var/approve-fe-statistics.mjs`）。落账：applicants 172217／examinees 147186／passed 56370／pass_rate 38.3（官方印刷值）／statistics_methodology 两句原文，全 `exam_year=2025`、`delivery_mode=cbt`、high。
+
+**交付与验收（对照 §8）**：`f46c943`（15 文件 796/14）直推 main，CI run `43160584486` 双 job success。①pass_rate 绑定真实快照、官方印刷值、evidence 带单元格地址✓；②exam_year/delivery_mode/source_type 按拍板✓；③真实字节用例锁定、结构变化→structure_changed✓；④D4 消解✓；⑤门禁 6/6、pending 0、baseline/夹具 982 未动✓。facts 994→**999**（FE 15→**20**）、pytest **237**（collector 230＋parser 7）。
+
+**遗留（各需新授权）**：月度附件 URL 滚动刷新（改常量表＋新迁移＋三次授权）；令和5/6 历史年度入库；baseline/夹具刷新（本机领先 17）。
+
 ---
 
-相关文档：`docs/work-package-f-statistics-sources.md`（六资格统计来源调研，FE 附件目录页结论的出处）、`docs/fundamental-it-engineer-source-contract.md`（FE 来源登记与字段契约）、`docs/data-gate-semantics.md`（`post_event` 跳过机制）、`services/collector/src/collector/youkou_pdf.py`（PDF 最小提取先例）。
+相关文档：`docs/work-package-f-statistics-sources.md`（六资格统计来源调研，FE 附件目录页结论的出处）、`docs/fundamental-it-engineer-source-contract.md`（FE 来源登记与字段契约，含 suiihyo 条目与 J 落账节）、`docs/data-gate-semantics.md`（`post_event` 跳过机制）、`services/collector/src/collector/youkou_pdf.py`（PDF 最小提取先例）、`services/collector/src/collector/fe_statistics_xlsx.py`（本包落地的 xlsx 提取器）。
