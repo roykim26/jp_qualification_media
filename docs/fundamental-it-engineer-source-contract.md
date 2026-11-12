@@ -8,16 +8,16 @@ FE 自令和 5 年度起全年以 CBT 随时实施，没有「统一考试日 + 
 
 来源由 `packages/db/migrations/0005_fundamental_it_sources.sql`、`0022_p0_1_core_fact_sources.sql`、`0023_fe_operator_and_outline_sources.sql`、`0027_fundamental_it_statistics_source.sql` 与 `0029_fe_statistics_suiihyo_source.sql` 登记，常量表在 `services/collector/src/collector/fundamental_it.py` 的 `FUNDAMENTAL_IT_SOURCES`。
 
-| source_id                                     | URL                                                                                   | source_type                 | 是否产出候选                                     |
-| --------------------------------------------- | ------------------------------------------------------------------------------------- | --------------------------- | ------------------------------------------------ |
-| `source:fundamental-it:exam`                  | `https://www.ipa.go.jp/shiken/kubun/fe.html`                                          | `official_exam_information` | 是（科目结构）                                   |
-| `source:fundamental-it:cbt`                   | `https://www.ipa.go.jp/shiken/mousikomi/cbt_sg_fe.html`                               | `official_cbt_application`  | 是（仅两句共用陈述）                             |
-| `source:fundamental-it:syllabus`              | `https://www.ipa.go.jp/shiken/syllabus/index.html`                                    | `official_syllabus`         | 否，只作大纲证据                                 |
-| `source:fundamental-it:statistics-fe`         | `https://www.ipa.go.jp/shiken/reports/toukei_fe.html`                                 | `official_statistics`       | 是（仅 `statistics_methodology` 一条，工作包 J） |
-| `source:fundamental-it:statistics-fe-suiihyo` | `https://www.ipa.go.jp/shiken/reports/ps6vr70000016ew6-att/202609_fe_01_suiihyo.xlsx` | `official_statistics`       | 是（年度人数三项＋官方印刷合格率，工作包 J）     |
-| `source:fundamental-it:ipa-fee`               | `https://www.ipa.go.jp/shiken/mousikomi/schedule.html`                                | `official_exam_calendar`    | 是（区分共通受験手数料）                         |
-| `source:fundamental-it:cbt-s`                 | `https://www.cbt-s.com/examinee/examination/fe`                                       | `official_cbt_operator`     | 是（受験資格・合格基準）                         |
-| `source:fundamental-it:youkou-pdf`            | `https://www.ipa.go.jp/shiken/syllabus/rcu1hd00000141gq-att/youkou_ver5_6.pdf`        | `official_exam_outline_pdf` | 是（仅 IRT 评分方式一句）                        |
+| source_id                                     | URL                                                                                   | source_type                 | 是否产出候选                                              |
+| --------------------------------------------- | ------------------------------------------------------------------------------------- | --------------------------- | --------------------------------------------------------- |
+| `source:fundamental-it:exam`                  | `https://www.ipa.go.jp/shiken/kubun/fe.html`                                          | `official_exam_information` | 是（科目结构）                                            |
+| `source:fundamental-it:cbt`                   | `https://www.ipa.go.jp/shiken/mousikomi/cbt_sg_fe.html`                               | `official_cbt_application`  | 是（仅两句共用陈述）                                      |
+| `source:fundamental-it:syllabus`              | `https://www.ipa.go.jp/shiken/syllabus/index.html`                                    | `official_syllabus`         | 否，只作大纲证据                                          |
+| `source:fundamental-it:statistics-fe`         | `https://www.ipa.go.jp/shiken/reports/toukei_fe.html`                                 | `official_statistics`       | 是（仅 `statistics_methodology` 一条，工作包 J）          |
+| `source:fundamental-it:statistics-fe-suiihyo` | `https://www.ipa.go.jp/shiken/reports/ps6vr70000016ew6-att/202609_fe_01_suiihyo.xlsx` | `official_statistics`       | 是（年度人数三项＋官方印刷合格率，工作包 J＋D2 历史年度） |
+| `source:fundamental-it:ipa-fee`               | `https://www.ipa.go.jp/shiken/mousikomi/schedule.html`                                | `official_exam_calendar`    | 是（区分共通受験手数料）                                  |
+| `source:fundamental-it:cbt-s`                 | `https://www.cbt-s.com/examinee/examination/fe`                                       | `official_cbt_operator`     | 是（受験資格・合格基準）                                  |
+| `source:fundamental-it:youkou-pdf`            | `https://www.ipa.go.jp/shiken/syllabus/rcu1hd00000141gq-att/youkou_ver5_6.pdf`        | `official_exam_outline_pdf` | 是（仅 IRT 评分方式一句）                                 |
 
 `source:fundamental-it:statistics-fe` 是工作包 F（历史统计）第一批的采集登记，2026-10-11 只进了采集侧常量表；2026-11-11 所有者拍板补登记进 `sources`（迁移 `0027_fundamental_it_statistics_source.sql`；P1-1 运营发现：巡检抓得到、落账却因未登记被跳过 `skipped_unregistered`）。该页是 IPA 的 FE 统计**附件目录页**（PDF/Excel 附件清单），页内零表格；工作包 J（2026-11-12）起适配器从页内两句成文口径产出 **1 条 `statistics_methodology`**（见下节），不再整页 `structure_changed`。授权口径见 `docs/work-package-f-live-capture-authorization.md` 与 `docs/work-package-j-fe-pass-rate-proposal.md`。
 
@@ -41,12 +41,12 @@ FE 自令和 5 年度起全年以 CBT 随时实施，没有「统一考试日 + 
 - `youkou-pdf` 用 `pypdf` 抽取全文，去掉空白后只匹配「基本情報技術者試験においてはIRT（ItemResponseTheory：項目応答理論）に基づいて解答結果から評価点を算出する。」⇒ `scoring_method`（`normalized_value=IRT`，`display_value=IRT（項目応答理論）`，medium）。找不到该句 ⇒ `structure_changed`，不做推断。
 - `statistics-fe` 目录页（工作包 J）：去空白后必须同时含「令和5年度以降の基本情報技術者試験の統計情報を掲載しています。」与「応募者の方々に受験申込時に記入していただいたアンケートに基づいた情報です。」两句 ⇒ 产出 1 条 `statistics_methodology`（text，high，`exam_year=None` 由入库参数兜底）。任一句缺失 ⇒ 不产候选（整页 `structure_changed`），不推断。
 - `statistics-fe-suiihyo` 推移表 xlsx（工作包 J，`fe_statistics_xlsx.py`，依赖 `openpyxl>=3.1`）：sheet 必须名「ＦＥ」；表头含「(令和N年M月D日現在)」截止注记；oddFooter 必须含成文分母公式「合格率（合格者数／受験者数：％）」；4月–3月成对列＋Z/AA 年度合計布局锚定。每个**完整年度**块（A 列「令和N年度」标签起 3 行：応募者数／受験者数／合格者数）产出 4 条：`applicants`/`examinees`/`passed`（integer，年度合計列 Z）＋`pass_rate`（decimal，**官方印刷值** AA 列，`round(x,1)` 去浮点尾差，不自行计算）。`exam_year=2018+令和数`（**年度起始年**，D2 拍板：令和7→2025）；进行中年度（月份不全）与「累計」块整块跳过；重复年度标签/缺年度合計/脚注或表头或月份布局漂移 ⇒ 0 候选＋`structure_changed`。evidence 带单元格地址（如 `ＦＥ!AA12 令和７年度 年度合計 合格率: 38.3%`）＋脚注原文＋截止注记。真实字节夹具 `tests/fixtures/fe/202609_fe_01_suiihyo.xlsx`（sha256 `2063cd07…`）＋13 条用例（含 8 条结构篡改）锁定。
-- 所有 FE 候选默认 `delivery_mode='cbt'`；`exam_subject_{a|b}_*` 自动带 `exam_component='subject-a'|'subject-b'`，其余 FE 事实的 `exam_component` 为 `NULL`。入库写入这两列，与迁移 `0024_fe_cbt_dimensions_backfill.sql` 的回填口径一致。统计五字段（工作包 J）同样 `delivery_mode='cbt'`、`exam_component=NULL`，但 `exam_year=2025`（统计覆盖年度，与其余 FE 事实的 2026 不同）；入库可用 `FUNDAMENTAL_IT_ONLY_EXAM_YEAR` 环境变量把候选过滤到单一年度（D3 拍板：首批仅令和7完整年度）。
+- 所有 FE 候选默认 `delivery_mode='cbt'`；`exam_subject_{a|b}_*` 自动带 `exam_component='subject-a'|'subject-b'`，其余 FE 事实的 `exam_component` 为 `NULL`。入库写入这两列，与迁移 `0024_fe_cbt_dimensions_backfill.sql` 的回填口径一致。统计四字段（工作包 J＋D2）同样 `delivery_mode='cbt'`、`exam_component=NULL`，`exam_year` 取年度起始年（现覆盖 2023/2024/2025 三个完整年度；methodology 一条 `exam_year=None` 由入库参数兜底，J 轮取 2025，与其余 FE 事实的 2026 不同）；入库可用 `FUNDAMENTAL_IT_ONLY_EXAM_YEAR` 环境变量把候选过滤到单一年度（J 轮 D3 首批仅令和7；D2 轮按 2023、2024 各跑一次）。
 - 风险分级：走 `[data-fact-key]` 路径时，`application_rule`/`application_deadline`/`exam_date`/`fee`/`eligibility` 固定 `high`，其余 `medium`；`_extract_exam_page()` 与 `_extract_cbt_page()` 产出的字段固定 `medium`（`suspension_period` 例外，固定 `high`）。`_extract_fee_page()` 固定 `high`；`_extract_cbt_s_page()` 的资格与合格标准固定 `high`；PDF 的 `scoring_method` 固定 `medium`；统计五字段（目录页 methodology 与推移表四项）固定 `high`。
 
 ## 已批准事实基表（2026 年度，12 条，2026-11-10 时点）
 
-> 时点注记：本表是 2026-11-10 的 12 条基表。其后 2026-11-11 批准资格/评分 3 条（FE 12→15）、2026-11-12 工作包 J 批准统计 5 条（FE 15→**20**，`exam_year=2025`），见下面两节；全库现值以只读查询现取为准。
+> 时点注记：本表是 2026-11-10 的 12 条基表。其后 2026-11-11 批准资格/评分 3 条（FE 12→15）、2026-11-12 工作包 J 批准统计 5 条（FE 15→20，`exam_year=2025`）、同日 D2 历史年度轮批准 8 条（FE 20→**28**，`exam_year=2023/2024`），见下面各节；全库现值以只读查询现取为准。
 
 全部绑定真实官方快照（`snapshots.synthetic=false`，HTTP 200）：10 条科目字段来自 `exam` 页快照 `7e349607`，`exam_method`／`exam_schedule`／`suspension_period` 来自 `cbt` 页快照 `7bf47930`（两次采集的 `retrieved_at_jst` 均为 2026-11-09，`cbt` 页更新日为 2026-11-05），`fee` 来自 `ipa-fee` 页快照 `371df812`（2026-11-10 采集；`ipa-fee` 页面本身不标注更新日）。
 
@@ -105,8 +105,21 @@ FE 自令和 5 年度起全年以 CBT 随时实施，没有「统一考试日 + 
 
 - 证据：xlsx 快照 `2063cd07`（18040 字节，`ＦＥ!Z10/Z11/Z12/AA12`，脚注「合格率（合格者数／受験者数：％）」，表头「(令和8年10月21日現在)」）；目录页快照 `d2178a93`（80686 字节）。两哈希与阶段 1 探针抓取逐字节一致。`pass_rate` 是**官方印刷值**（分母公式在附件脚注成文，D4 不再需要）。
 - 五条均 `exam_year=2025`、`delivery_mode='cbt'`、risk high；审阅人 `work-package-j-owner-review`（2026-11-12），批准脚本 `var/approve-fe-statistics.mjs`（gitignored）。FE 15→**20**、全库 994→**999**、pending 归 0、`verify:all` 6/6。
-- 推移表内的令和5/6 完整年度数据**未入库**（授权范围只令和7）；令和8 进行中年度被提取器整块跳过。月度附件刷新与历史年度入库各需新授权。
+- 推移表内的令和5/6 完整年度数据已于同日 **D2 历史年度轮入库并批准**（见下节）；令和8 进行中年度被提取器整块跳过。月度附件刷新仍须新授权。
 - baseline/CI 夹具已于 2026-11-12 同批刷为 **999 facts／37 snapshots** 并合并（squash PR #73＝`ef8ce97`）：J 轮时点的本机领先差 17（FE 旧 4＋ITP 8＋本轮 5）与 kinzai **7 条值差**（4 条実技第三场次＋3 条 display 全角空格）全部进夹具。方案与执行记录见 `docs/work-package-j-fe-pass-rate-proposal.md`。
+
+## 2026-11-12 D2 历史年度轮：令和5/6 八条（已批准，exam_year 2023/2024）
+
+号主拍板「D2 做」（D1 月度附件刷新挂起：J 轮当日 12:43 实抓的目录页快照 `d2178a93` 所列推移表附件仍是 `202609_fe_01_suiihyo.xlsx`，与登记 URL 一致，无漂移事件）。**零新抓取**——复用 J 轮同一 xlsx 快照 `2063cd07`（18040 字节，表头「(令和8年10月21日現在)」），离线直接调提取器试算 12 条候选（3 个完整年度×4，issues 空），令和7 四条与库内已批准值逐条一致，三个合格率按脚注公式（合格者数／受験者数）交叉验算吻合印刷值。
+
+| exam_year | applicants | examinees | passed  | pass_rate | 证据单元格    |
+| --------- | ---------- | --------- | ------- | --------- | ------------- |
+| 2023      | `140774`   | `121611`  | `57278` | `47.1`    | `ＦＥ!Z4:AA6` |
+| 2024      | `157259`   | `133732`  | `54501` | `40.8`    | `ＦＥ!Z7:AA9` |
+
+- 入库：`FUNDAMENTAL_IT_ONLY_EXAM_YEAR=2023`／`2024` 各跑一次（`FUNDAMENTAL_IT_LOCAL_WRITE=1`＋localhost），各 4 条共 **8 条 pending_review**；snapshots/capture_runs/source_checks 按同哈希幂等，80/17/68 不变。
+- 批准：`var/approve-fe-history.mjs`（gitignored，自包含起停 admin 3001、数量≠8 即中止），**8/8 OK**，审阅人 `d2-fe-history-owner-review`（2026-11-12），reason 绑定拍板、数值与单元格证据。FE 20→**28**、全库 999→**1007**、pending 归 0、`verify:all` 6/6（FE API 28 条）。
+- 八条均 `delivery_mode='cbt'`、`exam_component=NULL`、risk high；`pass_rate` 为官方印刷值。baseline/CI 夹具未动（仍 **999/37**），本机领先 **8** 条，刷新属另一次授权。
 
 ## 门禁告警：6/6 通过 ≠ FE 字段完整
 
@@ -138,6 +151,7 @@ FE 自令和 5 年度起全年以 CBT 随时实施，没有「统一考试日 + 
 2. ~~`eligibility`、`scoring_method`、`passing_standard` 仍为零已批准事实~~ **已闭合**：三条于 2026-11-11 经三次授权流程实抓→入库→批准（见上节），不得用推断值补全的约束继续适用于未来变更。
 3. `syllabus` 来源只作证据，未接入适配器。
 4. 统计类字段（`post_event`）：FE 五字段已由工作包 J 闭合（2026-11-12，见上节）；其余资格的合格率等仍零覆盖，归工作包 F。
-5. **月度附件刷新**：推移表 URL 按月滚动（当前登记 `202609_fe_01_suiihyo.xlsx`），刷新须改常量表＋新迁移＋重走三次授权；令和5/6 历史年度数据在表内但未入库，入库属新授权。
+5. **月度附件刷新**：推移表 URL 按月滚动（当前登记 `202609_fe_01_suiihyo.xlsx`），刷新须改常量表＋新迁移＋重走三次授权。2026-11-12 D2 轮现取：当日目录页快照所列附件仍为 202609，无漂移，D1 挂起至新月度版发布。
+6. ~~令和5/6 历史年度数据在表内但未入库~~ **已闭合**：2026-11-12 D2 轮入库并批准 8 条（见「D2 历史年度轮」节），统计覆盖年度扩至 2023–2025。
 
 相关文档：`docs/data-gate-semantics.md`（`conditional` 跳过机制与前缀匹配规则的完整口径）、`docs/it-passport-source-contract.md`（同为 CBT 资格的 ITパスポート口径）。
