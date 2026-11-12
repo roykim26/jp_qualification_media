@@ -19,7 +19,7 @@
 
 - **B 已全闭合**：号主拍板 D1～D5（D3 修订为退役空登记 `kinzai-schedule`）后，`4f45330` 域名迁移代码＋四提取器重写＋迁移 `0028`（本机已应用，sources 52→51）；随后三次独立授权连走＝7 条 kinzai 实抓（旧快照先固化备份）→4 条产事实页入库 27 候选→admin 批准 27/27（4 条 schedule 实技新值上线，补旧提取器漏抓的第 3 窗口）；同日巡检收尾轮重跑 home/2/3 三条证据页，**7 条 kinzai 最新 source_checks 全 changed/200，原始「9 条 failed」发现全闭合**。逐轮读数见 `docs/stage-log.md` 2026-11-12 三段与 `docs/work-package-i-kinzai-domain-migration.md` §12。
 - **C 的延伸＝工作包 J 已闭合**：FE 统计五字段经推移表 xlsx 事实化（阶段 1 仅采集核读→阶段 2 离线代码→阶段 3＋4 连走），迁移 `0029` 登记 `source:fundamental-it:statistics-suiihyo`；批准 5 条（令和7完整年度：応募 172217／受験 147186／合格 56370／合格率 38.3%＋目录页方法论），FE facts 15→**20**、全库 994→**999**、pending 0、门禁 6/6；`f46c943` 直推 main，CI run `43160584486` 双绿。方案与执行记录见 `docs/work-package-j-fe-pass-rate-proposal.md` §11。
-- **本机现态（2026-11-12）**：迁移 **30**（0000–0029）、sources **52**、facts **999**、pending **0**、candidate_facts/reviews/change_events 各 **1038**、snapshots **80**、capture_runs **17**、source_checks **68**；baseline／CI 夹具仍 **982** 未动（差 17＋kinzai 4 条值差，刷新属另一次 baseline 变更授权）。下文「本机运行态」节的旧读数一律以本段与开工单 §3 为准。
+- **本机现态（2026-11-12）**：迁移 **30**（0000–0029）、sources **52**、facts **999**、pending **0**、candidate_facts/reviews/change_events 各 **1038**、snapshots **80**、capture_runs **17**、source_checks **68**；baseline／CI 夹具已于 2026-11-12 刷为 **999 facts／37 snapshots** 并合并（squash PR #73＝`ef8ce97`；差 17＋kinzai **7** 条值差同批进夹具，PR CI `43179797846`＋main push CI `43180906300` 双绿）。下文「本机运行态」节的旧读数一律以本段与开工单 §3 为准。
 
 ## 本机运行态（生成时现取，会过期，用前重取）
 
@@ -32,7 +32,7 @@
 - 失效来源**不自动改 `canonical_url`**；新 URL 须所有者拍板后「**代码＋迁移＋文档**」同批改（先例：FE cbt-s，见 checklist 2026-11-11「FE 补口实抓」条目）。**不猜 URL**。
 - **扩大域名白名单属安全边界决策**，须所有者拍板（`SafeFetcher`/`SourcePolicy` 在 `services/collector/src/collector/http_policy.py`）。
 - 采集、候选入库、审核批准是三次独立授权；push/开 PR 各要一句明示；只有出现「合并」二字才同意合并；**部署仍暂缓，别提部署**。定时任务/外部通知安装前必须确认。
-- 数据边界：不动 release baseline 与 CI 夹具（**982**）；不推断 `eligibility`/`passing_standard`/`scoring_method`；`venue_rule`/`booking_window`/`application_rule` 保持 `not_applicable`；admin 写只认 `x-reviewer-id` 头；`data:staleness` 只读。
+- 数据边界：不动 release baseline 与 CI 夹具（现 **999／37**，改动仍需单独授权）；不推断 `eligibility`/`passing_standard`/`scoring_method`；`venue_rule`/`booking_window`/`application_rule` 保持 `not_applicable`；admin 写只认 `x-reviewer-id` 头；`data:staleness` 只读。
 
 ## 三项发现（证据现取自 patrol-report.json）
 
