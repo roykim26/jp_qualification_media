@@ -129,16 +129,21 @@ async function proxyIcs(apiPath: string, res: ServerResponse) {
   res.end(body);
 }
 
+const STATIC_IMAGES = new Set([
+  'exam-information-workspace-hero.png',
+  'brand-mark.png',
+  'favicon-32.png',
+  'apple-touch-icon.png',
+]);
+
 const server = createServer(async (req, res) => {
   try {
     const url = new URL(req.url ?? '/', 'http://127.0.0.1');
     const pathname = url.pathname;
-    if (pathname === '/images/exam-information-workspace-hero.png') {
+    const imageMatch = pathname.match(/^\/images\/([a-z0-9-]+\.png)$/);
+    if (imageMatch && STATIC_IMAGES.has(imageMatch[1])) {
       const image = await readFile(
-        new URL(
-          '../public/images/exam-information-workspace-hero.png',
-          import.meta.url,
-        ),
+        new URL(`../public/images/${imageMatch[1]}`, import.meta.url),
       );
       res.writeHead(200, {
         'content-type': 'image/png',

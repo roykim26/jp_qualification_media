@@ -225,7 +225,7 @@ export const webStyles = String.raw`
 /* Public site visual hierarchy: one system for discovery, facts, and tools. */
 .site-header { box-shadow: 0 1px 0 var(--color-border); }
 .brand { display: inline-flex; align-items: center; gap: var(--space-3); font-size: 15px; line-height: 1.3; }
-.brand__mark { display: grid; width: 40px; height: 40px; flex: none; place-items: center; border-radius: var(--radius-control); background: var(--color-primary); color: var(--color-surface); font-size: 21px; font-weight: 700; }
+.brand__mark { width: 40px; height: 40px; flex: none; }
 .brand__text { display: grid; gap: 2px; }
 .brand__text small { color: var(--color-muted); font-size: 11px; font-weight: 400; }
 .nav-link--search { margin-left: var(--space-2); border: 1px solid var(--color-border-strong); }
@@ -330,7 +330,7 @@ export const webStyles = String.raw`
 @media (max-width: 767px) {
   .site-header__inner { gap: 0; }
   .brand { font-size: 13px; }
-  .brand__mark { width: 34px; height: 34px; font-size: 18px; }
+  .brand__mark { width: 34px; height: 34px; }
   .brand__text small { display: none; }
   .mobile-search { display: inline-grid; width: 44px; height: 44px; align-items: center; justify-items: center; margin-left: auto; border-radius: var(--radius-control); color: var(--color-text-secondary); }
   .mobile-menu { margin-left: 0; }

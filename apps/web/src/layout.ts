@@ -136,7 +136,7 @@ function renderHeader(currentNav: PublicNavKey): string {
   const links = publicNav
     .map((item) => renderNavItem(item, currentNav))
     .join('');
-  return `<header class="site-header"><div class="container site-header__inner"><a class="brand" href="/"${currentNav === 'home' ? ' aria-current="page"' : ''}><span class="brand__mark" aria-hidden="true">資</span><span class="brand__text">資格試験の公式情報<small>公式発表を、探しやすく。</small></span></a><nav class="desktop-nav" aria-label="メインナビゲーション">${links}<a class="nav-link nav-link--search" href="/shikaku/" aria-label="資格を検索">${renderIcon('search')}<span>検索</span></a></nav><a class="mobile-search" href="/shikaku/" aria-label="資格を検索">${renderIcon('search')}</a><details class="mobile-menu"><summary aria-label="メニューを開く">${renderIcon('menu')}</summary><nav class="mobile-menu__panel" aria-label="モバイルメニュー">${links}</nav></details></div></header>`;
+  return `<header class="site-header"><div class="container site-header__inner"><a class="brand" href="/"${currentNav === 'home' ? ' aria-current="page"' : ''}><img class="brand__mark" src="/images/brand-mark.png" alt="" width="40" height="40"><span class="brand__text">資格試験の公式情報<small>公式発表を、探しやすく。</small></span></a><nav class="desktop-nav" aria-label="メインナビゲーション">${links}<a class="nav-link nav-link--search" href="/shikaku/" aria-label="資格を検索">${renderIcon('search')}<span>検索</span></a></nav><a class="mobile-search" href="/shikaku/" aria-label="資格を検索">${renderIcon('search')}</a><details class="mobile-menu"><summary aria-label="メニューを開く">${renderIcon('menu')}</summary><nav class="mobile-menu__panel" aria-label="モバイルメニュー">${links}</nav></details></div></header>`;
 }
 
 function renderBreadcrumbs(items: BreadcrumbItem[]): string {
@@ -223,7 +223,7 @@ export function renderPublicDocument(input: DocumentInput): string {
     ? `<div class="container">${renderBreadcrumbs(input.breadcrumbs)}</div>`
     : '';
   return `<!doctype html>
-<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" href="data:,">${description}${canonical}${robots}${openGraph}${structuredData}${verification}<title>${escapeHtml(input.title)}</title><style>${uiStyles}${webStyles}</style>${analytics}</head><body><a class="skip-link" href="#main-content">本文へ移動</a>${renderHeader(currentNav)}${input.subnav ?? ''}<main id="main-content" class="page-main">${breadcrumbs}${input.body}</main>${renderFooter()}${renderMobileBottomNav(currentNav)}</body></html>`;
+<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32.png"><link rel="apple-touch-icon" href="/images/apple-touch-icon.png">${description}${canonical}${robots}${openGraph}${structuredData}${verification}<title>${escapeHtml(input.title)}</title><style>${uiStyles}${webStyles}</style>${analytics}</head><body><a class="skip-link" href="#main-content">本文へ移動</a>${renderHeader(currentNav)}${input.subnav ?? ''}<main id="main-content" class="page-main">${breadcrumbs}${input.body}</main>${renderFooter()}${renderMobileBottomNav(currentNav)}</body></html>`;
 }
 
 export function renderQualificationSubnav(
