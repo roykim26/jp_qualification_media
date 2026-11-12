@@ -10,7 +10,10 @@ from urllib.parse import urlsplit
 
 import psycopg
 
+from collector.fe_statistics_xlsx import extract_candidates as extract_suiihyo_candidates
+from collector.fe_statistics_xlsx import snapshot_from_xlsx
 from collector.fundamental_it import extract_candidates, snapshot_from_html
+from collector.youkou_pdf import SOURCE_ID as YOUKOU_PDF_SOURCE_ID
 from collector.youkou_pdf import extract_candidates as extract_pdf_candidates
 from collector.youkou_pdf import snapshot_from_pdf
 
@@ -36,7 +39,22 @@ def capture_record(source_id: str, snapshot_path: Path) -> dict[str, object]:
     return record
 
 
-def ingest_snapshot(database_url: str, source_id: str, snapshot_path: str | Path, exam_year: int) -> dict[str, int | str]:
+def selected_candidates(candidates, exam_year: int, only_exam_year: int | None):
+    """Batch scope (owner decision D3): keep only the requested coverage year.
+
+    Statistics candidates carry their own exam_year; other candidates use the
+    ingest-time fallback.  None keeps the whole snapshot.
+    """
+    if only_exam_year is None:
+        return list(candidates)
+    return [
+        candidate
+        for candidate in candidates
+        if (exam_year if candidate.exam_year is None else candidate.exam_year) == only_exam_year
+    ]
+
+
+def ingest_snapshot(database_url: str, source_id: str, snapshot_path: str | Path, exam_year: int, *, only_exam_year: int | None = None) -> dict[str, int | str]:
     if os.getenv("NODE_ENV", "development") == "production":
         raise RuntimeError("Fundamental IT ingest refuses NODE_ENV=production")
     if os.getenv("FUNDAMENTAL_IT_LOCAL_WRITE") != "1":
@@ -44,12 +62,20 @@ def ingest_snapshot(database_url: str, source_id: str, snapshot_path: str | Path
     if urlsplit(database_url).hostname not in {"localhost", "127.0.0.1"}:
         raise RuntimeError("Fundamental IT ingest only permits localhost database hosts")
     path = Path(snapshot_path).resolve()
-    if SNAPSHOT_ROOT not in path.parents or path.suffix.lower() not in {".html", ".pdf"}:
-        raise ValueError("snapshot_path must be an HTML or PDF file below var/official-snapshots/fundamental-it")
+    if SNAPSHOT_ROOT not in path.parents or path.suffix.lower() not in {".html", ".pdf", ".xlsx"}:
+        raise ValueError("snapshot_path must be an HTML, PDF or XLSX file below var/official-snapshots/fundamental-it")
     record = capture_record(source_id, path)
     # The capture report validates the raw bytes before any text extraction.
     raw = path.read_bytes()
-    if path.suffix.lower() == ".pdf":
+    suffix = path.suffix.lower()
+    if suffix == ".xlsx":
+        snapshot = snapshot_from_xlsx(source_id, raw, synthetic=False)
+        candidates, issues = extract_suiihyo_candidates(snapshot)
+    elif suffix == ".pdf":
+        # PDF extraction is per-source: only the 試験要綱 has a PDF extractor.
+        # Other PDF sources must not silently reuse the youkou adapter.
+        if source_id != YOUKOU_PDF_SOURCE_ID:
+            raise ValueError(f"no PDF extractor registered for source: {source_id}")
         snapshot = snapshot_from_pdf(raw, synthetic=False)
         candidates, issues = extract_pdf_candidates(snapshot)
     else:
@@ -59,6 +85,9 @@ def ingest_snapshot(database_url: str, source_id: str, snapshot_path: str | Path
         raise ValueError("adapter snapshot hash does not match capture report")
     if issues:
         raise ValueError("snapshot parse failed: " + "; ".join(issue.code for issue in issues))
+    candidates = selected_candidates(candidates, exam_year, only_exam_year)
+    if not candidates:
+        raise ValueError(f"no candidates match the exam_year scope (only_exam_year={only_exam_year})")
     snapshot_id = f"snapshot:fundamental-it:{snapshot.content_hash}"
     inserted = 0
     captured_at = str(record["captured_at"])
@@ -86,11 +115,14 @@ def ingest_snapshot(database_url: str, source_id: str, snapshot_path: str | Path
                 (f"source-check:fundamental-it:{snapshot.content_hash}", source_id, capture_run_id,
                  snapshot_id, captured_at, record["status_code"]))
             for candidate in candidates:
+                # Statistics rows carry their own coverage year (owner decision
+                # D2); other candidates keep the ingest-time exam_year.
+                year = exam_year if candidate.exam_year is None else candidate.exam_year
                 cursor.execute("""INSERT INTO candidate_facts
                     (id,qualification_id,exam_year,fact_key,value_type,normalized_value,display_value,evidence_text,status,risk_level,delivery_mode,exam_component,source_id,source_snapshot_id,synthetic)
                     VALUES (%s,%s,%s,%s,%s,%s::jsonb,%s,%s,'pending_review',%s,%s,%s,%s,%s,false)
                     ON CONFLICT DO NOTHING""",
-                    (f"candidate:fundamental-it:{snapshot.content_hash}:{candidate.fact_key}", QUALIFICATION_ID, exam_year,
+                    (f"candidate:fundamental-it:{snapshot.content_hash}:{year}:{candidate.fact_key}", QUALIFICATION_ID, year,
                      candidate.fact_key, candidate.value_type, json.dumps(candidate.normalized_value, ensure_ascii=False),
                      candidate.display_value, candidate.evidence_text, candidate.risk_level,
                      candidate.delivery_mode, candidate.exam_component, source_id, snapshot_id))
@@ -103,4 +135,5 @@ if __name__ == "__main__":
     snapshot = os.getenv("FUNDAMENTAL_IT_SNAPSHOT")
     if not database_url or not snapshot:
         raise SystemExit("DATABASE_URL and FUNDAMENTAL_IT_SNAPSHOT are required")
-    print(json.dumps(ingest_snapshot(database_url, os.getenv("FUNDAMENTAL_IT_SOURCE_ID", "source:fundamental-it:exam"), snapshot, int(os.getenv("FUNDAMENTAL_IT_EXAM_YEAR", "2026"))), ensure_ascii=False))
+    only_year_raw = os.getenv("FUNDAMENTAL_IT_ONLY_EXAM_YEAR", "")
+    print(json.dumps(ingest_snapshot(database_url, os.getenv("FUNDAMENTAL_IT_SOURCE_ID", "source:fundamental-it:exam"), snapshot, int(os.getenv("FUNDAMENTAL_IT_EXAM_YEAR", "2026")), only_exam_year=int(only_year_raw) if only_year_raw else None), ensure_ascii=False))

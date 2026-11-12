@@ -81,7 +81,9 @@ def _cached_snapshot_body(
     content_hash = entry.get("content_hash")
     if not isinstance(content_hash, str):
         return None
-    for suffix in (".pdf", ".html"):
+    # Prefer the registered kind, then fall back for legacy snapshot names.
+    suffixes = dict.fromkeys((f".{source.kind}", ".pdf", ".xlsx", ".html"))
+    for suffix in suffixes:
         path = snapshot_root / source.snapshot_dir / f"{content_hash}{suffix}"
         if path.exists():
             return path.read_bytes()

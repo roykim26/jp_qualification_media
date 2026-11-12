@@ -47,6 +47,8 @@ def test_registry_marks_pdf_sources_and_capture_only_evidence():
     assert registry["source:fundamental-it:exam"].kind == "html"
     assert registry["source:fundamental-it:exam"].capture_only is False
     assert registry["source:fundamental-it:exam"].snapshot_dir == "fundamental-it"
+    assert registry["source:fundamental-it:statistics-fe-suiihyo"].kind == "xlsx"
+    assert registry["source:fundamental-it:youkou-pdf"].kind == "pdf"
 
 
 def test_registry_is_stable_and_json_serializable():

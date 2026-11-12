@@ -7,6 +7,8 @@ from hashlib import sha256
 import json
 from pathlib import Path
 
+from collector.fe_statistics_xlsx import extract_candidates as extract_suiihyo_candidates
+from collector.fe_statistics_xlsx import snapshot_from_xlsx
 from collector.fundamental_it import extract_candidates, snapshot_from_html
 from collector.youkou_pdf import extract_candidates as extract_pdf_candidates
 from collector.youkou_pdf import snapshot_from_pdf
@@ -30,6 +32,11 @@ def analyze_capture(
         if snapshot_path.suffix.lower() == ".pdf":
             snapshot = snapshot_from_pdf(snapshot_bytes, synthetic=False)
             candidates, issues = extract_pdf_candidates(snapshot)
+        elif snapshot_path.suffix.lower() == ".xlsx":
+            snapshot = snapshot_from_xlsx(
+                captured["source_id"], snapshot_bytes, synthetic=False
+            )
+            candidates, issues = extract_suiihyo_candidates(snapshot)
         else:
             snapshot = snapshot_from_html(
                 captured["source_id"],

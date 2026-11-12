@@ -76,6 +76,18 @@ def test_source_ids_narrows_the_run_to_the_authorized_pages(
     assert report["source_count"] == 1
 
 
+def test_xlsx_attachment_keeps_its_suffix(monkeypatch, tmp_path: Path):
+    monkeypatch.setenv("FUNDAMENTAL_IT_LIVE_AUTHORIZED", "1")
+    monkeypatch.setattr(module, "SafeFetcher", _FakeFetcher)
+    requested = ("source:fundamental-it:statistics-fe-suiihyo",)
+    report = capture_registered_sources(tmp_path, source_ids=requested)
+
+    record = report["results"][0]
+    assert record["snapshot_path"].endswith(".xlsx")
+    assert len(list(tmp_path.glob("*.xlsx"))) == 1
+    assert not list(tmp_path.glob("*.html"))
+
+
 def test_unregistered_source_id_is_refused_before_any_request(
     monkeypatch, tmp_path: Path
 ):

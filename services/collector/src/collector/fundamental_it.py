@@ -28,9 +28,18 @@ FUNDAMENTAL_IT_SOURCES = {
         "allowed_domain": "www.ipa.go.jp",
     },
     # Work package F: IPA publishes the per-examination historical statistics
-    # table here.  No extractor reads it yet.
+    # table here.  The index page itself carries only the two methodology
+    # sentences; the numbers live in the attachments it links to.
     "source:fundamental-it:statistics-fe": {
         "canonical_url": "https://www.ipa.go.jp/shiken/reports/toukei_fe.html",
+        "allowed_domain": "www.ipa.go.jp",
+    },
+    # Work package J (owner decisions D1=A, D2=fiscal start year, D3=令和7年度,
+    # D5=methodology same batch): the 推移表 xlsx attachment behind the
+    # statistics index.  The file name rolls monthly (202609_… at registration);
+    # a rolled name is a URL-drift event, handled like 0026 for bookkeeping.
+    "source:fundamental-it:statistics-fe-suiihyo": {
+        "canonical_url": "https://www.ipa.go.jp/shiken/reports/ps6vr70000016ew6-att/202609_fe_01_suiihyo.xlsx",
         "allowed_domain": "www.ipa.go.jp",
     },
     # Shared 情報処理技術者試験 fee page; the 7,500円 statement is category-level.
@@ -75,6 +84,9 @@ class FundamentalITFactCandidate:
     value_type: str = "text"
     delivery_mode: str | None = "cbt"
     exam_component: str | None = None
+    # Statistics rows carry their own coverage year (fiscal start year, owner
+    # decision D2); None keeps the ingest-time exam_year fallback.
+    exam_year: int | None = None
 
 
 @dataclass(frozen=True)
@@ -114,6 +126,8 @@ def extract_candidates(snapshot: FundamentalITSnapshot) -> tuple[list[Fundamenta
         candidates.extend(_extract_fee_page(snapshot))
     if snapshot.source_id == "source:fundamental-it:cbt-s":
         candidates.extend(_extract_cbt_s_page(snapshot))
+    if snapshot.source_id == "source:fundamental-it:statistics-fe":
+        candidates.extend(_extract_statistics_index_page(snapshot))
     if not candidates:
         return [], (FundamentalITParseIssue("structure_changed", "no supported official fields found"),)
     return [replace(candidate, exam_component=_subject_component(candidate.fact_key)) for candidate in candidates], ()
@@ -166,6 +180,41 @@ def _extract_cbt_s_page(snapshot: FundamentalITSnapshot) -> list[FundamentalITFa
             )
         )
     return candidates
+
+
+_STATISTICS_INDEX_SENTENCES = (
+    "令和5年度以降の基本情報技術者試験の統計情報を掲載しています。",
+    "応募者の方々に受験申込時に記入していただいたアンケートに基づいた情報です。",
+)
+
+
+def _extract_statistics_index_page(snapshot: FundamentalITSnapshot) -> list[FundamentalITFactCandidate]:
+    """Read only the two printed methodology sentences of the statistics index.
+
+    The index page is an attachment directory with zero in-page tables.  Owner
+    decision D5 takes its two documented statements as statistics_methodology;
+    the numeric fields come from the 推移表 xlsx attachment instead.  A missing
+    sentence yields no candidate, never a paraphrase.
+    """
+    text = re.sub(
+        r"\s+", "", BeautifulSoup(snapshot.html, "html.parser").get_text(" ", strip=True)
+    )
+    if not all(sentence in text for sentence in _STATISTICS_INDEX_SENTENCES):
+        return []
+    evidence = "".join(_STATISTICS_INDEX_SENTENCES)
+    return [
+        FundamentalITFactCandidate(
+            "statistics_methodology",
+            evidence,
+            evidence,
+            snapshot.source_id,
+            snapshot.content_hash,
+            risk_level="high",
+            synthetic=snapshot.synthetic,
+            evidence_text=evidence,
+            value_type="text",
+        )
+    ]
 
 
 def _extract_fee_page(snapshot: FundamentalITSnapshot) -> list[FundamentalITFactCandidate]:

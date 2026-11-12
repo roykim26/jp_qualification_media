@@ -72,10 +72,12 @@ def capture_registered_sources(
             }
             if fetched.body is not None and fetched.status in {"ok", "not_modified"}:
                 content_hash = sha256(fetched.body).hexdigest()
-                suffix = (
-                    ".pdf"
-                    if urlsplit(source["canonical_url"]).path.lower().endswith(".pdf")
-                    else ".html"
+                # Suffix follows the registered URL: statistics attachments
+                # include .xlsx (work package J), not only .pdf and HTML.
+                path_lower = urlsplit(source["canonical_url"]).path.lower()
+                suffix = next(
+                    (ext for ext in (".pdf", ".xlsx") if path_lower.endswith(ext)),
+                    ".html",
                 )
                 snapshot_path = root / f"{content_hash}{suffix}"
                 if not snapshot_path.exists():

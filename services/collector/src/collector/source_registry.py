@@ -56,7 +56,10 @@ def build_registry() -> dict[str, RegisteredSource]:
                 raise ValueError(f"conflicting registration for {source_id}")
             return
         domain = allowed_domain or (urlsplit(canonical_url).hostname or "")
-        kind = "pdf" if urlsplit(canonical_url).path.lower().endswith(".pdf") else "html"
+        path_lower = urlsplit(canonical_url).path.lower()
+        kind = next(
+            (ext for ext in ("pdf", "xlsx") if path_lower.endswith("." + ext)), "html"
+        )
         registry[source_id] = RegisteredSource(
             source_id=source_id,
             qualification=qualification,

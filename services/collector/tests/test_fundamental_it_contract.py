@@ -42,6 +42,7 @@ def test_fundamental_it_source_plan_is_explicit_and_https_only():
         "source:fundamental-it:cbt",
         "source:fundamental-it:syllabus",
         "source:fundamental-it:statistics-fe",
+        "source:fundamental-it:statistics-fe-suiihyo",
         "source:fundamental-it:ipa-fee",
         "source:fundamental-it:cbt-s",
         "source:fundamental-it:youkou-pdf",
@@ -56,6 +57,39 @@ def test_statistics_page_yields_no_fabricated_candidates():
     )
     candidates, issues = extract_candidates(snapshot)
 
+    assert candidates == []
+    assert [issue.code for issue in issues] == ["structure_changed"]
+
+
+def test_statistics_index_page_extracts_only_the_two_printed_methodology_sentences():
+    # Mirrors the live markup: the second sentence is split by <strong>.
+    html = """<html><body>
+    <p>令和5年度以降の基本情報技術者試験の統計情報を掲載しています。</p>
+    <ul><li>応募者の方々に<strong>受験申込時に記入していただいたアンケートに基づいた情報</strong>です。</li></ul>
+    </body></html>"""
+    candidates, issues = extract_candidates(
+        snapshot_from_html("source:fundamental-it:statistics-fe", html, synthetic=False)
+    )
+    assert not issues
+    assert len(candidates) == 1
+    methodology = candidates[0]
+    assert methodology.fact_key == "statistics_methodology"
+    assert methodology.normalized_value == (
+        "令和5年度以降の基本情報技術者試験の統計情報を掲載しています。"
+        "応募者の方々に受験申込時に記入していただいたアンケートに基づいた情報です。"
+    )
+    assert methodology.value_type == "text"
+    assert methodology.risk_level == "high"
+    assert methodology.delivery_mode == "cbt"
+    assert methodology.exam_year is None  # ingest-time fallback, not year-specific
+    assert methodology.synthetic is False
+
+
+def test_statistics_index_page_with_one_sentence_missing_stays_structure_changed():
+    html = "<html><body><p>令和5年度以降の基本情報技術者試験の統計情報を掲載しています。</p></body></html>"
+    candidates, issues = extract_candidates(
+        snapshot_from_html("source:fundamental-it:statistics-fe", html, synthetic=False)
+    )
     assert candidates == []
     assert [issue.code for issue in issues] == ["structure_changed"]
 
@@ -264,3 +298,85 @@ def test_fundamental_it_subject_facts_carry_cbt_component_dimensions():
     assert by_key["exam_subject_b_time"].exam_component == "subject-b"
     assert by_key["exam_method"].delivery_mode == "cbt"
     assert by_key["exam_method"].exam_component is None
+
+
+def _seed_capture_report(tmp_path: Path, source_id: str, snapshot: Path, url: str) -> None:
+    content_hash = sha256(snapshot.read_bytes()).hexdigest()
+    (tmp_path / "capture-report.json").write_text(
+        json.dumps(
+            {"results": [{"source_id": source_id, "content_hash": content_hash,
+                          "status": "ok", "status_code": 200, "captured_at": "2026-11-12T00:00:00+00:00",
+                          "url": url, "snapshot_path": str(snapshot)}]}
+        ),
+        encoding="utf-8",
+    )
+
+
+def test_ingest_refuses_pdf_sources_without_a_registered_pdf_extractor(monkeypatch, tmp_path: Path):
+    monkeypatch.setenv("FUNDAMENTAL_IT_LOCAL_WRITE", "1")
+    monkeypatch.delenv("NODE_ENV", raising=False)
+    snapshot = tmp_path / "snapshot.pdf"
+    snapshot.write_bytes(b"%PDF-1.4 not the youkou")
+    _seed_capture_report(
+        tmp_path, "source:fundamental-it:statistics-fe", snapshot,
+        "https://www.ipa.go.jp/shiken/reports/toukei_fe.html",
+    )
+    monkeypatch.setattr(ingest_module, "SNAPSHOT_ROOT", tmp_path)
+    try:
+        ingest_module.ingest_snapshot(
+            "postgresql://u:p@localhost:5432/db",
+            "source:fundamental-it:statistics-fe", snapshot, 2025,
+        )
+    except ValueError as error:
+        assert "no PDF extractor registered" in str(error)
+    else:
+        raise AssertionError("PDF ingest must not fall back to the youkou adapter")
+
+
+def test_ingest_exam_year_scope_keeps_only_the_requested_coverage_year():
+    from collector.fundamental_it import FundamentalITFactCandidate
+
+    def candidate(fact_key: str, year):
+        return FundamentalITFactCandidate(
+            fact_key, "1", "1", "source:fundamental-it:statistics-fe-suiihyo",
+            "hash", exam_year=year,
+        )
+
+    batch = [
+        candidate("applicants", 2023),
+        candidate("applicants", 2024),
+        candidate("applicants", 2025),
+        candidate("statistics_methodology", None),
+    ]
+    scoped = ingest_module.selected_candidates(batch, 2025, 2025)
+    assert [c.fact_key for c in scoped] == ["applicants", "statistics_methodology"]
+    assert scoped[0].exam_year == 2025
+    # The methodology fallback follows the ingest-time year.
+    scoped_2024 = ingest_module.selected_candidates(batch, 2024, 2024)
+    assert [c.fact_key for c in scoped_2024] == ["applicants", "statistics_methodology"]
+    assert scoped_2024[1].exam_year is None
+    assert len(ingest_module.selected_candidates(batch, 2025, None)) == 4
+    assert ingest_module.selected_candidates(batch, 2025, 2026) == []
+
+
+def test_ingest_routes_xlsx_to_the_suiihyo_extractor_before_any_database_write(monkeypatch, tmp_path: Path):
+    monkeypatch.setenv("FUNDAMENTAL_IT_LOCAL_WRITE", "1")
+    monkeypatch.delenv("NODE_ENV", raising=False)
+    snapshot = tmp_path / "snapshot.xlsx"
+    snapshot.write_bytes(b"PK\x03\x04corrupt zip body")
+    _seed_capture_report(
+        tmp_path, "source:fundamental-it:statistics-fe-suiihyo", snapshot,
+        "https://www.ipa.go.jp/shiken/reports/ps6vr70000016ew6-att/202609_fe_01_suiihyo.xlsx",
+    )
+    monkeypatch.setattr(ingest_module, "SNAPSHOT_ROOT", tmp_path)
+    try:
+        ingest_module.ingest_snapshot(
+            "postgresql://u:p@localhost:5432/db",
+            "source:fundamental-it:statistics-fe-suiihyo", snapshot, 2025,
+        )
+    except ValueError as error:
+        # The xlsx extractor ran and its structure_changed issue blocked the
+        # ingest before any database connection was attempted.
+        assert "snapshot parse failed: structure_changed" in str(error)
+    else:
+        raise AssertionError("corrupt xlsx must be blocked by the suiihyo extractor")
