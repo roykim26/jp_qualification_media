@@ -134,6 +134,7 @@ const STATIC_IMAGES = new Set([
   'brand-mark.png',
   'favicon-32.png',
   'apple-touch-icon.png',
+  'og-brand.png',
 ]);
 
 const server = createServer(async (req, res) => {

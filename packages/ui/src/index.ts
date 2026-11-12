@@ -210,6 +210,10 @@ ul, ol { margin-block: 0 var(--space-4); }
 .subnav .is-disabled { color: var(--color-muted); opacity: .65; }
 
 .site-footer { padding-block: var(--space-12) calc(var(--space-12) + var(--mobile-nav-height)); border-top: 1px solid var(--color-border); background: var(--color-surface); }
+.footer-brand { display: flex; align-items: center; gap: var(--space-3); margin-bottom: var(--space-8); }
+.footer-brand img { width: 40px; height: 40px; flex: none; }
+.footer-brand__text { display: grid; gap: 2px; font-size: 15px; font-weight: 700; color: var(--color-ink); }
+.footer-brand__text small { color: var(--color-muted); font-size: 11px; font-weight: 400; }
 .footer-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-8); }
 .footer-group h2 { margin-bottom: var(--space-3); font-size: 16px; }
 .footer-group ul { padding: 0; list-style: none; }

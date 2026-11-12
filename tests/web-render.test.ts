@@ -900,7 +900,12 @@ describe('shared qualification page rendering', () => {
       expect(html).toContain(
         '<meta property="og:url" content="https://shikakucheck.com/guide/">',
       );
-      expect(html).toContain('<meta name="twitter:card" content="summary">');
+      expect(html).toContain(
+        '<meta name="twitter:card" content="summary_large_image">',
+      );
+      expect(html).toContain(
+        '<meta property="og:image" content="https://shikakucheck.com/images/og-brand.png">',
+      );
       expect(html).toContain('"@type":"WebPage"');
       expect(html).toContain('"@type":"BreadcrumbList"');
       expect(html).toContain('"name":"ホーム"');
