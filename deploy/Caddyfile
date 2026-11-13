@@ -4,5 +4,8 @@ www.shikakucheck.com {
 
 shikakucheck.com {
 	encode gzip
+	handle /googlea01c41ed599c5311.html {
+		respond "google-site-verification: googlea01c41ed599c5311.html" 200
+	}
 	reverse_proxy web:3000
 }
