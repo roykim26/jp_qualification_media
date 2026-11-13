@@ -76,7 +76,7 @@ pnpm release:check
 
 导出命令仅允许 localhost 数据库，真实候选存在 pending 时拒绝生成，并采用固定时间和 `ci://` object key 保证输出可审查、可重复。提交前必须同时审查基线 JSON 与 fixture SQL 的差异。
 
-夹具现为 999 facts / 999 candidate_facts / 999 fact_revisions / 37 snapshots（2026-11-12 重导）；重导后必须同步修改 `scripts/verify-ci-fixture.mjs` 第 9–12 行的四个计数断言与 `scripts/docker-smoke.mjs` 的四处冒烟断言（第 346／356 行事实数、第 359／360 行快照数），否则门禁或 docker-smoke 会以 `ERR_ASSERTION`／计数不符失败。完整口径见 `docs/data-gate-semantics.md` 第 5、9 节。
+夹具现为 1007 facts / 1007 candidate_facts / 1007 fact_revisions / 37 snapshots（2026-11-12 重导、2026-11-13 随 PR #79 合并）；重导后必须同步修改 `scripts/verify-ci-fixture.mjs` 第 9–12 行的四个计数断言与 `scripts/docker-smoke.mjs` 的四处冒烟断言（第 346／356 行事实数、第 359／360 行快照数），否则门禁或 docker-smoke 会以 `ERR_ASSERTION`／计数不符失败。完整口径见 `docs/data-gate-semantics.md` 第 5、9 节。
 
 ## 采集与入库授权
 
@@ -336,7 +336,7 @@ curl -s "https://shikakucheck.com/shikaku/bookkeeping/pass-rate/?year=2010" | gr
 
 判据＝六个路径全 200（ICS 为 `text/calendar`，`/sitemap.xml` 为 XML，其余 `text/html`）；robots 里 Sitemap 行是 `https://shikakucheck.com/sitemap.xml`；sitemap 含簿記 pass-rate 页、`?year=` 计数为 **0**；年份筛选页 noindex 计数为 **1**。再抽一眼内容：首页含「資格試験の公式情報」、`/shikaku/bookkeeping/` 含「日商簿記」。
 
-以上第 3–7 步的机器版＝`npm run smoke:docker`（CI 的 `docker-smoke` job 跑同一条命令）：构建镜像 → 临时 `postgres:16-alpine` → migrate（含二次幂等）→ seed → 恢复 CI 夹具 → 开通只读角色并验证写被拒 → 起 api+web → 断言 999 条事实与 37 个夹具快照、首页/资格页/API/sitemap/noindex/ICS/robots/404。改动 Dockerfile、compose 或依赖后先让这条冒烟绿，再上 VPS。
+以上第 3–7 步的机器版＝`npm run smoke:docker`（CI 的 `docker-smoke` job 跑同一条命令）：构建镜像 → 临时 `postgres:16-alpine` → migrate（含二次幂等）→ seed → 恢复 CI 夹具 → 开通只读角色并验证写被拒 → 起 api+web → 断言 1007 条事实与 37 个夹具快照、首页/资格页/API/sitemap/noindex/ICS/robots/404。改动 Dockerfile、compose 或依赖后先让这条冒烟绿，再上 VPS。
 
 ### 例行备份（VPS root crontab）
 

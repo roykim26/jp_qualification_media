@@ -20,7 +20,13 @@
 - **B 已全闭合**：号主拍板 D1～D5（D3 修订为退役空登记 `kinzai-schedule`）后，`4f45330` 域名迁移代码＋四提取器重写＋迁移 `0028`（本机已应用，sources 52→51）；随后三次独立授权连走＝7 条 kinzai 实抓（旧快照先固化备份）→4 条产事实页入库 27 候选→admin 批准 27/27（4 条 schedule 实技新值上线，补旧提取器漏抓的第 3 窗口）；同日巡检收尾轮重跑 home/2/3 三条证据页，**7 条 kinzai 最新 source_checks 全 changed/200，原始「9 条 failed」发现全闭合**。逐轮读数见 `docs/stage-log.md` 2026-11-12 三段与 `docs/work-package-i-kinzai-domain-migration.md` §12。
 - **C 的延伸＝工作包 J 已闭合**：FE 统计五字段经推移表 xlsx 事实化（阶段 1 仅采集核读→阶段 2 离线代码→阶段 3＋4 连走），迁移 `0029` 登记 `source:fundamental-it:statistics-suiihyo`；批准 5 条（令和7完整年度：応募 172217／受験 147186／合格 56370／合格率 38.3%＋目录页方法论），FE facts 15→**20**、全库 994→**999**、pending 0、门禁 6/6；`f46c943` 直推 main，CI run `43160584486` 双绿。方案与执行记录见 `docs/work-package-j-fe-pass-rate-proposal.md` §11。
 - **D2 历史年度轮亦闭合（同日后续轮）**：复用 J 轮既有 xlsx 快照（零新抓取），入库并批准令和5/6 八条统计（`exam_year=2023/2024`：2023 応募 140774／受験 121611／合格 57278／合格率 47.1%；2024 応募 157259／受験 133732／合格 54501／合格率 40.8%，审阅人 `d2-fe-history-owner-review`）⇒ FE facts 20→**28**、全库 999→**1007**、pending 0、门禁 6/6，运营表幂等零新增。D1 月度附件刷新经当日取证判无漂移、挂起。读数见 `docs/stage-log.md` D2 段与 FE 契约 D2 节。
-- **本机现态（2026-11-12）**：迁移 **30**（0000–0029）、sources **52**、facts **1007**（FE 28）、pending **0**、candidate_facts/reviews/change_events/fact_revisions 各 **1046**、snapshots **80**、capture_runs **17**、source_checks **68**；baseline／CI 夹具已于 2026-11-12 刷为 **999 facts／37 snapshots** 并合并（squash PR #73＝`ef8ce97`；差 17＋kinzai **7** 条值差同批进夹具，PR CI `43179797846`＋main push CI `43180906300` 双绿）；**D2 轮后本机领先夹具 8 条（1007 vs 999），刷新属另一次授权**。下文「本机运行态」节的旧读数一律以本段与开工单 §3 为准。
+- **本机现态（2026-11-13 刷新轮落账现取）**：迁移 **30**（0000–0029）、sources **52**、facts **1007**（FE 28）、pending **0**、candidate_facts/reviews/change_events/fact_revisions 各 **1046**、snapshots **80**、capture_runs **17**、source_checks **68**；baseline／CI 夹具已于 2026-11-13 刷为 **1007 facts／37 snapshots** 并合并（squash PR #79＝`1158457`；D2 八条纯新增零值差，PR CI `43339301778`＋main push CI `43342694532` 双绿；前值 999／37＝#73）⇒ **本机库／baseline／CI 夹具三方一致**。下文「本机运行态」节的旧读数一律以本段与开工单 §3 为准。
+
+## 进度更新（2026-11-13：baseline／CI 夹具刷新轮闭合＋D2 交付补落账）
+
+- **刷新轮已闭合**：号主 AskUserQuestion 拍板「刷＋squash PR」→ 四处计数链同批（baseline FE 20→28／夹具全量重导 **1007×3／37**＝3,214 行 2,218,265 字节、D2 八条纯新增零值差／`verify-ci-fixture.mjs` 9–11 行→1007／`docker-smoke.mjs` 346／356→1007，359／360 快照数 37 不变）→「提交」`b00ce53`（4 文件 30+/6−）→「push 并开 PR」**#79** →「盯 CI」run `43339301778` 双绿 →「合并」squash **`1158457`**（2026-11-13T01:09:08Z）→「盯合并后 CI」run `43342694532` 双绿 →「删分支」`chore/baseline-fixture-1007`（三重判据）⇒ **本机库／baseline／CI 夹具三方一致 1007／37**。逐轮读数见 `docs/stage-log.md` 2026-11-13 段。
+- **D2 轮交付补落账**：文档落账 commit `5dddc0b` push 时远端 main 已被另一窗口 #76 顶到 `2be681d` ⇒ rebase 对齐得 `38dfd32`（8 文件 66+/37−）→ PR **#77** → CI run `43215890696` 双绿 → squash **`696ff03`**（2026-11-12T12:37:28Z）→ main push CI run `43219610763` 双绿 → 分支 `docs/d2-fe-history-close` 已删。
+- **分支处置拍板（同轮 AskUserQuestion）**：`feat/p0-1-core-facts`（`82eca10`）经核查＝**未合并**（`git cherry main` 8 commits 全 `+`；diff vs main 76 文件 519+/4510−，旧基线缺 J/D2 工作；worktree `var/wt-mvp-execution` 干净）⇒ 停下问，号主拍板**保留**（内容已被后续轮超越，留档不删）。`var/wt-docs25` 归属未确认、删前先问。
 
 ## 本机运行态（生成时现取，会过期，用前重取）
 
@@ -33,7 +39,7 @@
 - 失效来源**不自动改 `canonical_url`**；新 URL 须所有者拍板后「**代码＋迁移＋文档**」同批改（先例：FE cbt-s，见 checklist 2026-11-11「FE 补口实抓」条目）。**不猜 URL**。
 - **扩大域名白名单属安全边界决策**，须所有者拍板（`SafeFetcher`/`SourcePolicy` 在 `services/collector/src/collector/http_policy.py`）。
 - 采集、候选入库、审核批准是三次独立授权；push/开 PR 各要一句明示；只有出现「合并」二字才同意合并；**部署仍暂缓，别提部署**。定时任务/外部通知安装前必须确认。
-- 数据边界：不动 release baseline 与 CI 夹具（现 **999／37**，改动仍需单独授权）；不推断 `eligibility`/`passing_standard`/`scoring_method`；`venue_rule`/`booking_window`/`application_rule` 保持 `not_applicable`；admin 写只认 `x-reviewer-id` 头；`data:staleness` 只读。
+- 数据边界：不动 release baseline 与 CI 夹具（现 **1007／37**，改动仍需单独授权）；不推断 `eligibility`/`passing_standard`/`scoring_method`；`venue_rule`/`booking_window`/`application_rule` 保持 `not_applicable`；admin 写只认 `x-reviewer-id` 头；`data:staleness` 只读。
 
 ## 三项发现（证据现取自 patrol-report.json）
 

@@ -119,7 +119,7 @@ FE 自令和 5 年度起全年以 CBT 随时实施，没有「统一考试日 + 
 
 - 入库：`FUNDAMENTAL_IT_ONLY_EXAM_YEAR=2023`／`2024` 各跑一次（`FUNDAMENTAL_IT_LOCAL_WRITE=1`＋localhost），各 4 条共 **8 条 pending_review**；snapshots/capture_runs/source_checks 按同哈希幂等，80/17/68 不变。
 - 批准：`var/approve-fe-history.mjs`（gitignored，自包含起停 admin 3001、数量≠8 即中止），**8/8 OK**，审阅人 `d2-fe-history-owner-review`（2026-11-12），reason 绑定拍板、数值与单元格证据。FE 20→**28**、全库 999→**1007**、pending 归 0、`verify:all` 6/6（FE API 28 条）。
-- 八条均 `delivery_mode='cbt'`、`exam_component=NULL`、risk high；`pass_rate` 为官方印刷值。baseline/CI 夹具未动（仍 **999/37**），本机领先 **8** 条，刷新属另一次授权。
+- 八条均 `delivery_mode='cbt'`、`exam_component=NULL`、risk high；`pass_rate` 为官方印刷值。baseline/CI 夹具当时未动（999/37、本机领先 8），已于 2026-11-13 随 squash PR #79＝`1158457` 同批刷为 **1007/37**（八条纯新增、零值差），三方一致。
 
 ## 门禁告警：6/6 通过 ≠ FE 字段完整
 
