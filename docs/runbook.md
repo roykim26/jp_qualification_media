@@ -292,6 +292,8 @@ git clone https://github.com/roykim26/jp_qualification_media.git /opt/jpqm && cd
 cd /opt/jpqm && docker compose -f deploy/docker-compose.prod.yml up -d --build db
 ```
 
+（2026-11-13 修正：postgres:18+ 官方镜像把数据目录布局改为 `PGDATA=/var/lib/postgresql/18/docker`，entrypoint 检测到旧路径 `/var/lib/postgresql/data` 上有挂载（哪怕空卷）会直接拒绝启动，故 compose 的卷挂载必须是 `pgdata:/var/lib/postgresql`。docker-smoke 不挂卷，抓不到这一项；db 反复 unhealthy 时先看 `docker compose -f deploy/docker-compose.prod.yml logs db --tail 30`。）
+
 判据＝`docker compose -f deploy/docker-compose.prod.yml ps db` 为 healthy。API 现在要求独立的只读账号，账号未开通前不要起 api；第 5 步用一次性容器把库和账号准备好。
 
 5. 建库表、灌入已批准数据并开通只读账号（API 尚未启动，统一用一次性容器执行；镜像里已带 `config/`、`dist/packages/db/migrations` 与 `scripts/`）：
