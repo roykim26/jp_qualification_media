@@ -264,7 +264,7 @@ DATABASE_URL="postgresql://postgres@127.0.0.1:55432/qualification_media" npm run
 
 上线范围＝公开站（web）＋公开 API＋PostgreSQL＋Caddy 自动 HTTPS。admin 与采集链不在 VPS 上运行（admin 写侧只有 `x-reviewer-id` 头一种弱鉴权，绝不能暴露公网；采集继续在开发机本机跑）。
 
-拓扑：`caddy(80/443) → web(3000) → api(4100) → db(5432)`，除 caddy 外全部只在 compose 内部网络。`WEB_HOST`/`API_HOST` 默认仍为 `127.0.0.1`（本机开发形态不变），仅 compose 显式设 `0.0.0.0` 供容器互访。
+拓扑：`caddy(80/443) → web(3000) → api(4100) → db(5432)`，除 caddy 外全部只在 compose 内部网络。`WEB_HOST`/`API_HOST` 默认仍为 `127.0.0.1`（本机开发形态不变），仅 compose 显式设 `0.0.0.0` 供容器互访。生产 db 镜像为 `postgres:18-alpine`，与开发机现用库（PG 18）同主版本——PG 18 的 `pg_dump` 备份无法恢复到 PG 16（`transaction_timeout` 等 17+ 参数会报错），故 2026-11-13 起生产与 docker-smoke 从 16 升 18；`release-gate` CI 仍用 PG 16，保留迁移双版本兼容证明。
 
 ### 首次部署（Ubuntu 24.04，整条复制执行）
 
@@ -297,18 +297,20 @@ cd /opt/jpqm && docker compose -f deploy/docker-compose.prod.yml up -d --build d
 5. 建库表、灌入已批准数据并开通只读账号（API 尚未启动，统一用一次性容器执行；镜像里已带 `config/`、`dist/packages/db/migrations` 与 `scripts/`）：
 
 ```bash
-cd /opt/jpqm && docker compose -f deploy/docker-compose.prod.yml run --rm api node dist/packages/db/src/migrate.js && docker compose -f deploy/docker-compose.prod.yml run --rm api node dist/packages/db/src/seed.js && docker compose -f deploy/docker-compose.prod.yml run --rm api node scripts/provision-api-db-role.mjs --confirm=PROVISION_API_DB_ROLE --allow-non-local
+cd /opt/jpqm && docker compose -f deploy/docker-compose.prod.yml run --rm api node dist/packages/db/src/migrate.js && docker compose -f deploy/docker-compose.prod.yml run --rm api node dist/packages/db/src/seed.js && docker compose -f deploy/docker-compose.prod.yml run --rm -e API_DB_PASSWORD=$(grep ^API_DB_PASSWORD= deploy/.env | cut -d= -f2) api node scripts/provision-api-db-role.mjs --confirm=PROVISION_API_DB_ROLE --allow-non-local
 ```
 
-判据＝migrate 逐条输出 `Applied <迁移文件>.`，条数等于镜像里 `dist/packages/db/migrations/*.sql` 的文件数（2026-11-12 是 29 条、末条为 `0028_kinzai_domain_migration.sql.`）；同一条 migrate 再跑一次**零 `Applied` 输出**（幂等）；seed 输出 `Seeded 6 stable qualification records`；provision 输出 `status: ok`、`login: true`。若报 `ENOENT ... migrations`，说明镜像没带上迁移目录，属构建缺陷，不要手工补目录。compose 内部库主机名是 `db`，故 provision 需显式加 `--allow-non-local`；本机默认仍只允许 localhost。
+（2026-11-13 修正：provision 必须显式 `-e API_DB_PASSWORD=…` 从 `deploy/.env` 直取——`docker compose run` 不会把 `.env` 的插值变量自动传进容器，compose 的 api 服务环境里也没有 `API_DB_PASSWORD`，旧写法会报 `API_DB_PASSWORD is required.`。）
+
+判据＝migrate 逐条输出 `Applied <迁移文件>.`，条数等于镜像里 `dist/packages/db/migrations/*.sql` 的文件数（2026-11-13 是 30 条、末条为 `0029_fe_statistics_suiihyo_source.sql.`；此前 2026-11-12 口径为 29 条／末条 0028，已过期）；同一条 migrate 再跑一次**零 `Applied` 输出**（幂等）；seed 输出 `Seeded 6 stable qualification records`；provision 输出 `status: ok`、`login: true`。若报 `ENOENT ... migrations`，说明镜像没带上迁移目录，属构建缺陷，不要手工补目录。compose 内部库主机名是 `db`，故 provision 需显式加 `--allow-non-local`；本机默认仍只允许 localhost。
 
 6. 从开发机导入生产数据（pg_dump 的自定义格式备份）：
 
 ```bash
-scp <备份文件> root@<VPS_IP>:/tmp/prod.dump && cd /opt/jpqm && docker compose -f deploy/docker-compose.prod.yml exec -T db pg_restore -U qualification_prod -d qualification_media --clean --if-exists --no-owner --exit-on-error < /tmp/prod.dump
+scp <备份文件> root@<VPS_IP>:/tmp/prod.dump && cd /opt/jpqm && docker compose -f deploy/docker-compose.prod.yml exec -T db pg_restore -U qualification_prod -d qualification_media --clean --if-exists --no-owner --no-privileges --exit-on-error < /tmp/prod.dump
 ```
 
-（导入第 6 步后第 5 步的 seed 会被覆盖为备份时点，属预期；两者顺序不能反。`pg_restore --clean` 重建的表依赖迁移里的默认权限获得只读 `SELECT`；导入完成后可再跑一次第 5 步的 provision 重新对齐授权。）
+（导入第 6 步后第 5 步的 seed 会被覆盖为备份时点，属预期；两者顺序不能反。2026-11-13 修正：加 `--no-privileges`——开发机 dump 的 ACL 引用本机 `postgres` 角色，生产库没有该角色，带 ACL 恢复会因 `role "postgres" does not exist` 中断；跳过后重建的表靠迁移 0025 的 `ALTER DEFAULT PRIVILEGES`（以 `qualification_prod` 执行）自动获得只读 `SELECT`。**导入完成后必须再跑一次第 5 步的 provision 重新对齐授权**，随后用 `docker compose -f deploy/docker-compose.prod.yml run --rm api node scripts/verify-api-readonly.mjs --allow-non-local` 验证写被拒——api 服务环境已带 `API_DATABASE_URL`，无需再传。）
 
 判据＝
 
@@ -316,7 +318,7 @@ scp <备份文件> root@<VPS_IP>:/tmp/prod.dump && cd /opt/jpqm && docker compos
 cd /opt/jpqm && docker compose -f deploy/docker-compose.prod.yml exec -T db psql -U qualification_prod -d qualification_media -tAc "select count(*) from facts where status='approved'"
 ```
 
-输出与备份时点一致（2026-10-26 开发机基线是 **981**；以实际备份时点为准，别硬套）。
+输出与备份时点一致（2026-10-26 开发机基线是 **981**、2026-11-13 现取是 **1007**；以实际备份时点为准，别硬套）。
 
 7. 起全部服务并验收：
 
@@ -336,7 +338,7 @@ curl -s "https://shikakucheck.com/shikaku/bookkeeping/pass-rate/?year=2010" | gr
 
 判据＝六个路径全 200（ICS 为 `text/calendar`，`/sitemap.xml` 为 XML，其余 `text/html`）；robots 里 Sitemap 行是 `https://shikakucheck.com/sitemap.xml`；sitemap 含簿記 pass-rate 页、`?year=` 计数为 **0**；年份筛选页 noindex 计数为 **1**。再抽一眼内容：首页含「資格試験の公式情報」、`/shikaku/bookkeeping/` 含「日商簿記」。
 
-以上第 3–7 步的机器版＝`npm run smoke:docker`（CI 的 `docker-smoke` job 跑同一条命令）：构建镜像 → 临时 `postgres:16-alpine` → migrate（含二次幂等）→ seed → 恢复 CI 夹具 → 开通只读角色并验证写被拒 → 起 api+web → 断言 1007 条事实与 37 个夹具快照、首页/资格页/API/sitemap/noindex/ICS/robots/404。改动 Dockerfile、compose 或依赖后先让这条冒烟绿，再上 VPS。
+以上第 3–7 步的机器版＝`npm run smoke:docker`（CI 的 `docker-smoke` job 跑同一条命令）：构建镜像 → 临时 `postgres:18-alpine` → migrate（含二次幂等）→ seed → 恢复 CI 夹具 → 开通只读角色并验证写被拒 → 起 api+web → 断言 1007 条事实与 37 个夹具快照、首页/资格页/API/sitemap/noindex/ICS/robots/404。改动 Dockerfile、compose 或依赖后先让这条冒烟绿，再上 VPS。
 
 ### 例行备份（VPS root crontab）
 

@@ -117,7 +117,7 @@ async function psql(sql) {
     network,
     '-e',
     `PGPASSWORD=${dbPassword}`,
-    'postgres:16-alpine',
+    'postgres:18-alpine',
     'psql',
     '-h',
     dbContainer,
@@ -159,7 +159,7 @@ async function main() {
       POSTGRES_USER: dbUser,
       POSTGRES_PASSWORD: dbPassword,
     }),
-    'postgres:16-alpine',
+    'postgres:18-alpine',
   ]);
   for (let attempt = 0; attempt < 60; attempt += 1) {
     const ready = await docker(
@@ -242,7 +242,7 @@ async function main() {
       '--network',
       network,
       ...envFlags({ PGPASSWORD: dbPassword }),
-      'postgres:16-alpine',
+      'postgres:18-alpine',
       'psql',
       '-h',
       dbContainer,
