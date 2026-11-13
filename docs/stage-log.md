@@ -11,7 +11,8 @@
 - **分支处置拍板（同轮 AskUserQuestion）**：`feat/p0-1-core-facts`（`82eca10`）经三重判据核查＝**未合并**（`git cherry main` 8 commits 全 `+`；diff vs main 76 文件 519+/4510−，旧基线缺 J/D2 工作；worktree `var/wt-mvp-execution` 干净）⇒ 停下问，号主拍板**保留**（内容已被后续轮超越，留档不删）。
 - 坑：① `gh run view <runId> --log` 两次返回空（results-receiver 故障）⇒ 按开工单先例 `--json jobs` 取 jobId 再 `--job <jobId> --log`，一次成功；② 轮前 status 曾现 ` M package.json` 但 diff 为空、复取即净＝并行窗口抖动，不碰；③ 远端 main 中途前进（D2 push 时 #76 插入）⇒ rebase 对齐，不回滚别的窗口；④ 删分支遇未合并分支必须停下问，不能按「已合并」惯例直删。
 - 文档同批（本落账轮，纯文档）：README、`data-gate-semantics.md` §9／§10、runbook 两处、FE 契约 D2 节、J 方案稿 §11 遗留＋D2 补记、P1-1 交接单进度节＋本机现态＋数据边界、交接单文头注记、开工单就地重写、本段。**历史段不回改**。
-- 下一步（各需单独授权）：① 本落账轮 commit／push／PR（纯文档，默认 squash）；② D1 月度附件刷新等 IPA 发新月度版再开；③ 工作树清理（`var/wt-docs25` 归属未确认删前先问；`feat/p0-1-core-facts` 已拍板保留）。
+- **交付与 CI（落账轮补记，PR #80）**：`6616f3b`（9 文件 63+/45−）经「提交」「push 并开 PR」逐句授权 ⇒ PR **#80**（分支 `docs/baseline-1007-close`，`main:refs/heads/…` 推送、未建本地分支）；「盯 CI」run **`43360393361`**（head `6616f3b` 对齐）release-gate／docker-smoke 双 **success**：vitest **15／139**、pytest **237**、gate **40/0**、verify:all **6/0**（逐格 16／15／10／28／863／75）；docker-smoke「restores the **1007** approved facts」（同块含 **37** 快照断言）＋全 10 条 ok。「合并」⇒ squash **`bf21e49`**（2026-11-13T04:11:36Z），main push CI run **`43363894940`**（head `bf21e49`）亦双 success（读数同 PR CI）；本地 main rebase 对齐（自动跳同补丁 `6616f3b`）。「删分支」三重判据（cherry `-`／PR MERGED／无 worktree 占用）⇒ 远端 `docs/baseline-1007-close` 已删（**本地从未建该分支，仅删远端**；删后 ls-remote heads 3）。本机 `smoke:docker` 未跑，冒烟证据取自 CI。本补记轮纯文档：本段收口＋开工单就地重写＋交接单文头注记＋P1-1 交接单进度节＋`data-gate-semantics.md` §10 冒烟证据再证。
+- 下一步（各需单独授权）：① 本落账轮交付已闭合（PR #80＝squash `bf21e49`，双 CI 双绿，分支已删，见上补记）；② D1 月度附件刷新等 IPA 发新月度版再开；③ 工作树清理（`var/wt-docs25` 归属未确认删前先问；`feat/p0-1-core-facts` 已拍板保留）。
 
 ## 2026-11-12（D2 历史年度轮）：FE 统计令和5/6 八条批准（FE 20→**28**、facts 999→**1007**、pending 0、门禁 6/6；零新抓取复用 J 轮快照；零代码／零迁移／零判级面改动；baseline／CI 夹具 999/37 未动、本机领先 8；D1 月度刷新当日判无漂移挂起）
 
