@@ -20,8 +20,11 @@ import {
   editorialAboutSlugs,
   editorialComparisonPage,
   editorialGuidePage,
+  unofficialNotice,
+  verifiedBadgeClarification,
 } from '../apps/web/src/editorial.js';
 import { launchQualifications } from '../packages/schema/src/qualifications.js';
+import type { PublicFact } from '../packages/schema/src/index.js';
 import type { PublicUpdateEvent } from '../packages/schema/src/updates.js';
 
 const itPassport = launchQualifications.find(
@@ -1371,5 +1374,80 @@ describe('home page data modules', () => {
     const empty = renderHomePage();
     expect(empty).toContain('更新情報はまだありません');
     expect(empty).toContain('href="/schedule/"');
+  });
+});
+
+describe('H1 non-official disclaimer and H2 display integration', () => {
+  const takken = launchQualifications.find((item) => item.slug === 'takken')!;
+  const baseFact = {
+    qualificationSlug: 'takken' as const,
+    examLevelId: null,
+    examYear: 2026,
+    status: 'approved' as const,
+    riskLevel: 'high' as const,
+    sourceId: 'source:takken:retio',
+    sourceSnapshotId: 'snapshot:takken:official',
+    synthetic: false,
+    verifiedAt: '2026-10-13T00:00:00.000Z',
+    officialVerifiedAt: '2026-10-13T00:00:00.000Z',
+  };
+  const view = (
+    facts: Array<
+      Pick<
+        PublicFact,
+        'factKey' | 'valueType' | 'normalizedValue' | 'displayValue'
+      >
+    >,
+  ) => ({
+    qualification: takken,
+    status: 'verified' as const,
+    officialVerifiedAt: '2026-10-13T00:00:00.000Z',
+    facts: facts.map((fact) => ({ ...baseFact, ...fact }) as PublicFact),
+  });
+
+  it('shows the non-official notice on the home page and in the global footer', () => {
+    expect(renderHomePage()).toContain(unofficialNotice);
+    expect(renderGuideIndex([])).toContain(unofficialNotice);
+  });
+
+  it('clarifies that the verified badge is not official endorsement', () => {
+    const html = renderQualificationSectionPage(view([]), 'overview');
+    expect(html).toContain(verifiedBadgeClarification);
+  });
+
+  it('renders a recovered truncated date, a fee with unit, and a Japanese method label', () => {
+    const facts = [
+      {
+        factKey: 'result_date',
+        valueType: 'datetime' as const,
+        normalizedValue: '2026-11-25T09:00:00+09:00',
+        displayValue: '令和8年11月25日(水)9',
+      },
+      {
+        factKey: 'fee',
+        valueType: 'money' as const,
+        normalizedValue: '8200',
+        displayValue: '8200',
+      },
+      {
+        factKey: 'exam_method',
+        valueType: 'text' as const,
+        normalizedValue: 'paper',
+        displayValue: 'paper',
+      },
+    ];
+    const annual = renderQualificationSectionPage(view(facts), 'annual', 2026);
+    expect(annual).toContain('2026年11月25日');
+    expect(annual).not.toContain('(水)9');
+
+    const overview = renderQualificationSectionPage(view(facts), 'overview');
+    expect(overview).toContain('8,200円');
+    expect(overview).not.toContain('>8200<');
+
+    const examContent = renderQualificationSectionPage(
+      view(facts),
+      'exam-content',
+    );
+    expect(examContent).toContain('紙筆方式');
   });
 });

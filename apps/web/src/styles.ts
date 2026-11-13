@@ -360,4 +360,6 @@ export const webStyles = String.raw`
   .history-table tbody th { width: 68px; }
   .detail-sidebar .sidebar-panel:first-child, .detail-sidebar .sidebar-panel:nth-child(2) { display: none; }
 }
+.unofficial-notice { margin-top: var(--space-6); padding-top: var(--space-4); border-top: 1px solid var(--color-border); color: var(--color-text-secondary); font-size: 12px; line-height: 1.7; }
+.footer-note--unofficial { margin-top: var(--space-3); padding-top: 0; border-top: 0; }
 `;
