@@ -1,3 +1,16 @@
+/**
+ * Site-wide non-official disclaimer (H1 compliance fix).
+ * The site is an independently operated reference aggregator, NOT an official
+ * exam-body site. This notice is shown in the footer, on the home page, and in
+ * the operator / terms pages to avoid misleading "official" impression.
+ */
+export const unofficialNotice =
+  '本サイトは個人が運営する非公式の参考情報サイトであり、各試験実施機関の公式サイトではありません。掲載内容は公式発表を出典として整理したものです。';
+
+/** Clarifies that the "公式確認済み" badge means verified-against-official, not endorsement. */
+export const verifiedBadgeClarification =
+  '※「公式確認済み」は公式発表と照合・確認済みであることを示し、実施機関による公認・背書を意味しません。';
+
 export type EditorialSection = {
   heading: string;
   paragraphs: readonly string[];
@@ -420,6 +433,7 @@ const aboutPages: Record<string, EditorialPage> = {
         heading: '運営体制',
         paragraphs: [
           '本サイトは、個人開発者による小規模な運営で公開しています。特定の試験実施機関、予備校、企業から独立して運営しており、掲載内容の判断は本サイトの編集方針に基づきます。',
+          unofficialNotice,
           '運営者の氏名、所在地、連絡先などの詳細は、下記の窓口から開示をご請求ください。請求の目的を確認したうえで、法令に基づき対応します。',
         ],
       },
@@ -525,6 +539,7 @@ const aboutPages: Record<string, EditorialPage> = {
         heading: '掲載情報の性質',
         paragraphs: [
           '本サイトは、試験実施機関や官公庁が公開する情報を整理して掲載する参考情報です。試験の申込み、受験、制度の適用に関する最終的な判断は、必ず実施機関の公式案内を確認してください。',
+          unofficialNotice,
           '掲載する日付、費用、受験資格などは、確認時点の情報です。その後に変更、訂正、延期される場合があります。',
         ],
       },
