@@ -21,7 +21,7 @@ FE 自令和 5 年度起全年以 CBT 随时实施，没有「统一考试日 + 
 
 `source:fundamental-it:statistics-fe` 是工作包 F（历史统计）第一批的采集登记，2026-10-11 只进了采集侧常量表；2026-11-11 所有者拍板补登记进 `sources`（迁移 `0027_fundamental_it_statistics_source.sql`；P1-1 运营发现：巡检抓得到、落账却因未登记被跳过 `skipped_unregistered`）。该页是 IPA 的 FE 统计**附件目录页**（PDF/Excel 附件清单），页内零表格；工作包 J（2026-11-12）起适配器从页内两句成文口径产出 **1 条 `statistics_methodology`**（见下节），不再整页 `structure_changed`。授权口径见 `docs/work-package-f-live-capture-authorization.md` 与 `docs/work-package-j-fe-pass-rate-proposal.md`。
 
-`source:fundamental-it:statistics-fe-suiihyo` 由迁移 `0029_fe_statistics_suiihyo_source.sql` 登记（2026-11-12，工作包 J），指向目录页所列的**推移表 xlsx 附件**（`official_statistics`）。⚠ **附件文件名按月滚动**（`202608_…`→`202609_…`→…），登记的是拍板时点的当前 URL（0026 簿记 URL 漂移先例）；下月刷新＝改 `FUNDAMENTAL_IT_SOURCES` 的 `canonical_url`＋新迁移＋重走采集/入库/批准三次授权，**不得自动抓新附件**。同目录的 `202609_fe_toukei.pdf`（統計資料报告）未登记：AES 加密（空口令）且文本扁平，路线拍板（D1=A）弃 PDF 取 xlsx。
+`source:fundamental-it:statistics-fe-suiihyo` 由迁移 `0029_fe_statistics_suiihyo_source.sql` 登记（2026-11-12，工作包 J），指向目录页所列的**推移表 xlsx 附件**（`official_statistics`）。⚠ **附件文件名按月滚动，但不是月初即滚**（本机同一目录页快照序列＝`202608_…`（2026-10-11 抓）→`202609_…`（2026-11-11 抓）→`202609_…`（2026-11-13 只读复取证）⇒ 标签月滞后约 **2 个月**，`202610_…` 预期出现在 2026-12 上中旬），登记的是拍板时点的当前 URL（0026 簿记 URL 漂移先例）；刷新＝改 `FUNDAMENTAL_IT_SOURCES` 的 `canonical_url`＋新迁移＋重走采集/入库/批准三次授权，**不得自动抓新附件**。同目录的 `…_fe_toukei.pdf` 序列（`202603`／`202503`／`202403`）是**每年 3 月**的年度汇总，与 01–09 月度 xlsx 属两条不同节奏，判漂移时勿混。同目录的 `202609_fe_toukei.pdf`（統計資料报告）未登记：AES 加密（空口令）且文本扁平，路线拍板（D1=A）弃 PDF 取 xlsx。
 
 `ipa-fee` 与 IT Passport 的 `source:it-passport:ipa-fee` 指向同一官方页。两者各登记一条 source、各自保存快照，使 FE 的费用事实拥有自己的来源；因此 `sources.canonical_url` 从全局唯一改为「同一资格下同一 URL 唯一」（迁移 `0022_p0_1_core_fact_sources.sql`）。
 
@@ -151,7 +151,7 @@ FE 自令和 5 年度起全年以 CBT 随时实施，没有「统一考试日 + 
 2. ~~`eligibility`、`scoring_method`、`passing_standard` 仍为零已批准事实~~ **已闭合**：三条于 2026-11-11 经三次授权流程实抓→入库→批准（见上节），不得用推断值补全的约束继续适用于未来变更。
 3. `syllabus` 来源只作证据，未接入适配器。
 4. 统计类字段（`post_event`）：FE 五字段已由工作包 J 闭合（2026-11-12，见上节）；其余资格的合格率等仍零覆盖，归工作包 F。
-5. **月度附件刷新**：推移表 URL 按月滚动（当前登记 `202609_fe_01_suiihyo.xlsx`），刷新须改常量表＋新迁移＋重走三次授权。2026-11-12 D2 轮现取：当日目录页快照所列附件仍为 202609，无漂移，D1 挂起至新月度版发布。
+5. **月度附件刷新**：推移表 URL 按月滚动（当前登记 `202609_fe_01_suiihyo.xlsx`），刷新须改常量表＋新迁移＋重走三次授权。2026-11-12 D2 轮现取＋**2026-11-13 只读复取证**（`var/d1_probe.py`，走生产同一 `SafeFetcher`＋`SourcePolicy` 代码路径，两次 HTTPS、零库写入）均判**无漂移**：目录页哈希仍 `d2178a93…`（80686 字节，与基线逐字节相同）、附件清单 15 个文件名 `added=[] removed=[]`、登记 xlsx 仍 ok/200／`2063cd07…`／18040 字节 ⇒ D1 继续挂起至新月度版发布。据目录页快照序列推算 `202610` 预期落在 **2026-12 上中旬**，故不建议 12-01 一刀切，从 12 月上旬起隔周复跑该只读探针即可。
 6. ~~令和5/6 历史年度数据在表内但未入库~~ **已闭合**：2026-11-12 D2 轮入库并批准 8 条（见「D2 历史年度轮」节），统计覆盖年度扩至 2023–2025。
 
 相关文档：`docs/data-gate-semantics.md`（`conditional` 跳过机制与前缀匹配规则的完整口径）、`docs/it-passport-source-contract.md`（同为 CBT 资格的 ITパスポート口径）。
