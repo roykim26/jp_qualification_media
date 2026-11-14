@@ -4,6 +4,23 @@ www.shikakucheck.com {
 
 shikakucheck.com {
 	encode gzip
+
+	log {
+		output file /var/log/caddy/access.log {
+			roll_size 10mb
+			roll_keep 5
+		}
+		format json
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+	}
+
 	handle /googlea01c41ed599c5311.html {
 		respond "google-site-verification: googlea01c41ed599c5311.html" 200
 	}

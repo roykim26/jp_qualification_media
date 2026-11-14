@@ -25,6 +25,7 @@ import {
 } from '../apps/web/src/editorial.js';
 import { launchQualifications } from '../packages/schema/src/qualifications.js';
 import type { PublicFact } from '../packages/schema/src/index.js';
+import type { PublicCalendarEvent } from '../packages/schema/src/calendar.js';
 import type { PublicUpdateEvent } from '../packages/schema/src/updates.js';
 
 const itPassport = launchQualifications.find(
@@ -1449,5 +1450,192 @@ describe('H1 non-official disclaimer and H2 display integration', () => {
       'exam-content',
     );
     expect(examContent).toContain('紙筆方式');
+  });
+});
+
+describe('B4 ended-schedule state and B5 home timeline dedup', () => {
+  const bookkeeping = launchQualifications.find(
+    (item) => item.slug === 'bookkeeping',
+  )!;
+  const fp = launchQualifications.find((item) => item.slug === 'fp')!;
+  const takken = launchQualifications.find((item) => item.slug === 'takken')!;
+
+  const calendarEvent = (
+    overrides: Partial<PublicCalendarEvent> = {},
+  ): PublicCalendarEvent => ({
+    id: 'event:default',
+    type: 'exam_date' as const,
+    label: '試験日',
+    qualification: bookkeeping,
+    examYear: 2999,
+    displayValue: '2999-11-15',
+    dateValue: '2999-11-15',
+    startValue: null,
+    factKey: 'exam_dates',
+    verifiedAt: '2026-01-01T00:00:00.000Z',
+    sequence: 0,
+    ...overrides,
+  });
+
+  it('collapses same-day same-type duplicates on the home timeline (B5)', () => {
+    const html = renderHomePage([
+      calendarEvent({
+        id: 'bookkeeping:1',
+        examLevelId: 'bookkeeping:1',
+        sequence: 1,
+      }),
+      calendarEvent({
+        id: 'bookkeeping:2',
+        examLevelId: 'bookkeeping:2',
+        sequence: 2,
+      }),
+      calendarEvent({
+        id: 'bookkeeping:3',
+        examLevelId: 'bookkeeping:3',
+        sequence: 3,
+      }),
+      calendarEvent({
+        id: 'fp:open',
+        type: 'application_open',
+        label: '申込開始',
+        qualification: fp,
+        dateValue: '2999-11-16',
+        displayValue: '2999-11-16',
+        factKey: 'application_open',
+        sequence: 1,
+      }),
+    ]);
+    expect(html.split('class="home-timeline__item"').length - 1).toBe(2);
+    expect(html.split('2999年11月15日').length - 1).toBe(1);
+    expect(html).toContain('2999年11月16日');
+    expect(html).toContain('href="/shikaku/fp/2999/"');
+  });
+
+  it('keeps distinct event types on the same date (B5)', () => {
+    const html = renderHomePage([
+      calendarEvent({ id: 'exam', sequence: 1 }),
+      calendarEvent({
+        id: 'result',
+        type: 'result_date',
+        label: '合格発表',
+        factKey: 'result_date',
+        sequence: 2,
+      }),
+    ]);
+    expect(html.split('class="home-timeline__item"').length - 1).toBe(2);
+  });
+
+  it('marks past schedule events as ended with guidance, keeps future ones clean (B4)', () => {
+    const html = renderSchedulePage([
+      calendarEvent({
+        id: 'takken:past',
+        qualification: takken,
+        examYear: 2000,
+        dateValue: '2000-10-18',
+        displayValue: '2000年10月18日',
+        factKey: 'exam_date',
+      }),
+      calendarEvent({
+        id: 'takken:future',
+        qualification: takken,
+        examYear: 2999,
+        dateValue: '2999-10-18',
+        displayValue: '2999年10月18日',
+        factKey: 'exam_date',
+      }),
+    ]);
+    expect(
+      html.split('class="schedule-event schedule-event--ended"').length - 1,
+    ).toBe(1);
+    expect(html).toContain('<span class="badge badge--info">');
+    expect(html).toContain('終了');
+    expect(html.split('この試験は終了しました').length - 1).toBe(1);
+    expect(html).toContain(
+      '合格発表日と次回日程は公式サイトでご確認ください。',
+    );
+  });
+
+  it('uses type-specific guidance for past application deadlines (B4)', () => {
+    const html = renderSchedulePage([
+      calendarEvent({
+        id: 'takken:deadline',
+        qualification: takken,
+        type: 'application_deadline',
+        label: '申込締切',
+        examYear: 2000,
+        dateValue: '2000-07-31',
+        displayValue: '2000年7月31日',
+        factKey: 'application_deadline',
+      }),
+    ]);
+    expect(html).toContain(
+      'この申込締切は過ぎました。次回の申込日程は公式サイトでご確認ください。',
+    );
+  });
+
+  const baseFact = {
+    qualificationSlug: 'takken' as const,
+    examLevelId: null,
+    examYear: 2026,
+    status: 'approved' as const,
+    riskLevel: 'high' as const,
+    sourceId: 'source:takken:retio',
+    sourceSnapshotId: 'snapshot:takken:official',
+    synthetic: false,
+    verifiedAt: '2026-10-13T00:00:00.000Z',
+    officialVerifiedAt: '2026-10-13T00:00:00.000Z',
+  };
+  const detailView = (facts: Array<Record<string, unknown>>) => ({
+    qualification: takken,
+    status: 'verified' as const,
+    officialVerifiedAt: '2026-10-13T00:00:00.000Z',
+    facts: facts.map((fact) => ({ ...baseFact, ...fact }) as PublicFact),
+  });
+
+  it('marks fully-past date facts as ended on the detail page (B4)', () => {
+    const html = renderQualificationSectionPage(
+      detailView([
+        {
+          factKey: 'exam_date',
+          valueType: 'date',
+          normalizedValue: '2000-10-18',
+          displayValue: '2000年10月18日',
+        },
+      ]),
+      'overview',
+    );
+    expect(html).toContain('<span class="badge badge--info">');
+    expect(html).toContain('終了');
+    expect(html).toContain(
+      'この日程は終了しています。最新の日程・情報は公式サイトでご確認ください。',
+    );
+  });
+
+  it('does not mark future or partially-future date facts as ended (B4)', () => {
+    const html = renderQualificationSectionPage(
+      detailView([
+        {
+          factKey: 'exam_date',
+          valueType: 'date',
+          normalizedValue: '2999-10-18',
+          displayValue: '2999年10月18日',
+        },
+        {
+          factKey: 'exam_dates',
+          valueType: 'date',
+          normalizedValue: '2000-06-14,2999-11-15',
+          displayValue: '2000-06-14、2999-11-15',
+        },
+        {
+          factKey: 'exam_schedule',
+          valueType: 'text',
+          normalizedValue: 'venue_defined',
+          displayValue: '各試験会場が設定する任意の日',
+        },
+      ]),
+      'overview',
+    );
+    expect(html).not.toContain('この日程は終了しています');
+    expect(html).not.toContain('<span class="badge badge--info">');
   });
 });

@@ -245,6 +245,19 @@ DATABASE_URL="postgresql://postgres@127.0.0.1:55432/qualification_media" npm run
 
 日检流程（约 5 分钟）：跑 `ops:daily` → 读「今日需处理」→ critical/blocked 来源决定是否进入下面的数据更新流程；warning 与到期事实排入复查；待审候选走审核批准授权。
 
+## 访问日志统计（access-report，只读）
+
+用途：MVP 验证期的保底访问统计（不装第三方分析脚本）。Caddy 站点块把 JSON 访问日志写到容器内 `/var/log/caddy/access.log`（10MB 滚动、保留 5 份），compose 以 `./caddy-logs:/var/log/caddy` bind mount 到宿主机 `deploy/caddy-logs/`（gitignore，不入库）。`scripts/access-report.mjs` 只读解析日志，输出总请求、人类/bot 拆分、ユニークIP、状态码分布、参照元（直接/検索/SNS/内部）、功能利用（ICS・検索・比較）、上位页面、日别趋势；日期按 JST 聚合。空 User-Agent 与常见爬虫/脚本 UA 计入 bot，不进人类计数。
+
+```bash
+# 服务器上（/opt/jpqm），手动跑，建议每周一次＋推广活动后各一次
+cd /opt/jpqm && node scripts/access-report.mjs deploy/caddy-logs/access.log
+# 指定窗口与 JSON 输出
+node scripts/access-report.mjs deploy/caddy-logs/access.log --since=2026-11-14 --until=2026-11-20 --json
+```
+
+判据＝`status: ok`（JSON 模式）或文本报告正常打印；不写库、不发外部请求、不装定时任务（与日检同口径，全手动）。首次启用需 `docker compose -f deploy/docker-compose.prod.yml up -d caddy` 重建一次 caddy 容器以挂上日志卷（此后改 Caddyfile 只需 reload）。安全响应头（HSTS/nosniff/X-Frame/Referrer-Policy/Permissions-Policy）由同一 Caddyfile 的 `header` 块下发；CSP 因站内内联样式/脚本暂未启用。
+
 ## 官方数据更新流程（SOP）
 
 触发：日报 `changed`/`blocked`/critical、`data:staleness` 到期、官方公告。采集、候选入库、审核批准仍是三次独立授权，逐段需所有者明示；巡检抓取与巡检落库也各算一次授权。
@@ -256,7 +269,7 @@ DATABASE_URL="postgresql://postgres@127.0.0.1:55432/qualification_media" npm run
 5. `npm run build`＋`npm run verify:all` 6/6。
 6. 仅当 facts 计数变化：`baseline:update`＋`ci:fixture:export` 同批，同步 `scripts/verify-ci-fixture.mjs` 四处计数断言与 `scripts/docker-smoke.mjs` 冒烟断言，`ci:fixture:verify` 通过；同一 PR 进 main（见第 9 节口径）。
 7. 全量回归绿 → commit → push（明示）→ PR（明示）→ 合并（「合并」明示）。
-8. `pg_dump` 数据包导出备用。部署暂缓，本流程不执行任何上线动作。
+8. `pg_dump` 数据包导出备用。上线按「生产部署 → 更新发布」节执行，每次发布仍需所有者明示授权；admin 与采集链不上 VPS。
 
 失效分支：`blocked`/404 来源不自动改 `canonical_url`；所有者拍板新 URL 后「代码＋迁移＋文档」同批改（FE cbt-s 先例），再回到第 1 步。
 

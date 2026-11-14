@@ -32,7 +32,7 @@ gh pr list --state open --json number,headRefName,headRefOid,mergeable,mergeStat
 
 1. **FE 统计月度附件刷新（D1，挂起至漂移）**：推移表附件名按月滚但滞后约 **2 个月**（当前登记 `202609_fe_01_suiihyo.xlsx`）；2026-11-12 D2 轮与 **2026-11-13 只读复取证**均判无漂移（目录页哈希仍 `d2178a93…`／80686 字节、xlsx 仍 `2063cd07…`／18040 字节、附件清单 `added=[] removed=[]`）。**下一版 `202610` 预期出现在 2026-12 上中旬**（本机目录页序列＝`202608`@10-11→`202609`@11-11），故不必 12-01 一刀切，从 12 月上旬起隔周复跑探针即可。复跑命令＝`NO_PROXY= PYTHONIOENCODING=utf-8 services/collector/.venv/Scripts/python.exe var/d1_probe.py`（脚本在 gitignored `var/`，两次 HTTPS、零库写入，证据落 `var/d1-probe-20261113/`）。新月度版发布后开新轮：实抓新附件（一次采集授权，先固化现有快照备份）→改 `FUNDAMENTAL_IT_SOURCES` canonical_url＋迁移 0030（旧值守卫 UPDATE）＋文档同批→本机应用迁移／入库／批准各需单独一句话。⚠ 目录页哈希一变 `statistics_methodology` 换号成新 pending 须同批批准；xlsx 哈希一变该页全部候选换号（kinzai 先例）。~~令和5/6 历史年度入库~~ **已由 D2 轮闭合**（8 条批准，FE 28／facts 1007）。口径见 FE 契约「D2 历史年度轮」节与 J 方案稿 §11 补记。
 2. **工作树与分支清理**：`var/wt-docs25`（detached `88febf5`）归属未确认，删除属仓库操作、单独授权、删前先问；`var/wt-mvp-execution` 与 `feat/p0-1-core-facts` 已拍板**保留**（未合并遗留留档），不再列为待删；`C:/Users/jinlo/.codex/worktrees/e24e` 不动。`chore/dev-env-file` 属另一窗口在途 PR #78，不碰。
-3. **部署仍暂缓**：号主尚未购服务器；`feat/deploy-vps` 虽已随 #51 合并，也不代表上线，别提议 VPS／DNS。
+3. **已上线（2026-11-13 部署完成）**：公开站 `https://shikakucheck.com`（东京 VPS，`/opt/jpqm`，compose 生产栈，例行备份见 runbook）；更新发布按 runbook「生产部署 → 更新发布」节执行，每次上线仍需所有者明示授权。旧约束「号主尚未购服务器／别提议 VPS／DNS」不再适用；admin 与采集链仍留本机、绝不上公网。
 
 ## 3. 本机环境卡点（未解，直接决定你能跑什么）
 
