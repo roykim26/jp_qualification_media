@@ -14,5 +14,8 @@ shikakucheck.com {
 	<user>EDA4FA186A6B3A981863D4145C31280D</user>
 </users>" 200
 	}
+	handle /dd3d6c883de8475fb7f2d7639208d313.txt {
+		respond "dd3d6c883de8475fb7f2d7639208d313" 200
+	}
 	reverse_proxy web:3000
 }
