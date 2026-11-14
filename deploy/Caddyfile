@@ -7,5 +7,12 @@ shikakucheck.com {
 	handle /googlea01c41ed599c5311.html {
 		respond "google-site-verification: googlea01c41ed599c5311.html" 200
 	}
+	handle /BingSiteAuth.xml {
+		header Content-Type application/xml
+		respond "<?xml version=\"1.0\"?>
+<users>
+	<user>EDA4FA186A6B3A981863D4145C31280D</user>
+</users>" 200
+	}
 	reverse_proxy web:3000
 }
