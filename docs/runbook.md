@@ -251,9 +251,10 @@ DATABASE_URL="postgresql://postgres@127.0.0.1:55432/qualification_media" npm run
 
 ```bash
 # 服务器上（/opt/jpqm），手动跑，建议每周一次＋推广活动后各一次
-cd /opt/jpqm && node scripts/access-report.mjs deploy/caddy-logs/access.log
+# 宿主机没有 node：日志经 stdin 进 web 容器跑（2026-11-14 实测 status: ok）
+cd /opt/jpqm && docker compose -f deploy/docker-compose.prod.yml exec -T web node scripts/access-report.mjs /dev/stdin < deploy/caddy-logs/access.log
 # 指定窗口与 JSON 输出
-node scripts/access-report.mjs deploy/caddy-logs/access.log --since=2026-11-14 --until=2026-11-20 --json
+cd /opt/jpqm && docker compose -f deploy/docker-compose.prod.yml exec -T web node scripts/access-report.mjs /dev/stdin --since=2026-11-14 --until=2026-11-20 --json < deploy/caddy-logs/access.log
 ```
 
 判据＝`status: ok`（JSON 模式）或文本报告正常打印；不写库、不发外部请求、不装定时任务（与日检同口径，全手动）。首次启用需 `docker compose -f deploy/docker-compose.prod.yml up -d caddy` 重建一次 caddy 容器以挂上日志卷（此后改 Caddyfile 只需 reload）。安全响应头（HSTS/nosniff/X-Frame/Referrer-Policy/Permissions-Policy）由同一 Caddyfile 的 `header` 块下发；CSP 因站内内联样式/脚本暂未启用。
