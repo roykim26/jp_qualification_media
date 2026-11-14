@@ -78,7 +78,7 @@
 
 **现状（实测）**：无 `Strict-Transport-Security`、`X-Content-Type-Options`、`X-Frame-Options`、`Content-Security-Policy`、`Referrer-Policy`、`Permissions-Policy`。HTTPS/跳转/证书本身正常。
 
-**整改方案**：在 `deploy/Caddyfile` 的 `shikakucheck.com` 块加 `header` 指令：HSTS（`max-age=31536000; includeSubDomains`）、`X-Content-Type-Options nosniff`、`X-Frame-Options DENY`、`Referrer-Policy strict-origin-when-cross-origin`、基础 CSP。属加固项，非法律强制。
+**整改方案**：在 `deploy/caddy/Caddyfile` 的 `shikakucheck.com` 块加 `header` 指令：HSTS（`max-age=31536000; includeSubDomains`）、`X-Content-Type-Options nosniff`、`X-Frame-Options DENY`、`Referrer-Policy strict-origin-when-cross-origin`、基础 CSP。属加固项，非法律强制。
 
 ### L2. 运营者信息最小化（可选）
 
