@@ -22,7 +22,7 @@ import {
   verifiedBadgeClarification,
   type EditorialPage,
 } from './editorial.js';
-import { formatFactDisplayValue } from './format.js';
+import { formatFactDisplayValue, isDateFactKey } from './format.js';
 import { renderPublicDocument, renderQualificationSubnav } from './layout.js';
 
 export type PublicQualificationView = {
@@ -168,6 +168,19 @@ const eventTone: Record<PublicCalendarEvent['type'], string> = {
   application_deadline: '締切',
   exam_date: '試験',
   result_date: '発表',
+};
+
+// B4: past schedule entries keep their verified facts but get an ended badge
+// and one line of guidance. We never invent the next year's dates.
+const endedGuidance: Record<PublicCalendarEvent['type'], string> = {
+  application_open:
+    'この申込開始日は過ぎました。次回の申込日程は公式サイトでご確認ください。',
+  application_deadline:
+    'この申込締切は過ぎました。次回の申込日程は公式サイトでご確認ください。',
+  exam_date:
+    'この試験は終了しました。合格発表日と次回日程は公式サイトでご確認ください。',
+  result_date:
+    'この合格発表日は過ぎました。最新の情報は公式サイトでご確認ください。',
 };
 
 const scheduleTypeLabels: Record<PublicCalendarEvent['type'], string> = {
@@ -576,6 +589,25 @@ function renderFactSource(fact: PublicFact): string {
     : `<details><summary>出典情報</summary><div><p>ソース ID: ${escapeHtml(fact.sourceId)}</p><p>スナップショット: ${escapeHtml(fact.sourceSnapshotId)}</p><p>${verification}</p></div></details>`;
 }
 
+// B4: a date-family fact is "ended" only when EVERY date in its normalized
+// value lies before today (JST). Multi-date facts with any future occurrence
+// stay unmarked; non-date normalized values (venue_defined, year_round, …)
+// never qualify.
+function factScheduleEnded(fact: PublicFact, today: string): boolean {
+  if (!isDateFactKey(fact.factKey)) return false;
+  const normalized = fact.normalizedValue;
+  if (typeof normalized !== 'string') return false;
+  const parts = normalized
+    .split(',')
+    .map((part) => part.trim())
+    .filter(Boolean);
+  if (!parts.length) return false;
+  return parts.every((part) => {
+    const date = part.match(/^\d{4}-\d{2}-\d{2}/)?.[0];
+    return date !== undefined && date < today;
+  });
+}
+
 function renderFact(fact: PublicFact): string {
   const dimensions = [
     fact.providerId,
@@ -593,7 +625,8 @@ function renderFact(fact: PublicFact): string {
     .join('');
   const verified =
     fact.provenanceStatus === 'verified' && Boolean(fact.officialVerifiedAt);
-  return `<article class="card fact" data-fact-key="${escapeHtml(fact.factKey)}"><div class="card__body"><div class="fact__heading"><h3>${escapeHtml(factLabel(fact.factKey))}</h3>${renderBadge(verified ? '公式確認済み' : '出典確認待ち', verified ? 'verified' : 'review')}</div>${dimensions ? `<div class="dimensions">${dimensions}</div>` : ''}<p class="fact-value">${escapeHtml(formatFactDisplayValue({ factKey: fact.factKey, displayValue: fact.displayValue, normalizedValue: fact.normalizedValue }))}</p><p class="meta">適用年度: ${escapeHtml(String(fact.examYear))}年</p>${renderFactSource(fact)}</div></article>`;
+  const ended = factScheduleEnded(fact, tokyoToday());
+  return `<article class="card fact" data-fact-key="${escapeHtml(fact.factKey)}"><div class="card__body"><div class="fact__heading"><h3>${escapeHtml(factLabel(fact.factKey))}</h3>${renderBadge(verified ? '公式確認済み' : '出典確認待ち', verified ? 'verified' : 'review')}${ended ? renderBadge('終了', 'info') : ''}</div>${dimensions ? `<div class="dimensions">${dimensions}</div>` : ''}<p class="fact-value">${escapeHtml(formatFactDisplayValue({ factKey: fact.factKey, displayValue: fact.displayValue, normalizedValue: fact.normalizedValue }))}</p>${ended ? '<p class="meta">この日程は終了しています。最新の日程・情報は公式サイトでご確認ください。</p>' : ''}<p class="meta">適用年度: ${escapeHtml(String(fact.examYear))}年</p>${renderFactSource(fact)}</div></article>`;
 }
 
 function matchesPrefixes(fact: PublicFact, prefixes: readonly string[]) {
@@ -1249,7 +1282,8 @@ export function renderSchedulePage(
           icon: 'calendar',
         })
       : '';
-    return `<article class="schedule-event"><time datetime="${escapeHtml(event.dateValue ?? '')}">${escapeHtml(formatCalendarDate(event.dateValue))}</time><div><div class="schedule-event__heading"><span class="schedule-event__type">${escapeHtml(eventTone[event.type])}</span><h2><a href="/shikaku/${escapeHtml(event.qualification.slug)}/${event.examYear}/">${escapeHtml(event.qualification.officialNameJa)}</a></h2></div><p class="schedule-event__value">${escapeHtml(formatFactDisplayValue({ factKey: event.factKey, displayValue: event.displayValue, normalizedValue: event.startValue }))}</p>${dimensions ? `<div class="dimensions">${dimensions}</div>` : ''}<p class="meta">${event.examYear}年 / ${escapeHtml(event.label)} / 公式確認: ${escapeHtml(formatVerifiedAt(event.verifiedAt))} / ${source}</p>${eventIcs ? `<div class="schedule-event__actions">${eventIcs}</div>` : ''}</div></article>`;
+    const ended = Boolean(event.dateValue && event.dateValue < today);
+    return `<article class="schedule-event${ended ? ' schedule-event--ended' : ''}"><time datetime="${escapeHtml(event.dateValue ?? '')}">${escapeHtml(formatCalendarDate(event.dateValue))}</time><div><div class="schedule-event__heading"><span class="schedule-event__type">${escapeHtml(eventTone[event.type])}</span>${ended ? renderBadge('終了', 'info') : ''}<h2><a href="/shikaku/${escapeHtml(event.qualification.slug)}/${event.examYear}/">${escapeHtml(event.qualification.officialNameJa)}</a></h2></div><p class="schedule-event__value">${escapeHtml(formatFactDisplayValue({ factKey: event.factKey, displayValue: event.displayValue, normalizedValue: event.startValue }))}</p>${ended ? `<p class="meta">${escapeHtml(endedGuidance[event.type])}</p>` : ''}${dimensions ? `<div class="dimensions">${dimensions}</div>` : ''}<p class="meta">${event.examYear}年 / ${escapeHtml(event.label)} / 公式確認: ${escapeHtml(formatVerifiedAt(event.verifiedAt))} / ${source}</p>${eventIcs ? `<div class="schedule-event__actions">${eventIcs}</div>` : ''}</div></article>`;
   };
   const monthGroups: {
     key: string;
@@ -1696,12 +1730,22 @@ export function renderHomePage(
     )
     .join('');
   const today = tokyoToday();
+  // B5: the same (date, type, qualification) can appear once per level or
+  // session (e.g. bookkeeping 1/2/3級 on one exam day). The timeline does not
+  // render levels, so collapse duplicates before taking the first four.
+  const seenTimeline = new Set<string>();
   const upcoming = [...calendarEvents]
     .filter((event) => event.dateValue && event.dateValue >= today)
     .sort(
       (a, b) =>
         a.dateValue!.localeCompare(b.dateValue!) || a.sequence - b.sequence,
     )
+    .filter((event) => {
+      const key = `${event.dateValue}|${event.type}|${event.qualification.slug}`;
+      if (seenTimeline.has(key)) return false;
+      seenTimeline.add(key);
+      return true;
+    })
     .slice(0, 4);
   const scheduleState = upcoming.length
     ? `<ul class="home-timeline" aria-label="直近の試験日程">${upcoming

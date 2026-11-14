@@ -81,6 +81,7 @@ services:
       - '443:443'
     volumes:
       - ./caddy:/etc/caddy:ro
+      - ./caddy-logs:/var/log/caddy
       - caddy_data:/data
       - caddy_config:/config
     depends_on:

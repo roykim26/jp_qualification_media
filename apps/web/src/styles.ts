@@ -315,6 +315,7 @@ export const webStyles = String.raw`
 .fact { border-color: var(--color-border); }
 .schedule-event { border-left: 4px solid var(--color-primary); }
 .schedule-event time { font-size: 20px; }
+.schedule-event--ended { opacity: .8; border-left-color: var(--color-border); }
 .compare-choice:has(input:checked) { border-color: var(--color-primary); background: var(--color-primary-soft); }
 .compare-table thead th { color: var(--color-ink); }
 .history-table tbody tr:nth-child(even) th, .history-table tbody tr:nth-child(even) td { background: var(--color-bg-subtle); }
