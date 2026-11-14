@@ -17,5 +17,8 @@ shikakucheck.com {
 	handle /dd3d6c883de8475fb7f2d7639208d313.txt {
 		respond "dd3d6c883de8475fb7f2d7639208d313" 200
 	}
+	handle /b416920e453b400196646cfea16e885b.txt {
+		respond "b416920e453b400196646cfea16e885b" 200
+	}
 	reverse_proxy web:3000
 }
