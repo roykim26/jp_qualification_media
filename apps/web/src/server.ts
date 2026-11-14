@@ -1,6 +1,7 @@
 import { createServer, type ServerResponse } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import {
+  launchSlugs,
   renderComparePage,
   renderEditorialPage,
   renderErrorPage,
@@ -16,6 +17,7 @@ import {
   qualificationSitemapContent,
   type QualificationSection,
 } from './render.js';
+import { siteCss, siteCssPath } from './assets.js';
 import {
   editorialAboutPage,
   editorialAboutSlugs,
@@ -30,6 +32,9 @@ import {
   searchQualifications,
 } from '../../../packages/schema/src/qualifications.js';
 import { sitemapQualificationPaths } from './sitemap.js';
+import type { PublicFact } from '../../../packages/schema/src/index.js';
+
+const launchSlugSet = new Set<string>(launchSlugs);
 
 const port = Number(process.env.WEB_PORT ?? 3000);
 const apiBaseUrl = process.env.API_BASE_URL ?? 'http://127.0.0.1:4100';
@@ -129,28 +134,48 @@ async function proxyIcs(apiPath: string, res: ServerResponse) {
   res.end(body);
 }
 
-const STATIC_IMAGES = new Set([
-  'exam-information-workspace-hero.png',
-  'brand-mark.png',
-  'favicon-32.png',
-  'apple-touch-icon.png',
-  'og-brand.png',
-]);
+const STATIC_IMAGES: Record<string, string> = {
+  'exam-information-workspace-hero.png': 'image/png',
+  'hero-800.avif': 'image/avif',
+  'hero-1200.avif': 'image/avif',
+  'hero-1983.avif': 'image/avif',
+  'hero-800.webp': 'image/webp',
+  'hero-1200.webp': 'image/webp',
+  'hero-1983.webp': 'image/webp',
+  'brand-mark.png': 'image/png',
+  'favicon-32.png': 'image/png',
+  'apple-touch-icon.png': 'image/png',
+  'og-brand.png': 'image/png',
+};
 
 const server = createServer(async (req, res) => {
   try {
     const url = new URL(req.url ?? '/', 'http://127.0.0.1');
     const pathname = url.pathname;
-    const imageMatch = pathname.match(/^\/images\/([a-z0-9-]+\.png)$/);
-    if (imageMatch && STATIC_IMAGES.has(imageMatch[1])) {
+    const imageMatch = pathname.match(
+      /^\/images\/([a-z0-9-]+\.(?:png|webp|avif))$/,
+    );
+    const imageType = imageMatch ? STATIC_IMAGES[imageMatch[1]] : undefined;
+    if (imageMatch && imageType) {
       const image = await readFile(
         new URL(`../public/images/${imageMatch[1]}`, import.meta.url),
       );
       res.writeHead(200, {
-        'content-type': 'image/png',
+        'content-type': imageType,
         'cache-control': 'public, max-age=604800',
       });
       return res.end(image);
+    }
+    if (pathname.startsWith('/assets/') && pathname.endsWith('.css')) {
+      if (pathname !== siteCssPath) {
+        res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
+        return res.end('Not Found');
+      }
+      res.writeHead(200, {
+        'content-type': 'text/css; charset=utf-8',
+        'cache-control': 'public, max-age=31536000, immutable',
+      });
+      return res.end(siteCss);
     }
     const icsMatch = pathname.match(
       /^\/ics\/([^/]+)\/(\d{4})(?:\/([^/]+))?\.ics$/,
@@ -217,21 +242,14 @@ const server = createServer(async (req, res) => {
       const query = url.searchParams.get('q') ?? '';
       const searchableQualifications = searchQualifications(
         launchQualifications.filter((qualification) =>
-          [
-            'takken',
-            'gyoseishoshi',
-            'it-passport',
-            'fundamental-it-engineer',
-            'bookkeeping',
-            'fp',
-          ].includes(qualification.slug),
+          launchSlugSet.has(qualification.slug),
         ),
         query,
       );
       const directoryItems = await Promise.all(
         searchableQualifications.map(async (qualification) => {
           const view = await readQualification(qualification.slug);
-          return { ...qualification, status: view.status };
+          return { ...qualification, status: view.status, facts: view.facts };
         }),
       );
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
@@ -271,6 +289,10 @@ const server = createServer(async (req, res) => {
           views.filter(({ view }) =>
             qualificationSectionHasContent(view, 'pass-rate'),
           ),
+          {
+            sort: url.searchParams.get('sort'),
+            order: url.searchParams.get('order'),
+          },
         ),
       );
     }
@@ -370,10 +392,15 @@ const server = createServer(async (req, res) => {
     if (pathname === '/') {
       // The home page keeps its static entry points even when the API is
       // unavailable, so a data outage degrades to empty modules instead of 502.
-      const [calendarResult, updatesResult] = await Promise.allSettled([
-        readCalendar(new URLSearchParams()),
-        readUpdates(new URLSearchParams(), 1),
-      ]);
+      const [calendarResult, updatesResult, ...factsResults] =
+        await Promise.allSettled([
+          readCalendar(new URLSearchParams()),
+          readUpdates(new URLSearchParams(), 1),
+          ...launchSlugs.map(async (slug) => {
+            const view = await readQualification(slug);
+            return { slug, facts: (view.facts ?? []) as PublicFact[] };
+          }),
+        ]);
       const calendarEvents =
         calendarResult.status === 'fulfilled'
           ? (calendarResult.value.data ?? [])
@@ -382,8 +409,14 @@ const server = createServer(async (req, res) => {
         updatesResult.status === 'fulfilled'
           ? (updatesResult.value.data ?? [])
           : [];
+      const factsBySlug: Record<string, PublicFact[]> = {};
+      for (const result of factsResults) {
+        if (result.status === 'fulfilled') {
+          factsBySlug[result.value.slug] = result.value.facts;
+        }
+      }
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
-      return res.end(renderHomePage(calendarEvents, updateEvents));
+      return res.end(renderHomePage(calendarEvents, updateEvents, factsBySlug));
     }
     res.writeHead(404, { 'content-type': 'text/html; charset=utf-8' });
     return res.end(renderNotFoundPage());

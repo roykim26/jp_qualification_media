@@ -21,6 +21,8 @@ export type EditorialPage = {
   title: string;
   description: string;
   eyebrow: string;
+  /** ガイド一覧カードに表示する想定読者。 */
+  audience?: string;
   sections: readonly EditorialSection[];
   related: readonly { href: string; label: string }[];
   compareQuery?: string;
@@ -158,6 +160,7 @@ const guidePages: Record<string, EditorialPage> = {
     description:
       '資格試験の公式情報を確認するときに、年度、出典、更新状況を見分けるためのガイドです。',
     eyebrow: '受験準備ガイド',
+    audience: '初めて公式情報を確認する人',
     sections: [
       {
         heading: 'まず年度を確認する',
@@ -196,6 +199,7 @@ const guidePages: Record<string, EditorialPage> = {
     description:
       '申込みから試験、合格発表までを公式情報に基づいて整理するためのガイドです。',
     eyebrow: '受験準備ガイド',
+    audience: '年間の学習・申込計画を立てる人',
     sections: [
       {
         heading: '予定は公式の日付から作る',
@@ -235,6 +239,7 @@ const guidePages: Record<string, EditorialPage> = {
     description:
       '資格試験へ申込む前に、公式案内で確認したい項目を整理したチェックリストです。',
     eyebrow: '受験準備ガイド',
+    audience: '申込み直前の確認をしたい人',
     sections: [
       {
         heading: '対象の試験を特定する',
@@ -272,6 +277,7 @@ const guidePages: Record<string, EditorialPage> = {
     description:
       '資格試験の合格率を、年度・母数・公式統計の口径とあわせて読むためのガイドです。',
     eyebrow: 'データの見方',
+    audience: '合格率データを比較する人',
     sections: [
       {
         heading: '年度と集計の対象をそろえる',

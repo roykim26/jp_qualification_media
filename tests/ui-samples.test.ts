@@ -26,11 +26,12 @@ describe('stage 4 representative UI samples', () => {
     expect(html).not.toContain('<span class="tool-card__link">');
     expect(html).toContain('href="/shikaku/gyoseishoshi/">行政書士</a>');
     expect(html).toContain(
-      'href="/shikaku/fundamental-it-engineer/">基本情報技術者</a>',
+      'href="/shikaku/fundamental-it-engineer/">基本情報</a>',
     );
+    expect(html).toContain('href="/shikaku/fp/">FP</a>');
   });
 
-  it('renders the directory sample with all current page destinations', () => {
+  it('renders the directory sample with one entry point per card', () => {
     const items = launchQualifications.map((qualification, index) => ({
       ...qualification,
       status:
@@ -39,10 +40,11 @@ describe('stage 4 representative UI samples', () => {
     const html = renderQualificationDirectory(items);
     expect(html).toContain('directory-overview');
     expect(html).toContain('公式確認済み');
-    expect(html).toContain('/shikaku/takken/2026/');
-    expect(html).toContain('/shikaku/takken/application/');
-    expect(html).toContain('/shikaku/takken/exam-content/');
-    expect(html).toContain('/shikaku/takken/pass-rate/');
+    expect(html).toContain('href="/shikaku/takken/"');
+    expect(html).not.toContain('/shikaku/takken/2026/');
+    expect(html).not.toContain('/shikaku/takken/application/');
+    expect(html).not.toContain('/shikaku/takken/exam-content/');
+    expect(html).not.toContain('/shikaku/takken/pass-rate/');
   });
 
   it('renders the FP multidimensional stress sample through production UI', () => {
@@ -53,7 +55,7 @@ describe('stage 4 representative UI samples', () => {
     expect(html).toContain('実技');
     expect(html).toContain('CBT');
     expect(html).toContain('detail-sidebar');
-    expect(html).toContain('適用年度: 2026年');
+    expect(html).toContain('2026年度・');
     expect(html).not.toContain('undefined');
   });
 

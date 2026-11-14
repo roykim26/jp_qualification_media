@@ -1,10 +1,7 @@
-import {
-  escapeHtml,
-  renderIcon,
-  uiStyles,
-} from '../../../packages/ui/src/index.js';
+import { escapeHtml, renderIcon } from '../../../packages/ui/src/index.js';
+import { criticalCss, siteCssPath } from './assets.js';
 import { unofficialNotice } from './editorial.js';
-import { webStyles } from './styles.js';
+import { heroImagePreload } from './hero-image.js';
 
 export type PublicNavKey =
   | 'home'
@@ -30,6 +27,7 @@ export type DocumentInput = {
   description?: string;
   canonicalPath?: string;
   noindex?: boolean;
+  heroPreload?: boolean;
 };
 
 function canonicalHref(path: string): string {
@@ -44,7 +42,7 @@ function canonicalHref(path: string): string {
   }
 }
 
-const siteName = '資格試験の公式情報';
+const siteName = 'シカクチェック';
 
 function searchConsoleVerification(): string {
   const token = process.env.GOOGLE_SITE_VERIFICATION?.trim();
@@ -129,6 +127,15 @@ const publicNav = [
   { key: 'updates' as const, label: '更新情報', href: '/updates/' },
 ];
 
+const secondaryNav = [
+  { label: '更新情報', href: '/updates/' },
+  { label: '運営者情報', href: '/about/operator/' },
+  { label: '情報源について', href: '/about/sources/' },
+  { label: '編集方針・AI方針', href: '/about/editorial-policy/' },
+  { label: 'お問い合わせ', href: '/about/contact/' },
+  { label: 'プライバシーポリシー', href: '/about/privacy/' },
+];
+
 function renderNavItem(
   item: (typeof publicNav)[number],
   currentNav: PublicNavKey,
@@ -141,7 +148,7 @@ function renderHeader(currentNav: PublicNavKey): string {
   const links = publicNav
     .map((item) => renderNavItem(item, currentNav))
     .join('');
-  return `<header class="site-header"><div class="container site-header__inner"><a class="brand" href="/"${currentNav === 'home' ? ' aria-current="page"' : ''}><img class="brand__mark" src="/images/brand-mark.png" alt="" width="40" height="40"><span class="brand__text">資格試験の公式情報<small>公式発表を、探しやすく。</small></span></a><nav class="desktop-nav" aria-label="メインナビゲーション">${links}<a class="nav-link nav-link--search" href="/shikaku/" aria-label="資格を検索">${renderIcon('search')}<span>検索</span></a></nav><a class="mobile-search" href="/shikaku/" aria-label="資格を検索">${renderIcon('search')}</a><details class="mobile-menu"><summary aria-label="メニューを開く">${renderIcon('menu')}</summary><nav class="mobile-menu__panel" aria-label="モバイルメニュー">${links}</nav></details></div></header>`;
+  return `<header class="site-header"><div class="container site-header__inner"><a class="brand" href="/"${currentNav === 'home' ? ' aria-current="page"' : ''}><img class="brand__mark" src="/images/brand-mark.png" alt="" width="40" height="40"><span class="brand__text"><span class="brand__name">${escapeHtml(siteName)}<span class="brand__badge">非公式</span></span><small>公式情報を整理した個人運営サイト</small></span></a><nav class="desktop-nav" aria-label="メインナビゲーション">${links}</nav><a class="mobile-search" href="/shikaku/" aria-label="資格を検索">${renderIcon('search')}</a></div></header>`;
 }
 
 function renderBreadcrumbs(items: BreadcrumbItem[]): string {
@@ -158,7 +165,7 @@ function renderBreadcrumbs(items: BreadcrumbItem[]): string {
 }
 
 function renderFooter(): string {
-  return `<footer class="site-footer"><div class="container"><div class="footer-brand"><img src="/images/brand-mark.png" alt="" width="40" height="40"><span class="footer-brand__text">${escapeHtml(siteName)}<small>公式発表を、探しやすく。</small></span></div><div class="footer-grid"><section class="footer-group"><h2>資格情報</h2><ul><li><a href="/shikaku/">資格を探す</a></li><li><a href="/schedule/">試験日程</a></li><li><a href="/guide/">資格試験ガイド</a></li></ul></section><section class="footer-group"><h2>データツール</h2><ul><li><a href="/compare/">資格比較</a></li><li><a href="/pass-rate/">合格率データ</a></li></ul></section><section class="footer-group"><h2>運営・方針</h2><ul><li><a href="/about/operator/">運営者情報</a></li><li><a href="/about/sources/">情報源について</a></li><li><a href="/about/editorial-policy/">編集方針・AI方針</a></li><li><a href="/about/ai-policy/">AI利用方針</a></li></ul></section><section class="footer-group"><h2>法務・連絡</h2><ul><li><a href="/about/privacy/">プライバシーポリシー</a></li><li><a href="/about/terms/">利用規約</a></li><li><a href="/about/advertising-policy/">広告・PR方針</a></li><li><a href="/about/contact/">お問い合わせ</a></li><li><a href="/about/corrections/">訂正のご連絡</a></li><li><a href="/updates/">更新情報</a></li></ul></section></div><p class="footer-note">動的事実は、承認済みで公式スナップショットに紐づく内容のみ表示します。日付、費用、制度情報は試験実施機関の最新発表をご確認ください。</p><p class="footer-note footer-note--unofficial">${escapeHtml(unofficialNotice)}</p></div></footer>`;
+  return `<footer class="site-footer"><div class="container"><div class="footer-brand"><img src="/images/brand-mark.png" alt="" width="40" height="40"><span class="footer-brand__text"><span class="brand__name">${escapeHtml(siteName)}<span class="brand__badge">非公式・個人運営</span></span><small>公式情報を整理した非公式サイト</small></span></div><div class="footer-grid"><section class="footer-group"><h2>資格情報</h2><ul><li><a href="/shikaku/">資格を探す</a></li><li><a href="/schedule/">試験日程</a></li><li><a href="/guide/">資格試験ガイド</a></li></ul></section><section class="footer-group"><h2>データツール</h2><ul><li><a href="/compare/">資格比較</a></li><li><a href="/pass-rate/">合格率データ</a></li></ul></section><details class="footer-group footer-group--collapsible" open><summary><span>運営・法務</span></summary><div class="footer-group__columns"><section><h2>運営・方針</h2><ul><li><a href="/about/operator/">運営者情報</a></li><li><a href="/about/sources/">情報源について</a></li><li><a href="/about/editorial-policy/">編集方針・AI方針</a></li><li><a href="/about/ai-policy/">AI利用方針</a></li></ul></section><section><h2>法務・連絡</h2><ul><li><a href="/about/privacy/">プライバシーポリシー</a></li><li><a href="/about/terms/">利用規約</a></li><li><a href="/about/advertising-policy/">広告・PR方針</a></li><li><a href="/about/contact/">お問い合わせ</a></li><li><a href="/about/corrections/">訂正のご連絡</a></li><li><a href="/updates/">更新情報</a></li></ul></section></div></details></div><p class="footer-note">動的事実は、承認済みで公式スナップショットに紐づく内容のみ表示します。日付、費用、制度情報は試験実施機関の最新発表をご確認ください。</p><p class="footer-note footer-note--unofficial">${escapeHtml(unofficialNotice)}</p></div></footer>`;
 }
 
 function renderMobileBottomNav(currentNav: PublicNavKey): string {
@@ -182,26 +189,42 @@ function renderMobileBottomNav(currentNav: PublicNavKey): string {
       icon: 'compare' as const,
     },
     {
-      key: 'updates' as const,
-      label: '更新',
-      href: '/updates/',
-      icon: 'update' as const,
+      key: 'guide' as const,
+      label: 'ガイド',
+      href: '/guide/',
+      icon: 'document' as const,
     },
   ];
   const links = items
     .map((item) => {
-      const content = `${renderIcon(item.icon)}<span>${item.label}</span>`;
-      if (!('href' in item))
-        return `<span class="is-disabled" aria-disabled="true">${content}</span>`;
       // The home page's primary task is qualification discovery, so its
       // mobile navigation state belongs to the discovery destination.
       const isCurrent =
         item.key === currentNav ||
         (currentNav === 'home' && item.key === 'qualifications');
-      return `<a href="${item.href}"${isCurrent ? ' aria-current="page"' : ''}>${content}</a>`;
+      return `<a href="${item.href}"${isCurrent ? ' aria-current="page"' : ''}>${renderIcon(item.icon)}<span>${item.label}</span></a>`;
     })
     .join('');
-  return `<nav class="mobile-bottom-nav" aria-label="モバイル主要ナビゲーション">${links}</nav>`;
+  const menuButton = `<button type="button" data-mobile-menu-button aria-expanded="false" aria-controls="mobile-menu-panel" aria-label="メニューを開く">${renderIcon('menu')}<span>メニュー</span></button>`;
+  return `<nav class="mobile-bottom-nav" aria-label="モバイル主要ナビゲーション">${links}${menuButton}</nav>`;
+}
+
+function renderMobileMenu(): string {
+  const links = secondaryNav
+    .map(
+      (item) => `<li><a href="${item.href}">${escapeHtml(item.label)}</a></li>`,
+    )
+    .join('');
+  return `<div class="mobile-menu-backdrop" data-mobile-menu-backdrop hidden></div><div class="mobile-menu-panel" id="mobile-menu-panel" role="dialog" aria-modal="true" aria-labelledby="mobile-menu-title" hidden><div class="mobile-menu-panel__head"><h2 id="mobile-menu-title">メニュー</h2><button type="button" class="mobile-menu-panel__close" data-mobile-menu-close aria-label="メニューを閉じる">${renderIcon('close')}</button></div><nav aria-label="補助メニュー"><ul>${links}</ul></nav></div><script>(function(){var button=document.querySelector('[data-mobile-menu-button]');if(!button)return;var panel=document.getElementById('mobile-menu-panel');var backdrop=document.querySelector('[data-mobile-menu-backdrop]');if(!panel||!backdrop)return;var close=panel.querySelector('[data-mobile-menu-close]');var lastFocus=null;function setOpen(open){if(open){lastFocus=document.activeElement;panel.hidden=false;backdrop.hidden=false;button.setAttribute('aria-expanded','true');button.setAttribute('aria-label','メニューを閉じる');document.body.classList.add('has-menu-open');var first=panel.querySelector('a');if(first)first.focus();}else{panel.hidden=true;backdrop.hidden=true;button.setAttribute('aria-expanded','false');button.setAttribute('aria-label','メニューを開く');document.body.classList.remove('has-menu-open');if(lastFocus&&lastFocus!==document.body)lastFocus.focus();else button.focus();}}button.addEventListener('click',function(){setOpen(panel.hidden);});backdrop.addEventListener('click',function(){setOpen(false);});if(close)close.addEventListener('click',function(){setOpen(false);});document.addEventListener('keydown',function(event){if(panel.hidden)return;if(event.key==='Escape'){setOpen(false);return;}if(event.key!=='Tab')return;var focusables=panel.querySelectorAll('a[href],button:not([disabled])');if(!focusables.length)return;var first=focusables[0],last=focusables[focusables.length-1];if(!panel.contains(document.activeElement)){event.preventDefault();first.focus();return;}if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}});})();</script>`;
+}
+
+/**
+ * Printing cannot reveal a closed <details> element through CSS alone, so the
+ * collapsed source and status blocks are opened for the print preview and
+ * closed again afterwards.
+ */
+function printDetailsScript(): string {
+  return `<script>(function(){var opened=[];function expand(){var list=document.querySelectorAll('details:not([open])');for(var i=0;i<list.length;i++){list[i].open=true;opened.push(list[i]);}}function restore(){for(var i=0;i<opened.length;i++)opened[i].open=false;opened=[];}window.addEventListener('beforeprint',expand);window.addEventListener('afterprint',restore);if(window.matchMedia){var media=window.matchMedia('print');var onChange=function(event){if(event.matches)expand();else restore();};if(media.addEventListener)media.addEventListener('change',onChange);}})();</script>`;
 }
 
 export function renderPublicDocument(input: DocumentInput): string {
@@ -224,11 +247,15 @@ export function renderPublicDocument(input: DocumentInput): string {
     : renderStructuredData(input, pageUrl);
   const verification = searchConsoleVerification();
   const analytics = analyticsSnippet();
+  const heroPreload = input.heroPreload ? heroImagePreload : '';
   const breadcrumbs = input.breadcrumbs?.length
     ? `<div class="container">${renderBreadcrumbs(input.breadcrumbs)}</div>`
     : '';
+  const printDetails = input.body.includes('<details')
+    ? printDetailsScript()
+    : '';
   return `<!doctype html>
-<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32.png"><link rel="apple-touch-icon" href="/images/apple-touch-icon.png">${description}${canonical}${robots}${openGraph}${structuredData}${verification}<title>${escapeHtml(input.title)}</title><style>${uiStyles}${webStyles}</style>${analytics}</head><body><a class="skip-link" href="#main-content">本文へ移動</a>${renderHeader(currentNav)}${input.subnav ?? ''}<main id="main-content" class="page-main">${breadcrumbs}${input.body}</main>${renderFooter()}${renderMobileBottomNav(currentNav)}</body></html>`;
+<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32.png"><link rel="apple-touch-icon" href="/images/apple-touch-icon.png">${description}${canonical}${robots}${openGraph}${structuredData}${verification}<title>${escapeHtml(input.title)}</title><style>${criticalCss}</style>${heroPreload}<link rel="stylesheet" href="${siteCssPath}" media="print" onload="this.media='all'"><noscript><link rel="stylesheet" href="${siteCssPath}"></noscript>${analytics}</head><body><a class="skip-link" href="#main-content">本文へ移動</a>${renderHeader(currentNav)}${input.subnav ?? ''}<main id="main-content" class="page-main">${breadcrumbs}${input.body}</main>${renderFooter()}${renderMobileBottomNav(currentNav)}${renderMobileMenu()}${printDetails}</body></html>`;
 }
 
 export function renderQualificationSubnav(

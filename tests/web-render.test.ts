@@ -348,6 +348,7 @@ describe('shared qualification page rendering', () => {
     expect(html).toContain('ITパスポート');
     expect(html).not.toContain('行政書士');
     expect(html).toContain('/shikaku/takken/');
+    expect(html).toContain('class="meta" aria-live="polite">2件');
   });
 
   it('renders the qualification search form, query state, and empty state', () => {
@@ -356,6 +357,58 @@ describe('shared qualification page rendering', () => {
     expect(html).toContain('value="not-found"');
     expect(html).toContain('一致する資格が見つかりません');
     expect(html).toContain('/shikaku/');
+    expect(html).toContain('filter-chip');
+    expect(html).not.toContain('<section class="directory-overview"');
+    expect(html).not.toContain('該当なし');
+    expect(html).not.toContain('>0件<');
+  });
+
+  it('gives each directory card one entry point and key facts', () => {
+    const facts = [
+      {
+        factKey: 'exam_date',
+        valueType: 'datetime' as const,
+        normalizedValue: '2999-04-01T09:30:00+09:00',
+        displayValue: '2999年4月1日(木)9:30',
+      },
+      {
+        factKey: 'fee',
+        valueType: 'money' as const,
+        normalizedValue: '8200',
+        displayValue: '8200円',
+      },
+      {
+        factKey: 'pass_rate',
+        valueType: 'decimal' as const,
+        normalizedValue: '51.2',
+        displayValue: '51.2%',
+      },
+    ].map((fact) => ({
+      qualificationSlug: 'it-passport' as const,
+      examLevelId: null,
+      examYear: 2026,
+      status: 'approved' as const,
+      riskLevel: 'medium' as const,
+      sourceId: 'source:it-passport:jitec-home',
+      sourceSnapshotId: 'snapshot:official',
+      synthetic: false,
+      verifiedAt: '2026-10-13T00:00:00.000Z',
+      ...fact,
+    }));
+    const html = renderQualificationDirectory([
+      { ...itPassport, status: 'verified' as const, facts },
+    ]);
+    expect(html).toContain('directory-card__facts');
+    expect(html).toContain('次回試験日');
+    expect(html).toContain('2999年4月1日');
+    expect(html).toContain('受験料');
+    expect(html).toContain('8200円');
+    expect(html).toContain('合格率');
+    expect(html).toContain('51.2%');
+    expect(html).toContain('詳細を見る');
+    expect(html.match(/href="\/shikaku\/it-passport\/"/g)).toHaveLength(1);
+    expect(html).not.toContain('/shikaku/it-passport/application/');
+    expect(html).not.toContain('/shikaku/it-passport/pass-rate/');
   });
 
   it('renders filtered directory search results', () => {
@@ -373,6 +426,11 @@ describe('shared qualification page rendering', () => {
 
   it('renders the public schedule page with filters and official events', () => {
     const takken = launchQualifications.find((item) => item.slug === 'takken')!;
+    const dateValue = (() => {
+      const date = new Date();
+      date.setUTCDate(date.getUTCDate() + 20);
+      return date.toISOString().slice(0, 10);
+    })();
     const html = renderSchedulePage(
       [
         {
@@ -381,9 +439,9 @@ describe('shared qualification page rendering', () => {
           label: '試験日',
           qualification: takken,
           examYear: 2026,
-          displayValue: '2026年10月18日',
-          dateValue: '2026-10-18',
-          startValue: '2026-10-18',
+          displayValue: dateValue,
+          dateValue,
+          startValue: dateValue,
           factKey: 'exam_date',
           verifiedAt: '2026-08-12T00:00:00.000Z',
           sourceUrl: 'https://www.retio.or.jp/exam/',
@@ -395,10 +453,13 @@ describe('shared qualification page rendering', () => {
     expect(html).toContain('試験日程');
     expect(html).toContain('selected>2026年');
     expect(html).toContain('selected>宅地建物取引士');
-    expect(html).toContain('2026年10月18日');
+    expect(html).toContain(`datetime="${dateValue}"`);
     expect(html).toContain('公式ソース');
     expect(html).toContain('/ics/takken/2026.ics');
     expect(html).toContain('/ics/takken/2026/takken%3A2026%3Aexam_date.ics');
+    expect(html).toContain(
+      '<p class="meta" aria-live="polite">絞り込み後 1件</p>',
+    );
   });
 
   it('renders the schedule empty state without invented dates', () => {
@@ -453,6 +514,45 @@ describe('shared qualification page rendering', () => {
     expect(html).toContain('selected>申込締切');
     expect(html).toContain('絞り込み後 1件');
     expect(html).toContain('<meta name="robots" content="noindex,follow">');
+  });
+
+  it('shows removable chips for active schedule filters', () => {
+    const takken = launchQualifications.find((item) => item.slug === 'takken')!;
+    const today = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Tokyo',
+    }).format(new Date());
+    const dateValue = new Date(`${today}T00:00:00Z`);
+    dateValue.setUTCDate(dateValue.getUTCDate() + 20);
+    const event = {
+      id: 'takken:2026:exam_date',
+      type: 'exam_date' as const,
+      label: '試験日',
+      qualification: takken,
+      examYear: 2026,
+      displayValue: dateValue.toISOString().slice(0, 10),
+      dateValue: dateValue.toISOString().slice(0, 10),
+      startValue: null,
+      factKey: 'exam_date',
+      verifiedAt: '2026-01-01T00:00:00.000Z',
+      sequence: 0,
+    };
+    const filteredHtml = renderSchedulePage([event], {
+      year: '2026',
+      qualification: 'takken',
+      type: 'exam_date',
+      range: 'all',
+    });
+    expect(filteredHtml).toContain('filter-chips');
+    expect(filteredHtml).toContain('年度: 2026年');
+    expect(filteredHtml).toContain('資格: 宅地建物取引士');
+    expect(filteredHtml).toContain('種類: 試験日');
+    expect(filteredHtml).toContain('期間: すべての期間');
+    expect(filteredHtml).toContain('すべてクリア');
+    expect(filteredHtml).toContain('aria-label="年度の条件「2026年」を解除"');
+    expect(filteredHtml).toContain(
+      'href="/schedule/?qualification=takken&amp;type=exam_date&amp;range=all"',
+    );
+    expect(renderSchedulePage([event])).not.toContain('すべてクリア');
   });
 
   it('limits schedule events to the next 30 days', () => {
@@ -528,6 +628,142 @@ describe('shared qualification page rendering', () => {
     );
     expect(html).toContain(`href="/ics/month/${first.slice(0, 7)}.ics"`);
     expect(html).toContain(`${label(first)}のICSを追加`);
+  });
+
+  it('defaults to a 90-day window and can widen to all upcoming events', () => {
+    const takken = launchQualifications.find((item) => item.slug === 'takken')!;
+    const today = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Tokyo',
+    }).format(new Date());
+    const shift = (days: number): string => {
+      const date = new Date(`${today}T00:00:00Z`);
+      date.setUTCDate(date.getUTCDate() + days);
+      return date.toISOString().slice(0, 10);
+    };
+    const event = (id: string, dateValue: string) => ({
+      id,
+      type: 'exam_date' as const,
+      label: '試験日',
+      qualification: takken,
+      examYear: 2026,
+      displayValue: dateValue,
+      dateValue,
+      startValue: null,
+      factKey: 'exam_date',
+      verifiedAt: '2026-01-01T00:00:00.000Z',
+      sequence: 0,
+    });
+    const near = shift(30);
+    const far = shift(200);
+    const html = renderSchedulePage([
+      event('event:near', near),
+      event('event:far', far),
+    ]);
+    expect(html).toContain('selected>今後90日');
+    expect(html).toContain('直近90日の公式日程');
+    expect(html).toContain(near);
+    expect(html).not.toContain(far);
+    const widened = renderSchedulePage(
+      [event('event:near', near), event('event:far', far)],
+      { range: 'all' },
+    );
+    expect(widened).toContain('selected>すべての期間');
+    expect(widened).toContain(far);
+  });
+
+  it('merges duplicate qualification, type and date events into one card', () => {
+    const takken = launchQualifications.find((item) => item.slug === 'takken')!;
+    const today = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Tokyo',
+    }).format(new Date());
+    const date = new Date(`${today}T00:00:00Z`);
+    date.setUTCDate(date.getUTCDate() + 10);
+    const dateValue = date.toISOString().slice(0, 10);
+    const base = {
+      type: 'exam_date' as const,
+      label: '試験日',
+      qualification: takken,
+      examYear: 2026,
+      displayValue: dateValue,
+      dateValue,
+      startValue: null,
+      factKey: 'exam_date',
+      verifiedAt: '2026-01-01T00:00:00.000Z',
+      sequence: 0,
+    };
+    const html = renderSchedulePage([
+      { ...base, id: 'event:2', examLevelId: 'bookkeeping:2' },
+      { ...base, id: 'event:3', examLevelId: 'bookkeeping:3' },
+      { ...base, id: 'event:2', examLevelId: 'bookkeeping:2' },
+    ]);
+    expect(html.match(/<article class="schedule-event/g)?.length).toBe(1);
+    expect(html).toContain('2級');
+    expect(html).toContain('3級');
+  });
+
+  it('folds long date lists behind a details control', () => {
+    const takken = launchQualifications.find((item) => item.slug === 'takken')!;
+    const today = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Tokyo',
+    }).format(new Date());
+    const shift = (days: number): string => {
+      const date = new Date(`${today}T00:00:00Z`);
+      date.setUTCDate(date.getUTCDate() + days);
+      return date.toISOString().slice(0, 10);
+    };
+    const dates = [shift(10), shift(40), shift(70)];
+    const html = renderSchedulePage([
+      {
+        id: 'event:multi',
+        type: 'exam_date',
+        label: '試験日',
+        qualification: takken,
+        examYear: 2026,
+        displayValue: dates.join(','),
+        dateValue: dates[0],
+        startValue: null,
+        factKey: 'exam_date',
+        verifiedAt: '2026-01-01T00:00:00.000Z',
+        sequence: 0,
+      },
+    ]);
+    expect(html).toContain('すべての日付を見る');
+    expect(html).toContain('ほか2件');
+    for (const value of dates) expect(html).toContain(value);
+  });
+
+  it('caps each month at ten cards and folds the remainder', () => {
+    const takken = launchQualifications.find((item) => item.slug === 'takken')!;
+    const today = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Tokyo',
+    }).format(new Date());
+    const baseDate = new Date(`${today}T00:00:00Z`);
+    const events = Array.from({ length: 12 }, (_, index) => {
+      const date = new Date(
+        Date.UTC(
+          baseDate.getUTCFullYear(),
+          baseDate.getUTCMonth() + 1,
+          index + 1,
+        ),
+      );
+      const dateValue = date.toISOString().slice(0, 10);
+      return {
+        id: `event:${index}`,
+        type: 'exam_date' as const,
+        label: '試験日',
+        qualification: takken,
+        examYear: 2026,
+        displayValue: dateValue,
+        dateValue,
+        startValue: null,
+        factKey: 'exam_date',
+        verifiedAt: '2026-01-01T00:00:00.000Z',
+        sequence: index,
+      };
+    });
+    const html = renderSchedulePage(events);
+    expect(html.match(/<article class="schedule-event/g)?.length).toBe(10);
+    expect(html).toContain('残り2件を表示');
   });
 
   it('carries schedule filters into the month ICS link', () => {
@@ -643,6 +879,29 @@ describe('shared qualification page rendering', () => {
     expect(html).toContain('筆記試験');
     expect(html).toContain('掲載情報なし');
     expect(html).toContain('/shikaku/takken/');
+    expect(html).toContain(
+      'class="compare-status" role="status" aria-live="polite"',
+    );
+    expect(html).toContain(
+      '<caption class="visually-hidden">選択した資格の比較表</caption>',
+    );
+  });
+
+  it('renders removable selection chips with one shared limit message', () => {
+    const takken = launchQualifications.find((item) => item.slug === 'takken')!;
+    const itPassport = launchQualifications.find(
+      (item) => item.slug === 'it-passport',
+    )!;
+    const html = renderComparePage(
+      { qualifications: [takken, itPassport], rows: [] },
+      launchQualifications,
+    );
+    expect(html).toContain('class="compare-chips"');
+    expect(html).toContain('href="/compare/?qualifications=it-passport"');
+    expect(html).toContain('href="/compare/?qualifications=takken"');
+    expect(html).toContain('を比較から外す');
+    expect(html).toContain('2〜3件を選択してください（最大3件）');
+    expect(html).not.toContain('2件以上');
   });
 
   it('renders the compare empty state until two qualifications are selected', () => {
@@ -650,7 +909,7 @@ describe('shared qualification page rendering', () => {
       { qualifications: [], rows: [] },
       launchQualifications,
     );
-    expect(html).toContain('比較する資格を2件以上選択してください');
+    expect(html).toContain('比較する資格を2〜3件選択してください');
     expect(html).not.toContain('undefined');
   });
 
@@ -679,6 +938,10 @@ describe('shared qualification page rendering', () => {
     expect(html).toContain('変更後');
     expect(html).toContain('2026年10月18日');
     expect(html).toContain('公式ソース');
+    expect(html).toContain(
+      '<table class="update-changes"><caption class="visually-hidden">',
+    );
+    expect(html).toContain('の変更前後</caption>');
   });
 
   it('renders the updates empty state without pretending a page changed', () => {
@@ -758,6 +1021,8 @@ describe('shared qualification page rendering', () => {
   it('renders a 404 page with home, search, and qualification entry points', () => {
     const html = renderNotFoundPage();
     expect(html).toContain('ページが見つかりません');
+    expect(html).toContain('<span class="not-found__code">404</span>');
+    expect(html).not.toContain('<p class="eyebrow">404</p>');
     expect(html).toContain('href="/"');
     expect(html).toContain('href="/shikaku/"');
     expect(html).toContain(
@@ -766,6 +1031,18 @@ describe('shared qualification page rendering', () => {
     expect(html).toContain('name="q"');
     expect(html).toContain('/shikaku/takken/');
     expect(html).toContain('/shikaku/it-passport/');
+    expect(html).toContain(
+      '<nav class="popular-pages" aria-label="よく見られるページ">',
+    );
+    for (const href of [
+      '/schedule/',
+      '/compare/',
+      '/pass-rate/',
+      '/updates/',
+      '/guide/',
+    ]) {
+      expect(html).toContain(`href="${href}"`);
+    }
     expect(html).toContain('<meta name="robots" content="noindex,follow">');
   });
 
@@ -806,6 +1083,52 @@ describe('shared qualification page rendering', () => {
     expect(html).toContain('<details class="updates-group" open>');
     expect(html).toContain('更新情報');
     expect(html).not.toContain('undefined');
+  });
+
+  it('merges same-day changes into one card and never prints internal keys', () => {
+    const takken = launchQualifications.find((item) => item.slug === 'takken')!;
+    const event = (
+      id: string,
+      factKey: string,
+      factLabel: string,
+      previousValue: string | null,
+      newValue: string,
+    ): PublicUpdateEvent => ({
+      id,
+      eventType: 'statistics_update',
+      eventLabel: '統計データの変更',
+      qualification: takken,
+      factKey,
+      factLabel,
+      examYear: 2025,
+      previousValue,
+      newValue,
+      affectedPages: [],
+      sourceUrl: 'https://www.example.go.jp/stat',
+      createdAt: '2026-08-14T00:00:00.000Z',
+      verifiedAt: '2026-08-13T00:00:00.000Z',
+    });
+    const html = renderUpdatesPage([
+      event('u1', 'pass_rate', '合格率', '40.1%', '40.8%'),
+      event('u2', 'applicants', '申込者数', '100', '120'),
+      event('u3', 'passed', '合格者数', '40', '49'),
+      event(
+        'u4',
+        'qualification:fundamental-it-engineer',
+        'qualification:fundamental-it-engineer',
+        'qualification:fundamental-it-engineer',
+        'fact:internal-key',
+      ),
+    ]);
+    expect((html.match(/<article class="update-card"/g) ?? []).length).toBe(1);
+    expect(html).toContain('統計データを更新（4項目）');
+    expect(html).toContain('<th scope="row">合格率</th>');
+    expect(html).toContain('40.1%');
+    expect(html).toContain('40.8%');
+    expect(html).toContain('公式情報');
+    expect(html).not.toContain('qualification:fundamental');
+    expect(html).not.toContain('fact:internal');
+    expect(html).not.toContain('T00:00');
   });
 
   it('renders a static comparison guide without inventing dynamic facts', () => {
@@ -852,6 +1175,11 @@ describe('shared qualification page rendering', () => {
     expect(html).toContain('資格試験ガイド');
     expect(html).toContain('/guide/official-information-check/');
     expect(html).toContain('/guide/how-to-read-pass-rates/');
+    expect(html).toContain('guide-card__meta');
+    expect(html).toContain('読了目安');
+    expect(html).toContain('対象：');
+    expect(html).toContain('関連する資格');
+    expect(html).toContain('href="/pass-rate/"');
     expect(html).not.toContain('undefined');
   });
 
@@ -896,10 +1224,10 @@ describe('shared qualification page rendering', () => {
     try {
       const html = renderGuideIndex([]);
       expect(html).toContain(
-        '<meta property="og:title" content="資格試験ガイド | 公式情報">',
+        '<meta property="og:title" content="資格試験ガイド｜情報の調べ方と申込みの確認手順｜シカクチェック">',
       );
       expect(html).toContain(
-        '<meta property="og:site_name" content="資格試験の公式情報">',
+        '<meta property="og:site_name" content="シカクチェック">',
       );
       expect(html).toContain(
         '<meta property="og:url" content="https://shikakucheck.com/guide/">',
@@ -1101,8 +1429,8 @@ describe('bookkeeping history statistics tables', () => {
     );
     expect(previous).not.toContain('data-fact-key="passing_standard"');
     expect(previous).toContain('data-fact-key="applicants"');
-    expect(previous).toContain('適用年度: 2025年');
-    expect(previous).not.toContain('適用年度: 2026年');
+    expect(previous).toContain('2025年度・');
+    expect(previous).not.toContain('2026年度・');
   });
 
   it('marks the year-filtered pass-rate page noindex but keeps the base page indexable', () => {
@@ -1135,6 +1463,127 @@ describe('bookkeeping history statistics tables', () => {
       8,
     );
     expect(overview).not.toContain('30.7%');
+  });
+
+  it('summarises key facts and groups the overview by task', () => {
+    const overview = renderQualificationSectionPage(view, 'overview');
+    expect(overview).toContain('要点サマリー');
+    expect(overview).toContain('>受験料<');
+    expect(overview).toContain('>合格率<');
+    expect(overview).toContain('4,800円');
+    for (const heading of ['試験内容', '費用', '統計']) {
+      expect(overview).toContain(`>${heading}</h2>`);
+    }
+    expect((overview.match(/<article class="card fact"/g) ?? []).length).toBe(
+      8,
+    );
+  });
+
+  it('lifts upcoming dates into the summary and formats long values', () => {
+    const facts = [
+      {
+        factKey: 'application_deadline',
+        valueType: 'datetime' as const,
+        normalizedValue: '2999-03-01T10:00:00+09:00',
+        displayValue: '2999年3月1日(日)10:00',
+      },
+      {
+        factKey: 'exam_date',
+        valueType: 'datetime' as const,
+        normalizedValue: '2999-04-01T09:30:00+09:00',
+        displayValue: '2999年4月1日(木)9:30',
+      },
+      {
+        factKey: 'eligibility',
+        valueType: 'text' as const,
+        normalizedValue: '誰でも受験可能',
+        displayValue:
+          'どなたでも受験できます。ただし、申込み時に本人確認書類の提示が必要です。',
+      },
+      {
+        factKey: 'fee',
+        valueType: 'money' as const,
+        normalizedValue: '8200',
+        displayValue: '8200',
+      },
+      {
+        factKey: 'fee',
+        valueType: 'money' as const,
+        normalizedValue: '8200',
+        displayValue: '8200',
+      },
+    ].map((fact) => ({
+      qualificationSlug: 'it-passport' as const,
+      examLevelId: null,
+      examYear: 2026,
+      status: 'approved' as const,
+      riskLevel: 'medium' as const,
+      sourceId: 'source:it-passport:jitec-home',
+      sourceSnapshotId: 'snapshot:official',
+      synthetic: false,
+      verifiedAt: '2026-10-13T00:00:00.000Z',
+      ...fact,
+    }));
+    const html = renderQualificationSectionPage(
+      {
+        qualification: itPassport,
+        status: 'verified',
+        officialVerifiedAt: '2026-10-13T00:00:00.000Z',
+        facts,
+      },
+      'overview',
+    );
+    expect(html).toContain('>試験日<');
+    expect(html).toContain('2999年4月1日');
+    expect(html).toContain('>申込締切<');
+    expect(html).toContain('2999年3月1日');
+    expect(html).toContain('fact-value--long');
+    expect(html).toContain('>受験資格</h2>');
+    expect((html.match(/data-fact-key="fee"/g) ?? []).length).toBe(1);
+  });
+
+  it('adds calendar downloads to key dates and pins the official site CTA', () => {
+    const facts = [
+      {
+        factKey: 'application_deadline',
+        valueType: 'datetime' as const,
+        normalizedValue: '2999-03-01T10:00:00+09:00',
+        displayValue: '2999年3月1日(日)10:00',
+      },
+      {
+        factKey: 'exam_date',
+        valueType: 'datetime' as const,
+        normalizedValue: '2999-04-01T09:30:00+09:00',
+        displayValue: '2999年4月1日(木)9:30',
+      },
+    ].map((fact) => ({
+      qualificationSlug: 'it-passport' as const,
+      examLevelId: null,
+      examYear: 2026,
+      status: 'approved' as const,
+      riskLevel: 'medium' as const,
+      sourceId: 'source:it-passport:jitec-home',
+      sourceSnapshotId: 'snapshot:official',
+      synthetic: false,
+      verifiedAt: '2026-10-13T00:00:00.000Z',
+      ...fact,
+    }));
+    const html = renderQualificationSectionPage(
+      {
+        qualification: itPassport,
+        status: 'verified',
+        officialVerifiedAt: '2026-10-13T00:00:00.000Z',
+        facts,
+      },
+      'overview',
+    );
+    expect((html.match(/class="detail-kpi__ics"/g) ?? []).length).toBe(2);
+    expect(html).toContain('カレンダーに追加');
+    expect(html).toMatch(/href="\/ics\/it-passport\/2026\/[^"]+\.ics"/);
+    expect(html).toContain('class="sidebar-panel sidebar-panel--cta"');
+    expect(html).toContain('https://www.ipa.go.jp/shiken/');
+    expect(html).toContain('公式サイトで確認');
+    expect(html).toContain("addEventListener('beforeprint'");
   });
 
   it('links a statistics update to the year table instead of the schedule page', () => {
@@ -1209,7 +1658,7 @@ describe('section content gating and discovery', () => {
 
     const annual = renderQualificationSectionPage(withHistory, 'annual', 2026);
     expect(annual).toContain(
-      '<title>ITパスポートの2026年試験日程 | 公式情報</title>',
+      '<title>ITパスポートの2026年試験日程｜申込・試験日・合格発表｜シカクチェック</title>',
     );
     expect(annual).toContain('/shikaku/it-passport/2026/');
     expect(annual).not.toContain('/shikaku/it-passport/2025/');
@@ -1262,7 +1711,9 @@ describe('section content gating and discovery', () => {
     const page = editorialAboutPage('corrections');
     expect(page).toBeDefined();
     const html = renderEditorialPage(page!, 'about', '/about/corrections/');
-    expect(html).toContain('<title>訂正のご連絡 | 公式情報</title>');
+    expect(html).toContain(
+      '<title>訂正のご連絡｜資格試験の調べ方と確認手順｜シカクチェック</title>',
+    );
     expect(html).toContain(`href="${correctionsIssueUrl}"`);
     expect(html).toContain('<link rel="canonical" href="/about/corrections/">');
     expect(html).not.toContain('<meta name="robots"');
@@ -1296,18 +1747,49 @@ describe('section content gating and discovery', () => {
     ).toContain(`href="${correctionsIssueUrl}"`);
   });
 
-  it('renders the pass-rate index only for qualifications with data', () => {
+  it('renders the pass-rate index as a sortable comparison table', () => {
     const html = renderPassRateIndex([
       {
         qualification: itPassport,
-        view: view([fact('pass_rate', 2025, '30.7%')]),
+        view: view([
+          fact('pass_rate', 2025, '30.7%'),
+          fact('examinees', 2025, '100,000人'),
+          fact('passed', 2025, '30,700人'),
+        ]),
       },
     ]);
-    expect(html).toContain('/shikaku/it-passport/pass-rate/');
-    expect(html).toContain('2025年の合格率');
+    expect(html).toContain('<table class="pass-rate-table">');
+    expect(html).toContain('data-label="年度">2025');
+    expect(html).toContain('data-label="受験者数">100,000人');
+    expect(html).toContain('data-label="合格者数">30,700人');
+    expect(html).toContain('data-label="合格率">30.7%');
+    expect(html).toContain('/shikaku/it-passport/pass-rate/?year=2025');
+    expect(html).toContain('href="/pass-rate/?sort=pass_rate');
+    expect(html).toContain('aria-sort="ascending"');
     expect(html).not.toContain('/shikaku/bookkeeping/pass-rate/');
     expect(renderPassRateIndex([])).toContain(
       '公開できる合格率データはまだありません',
+    );
+  });
+
+  it('sorts the pass-rate table by the requested column', () => {
+    const takken = launchQualifications.find((item) => item.slug === 'takken')!;
+    const html = renderPassRateIndex(
+      [
+        {
+          qualification: itPassport,
+          view: view([fact('pass_rate', 2024, '40.0%')]),
+        },
+        {
+          qualification: takken,
+          view: view([fact('pass_rate', 2025, '30.7%')]),
+        },
+      ],
+      { sort: 'year', order: 'desc' },
+    );
+    expect(html).toContain('aria-sort="descending"');
+    expect(html.indexOf('宅地建物取引士')).toBeLessThan(
+      html.indexOf('ITパスポート'),
     );
   });
 });
@@ -1330,6 +1812,48 @@ describe('home page data modules', () => {
     factKey: 'exam_date',
     verifiedAt: '2026-01-01T00:00:00.000Z',
     sequence,
+  });
+
+  it('summarises two decision facts on home qualification cards', () => {
+    const facts = [
+      {
+        factKey: 'exam_date',
+        valueType: 'datetime' as const,
+        normalizedValue: '2999-04-01T09:30:00+09:00',
+        displayValue: '2999年4月1日(木)9:30',
+      },
+      {
+        factKey: 'fee',
+        valueType: 'money' as const,
+        normalizedValue: '8200',
+        displayValue: '8200円',
+      },
+      {
+        factKey: 'pass_rate',
+        valueType: 'decimal' as const,
+        normalizedValue: '51.2',
+        displayValue: '51.2%',
+      },
+    ].map((fact) => ({
+      qualificationSlug: 'it-passport' as const,
+      examLevelId: null,
+      examYear: 2026,
+      status: 'approved' as const,
+      riskLevel: 'medium' as const,
+      sourceId: 'source:it-passport:jitec-home',
+      sourceSnapshotId: 'snapshot:official',
+      synthetic: false,
+      verifiedAt: '2026-10-13T00:00:00.000Z',
+      ...fact,
+    }));
+    const html = renderHomePage([], [], { 'it-passport': facts });
+    expect(html).toContain('<dt>次回試験日</dt><dd>2999年4月1日');
+    expect(html).toContain('<dt>受験料</dt><dd>8200円</dd>');
+    expect(
+      (html.match(/<dl class="home-qualification__facts">/g) ?? []).length,
+    ).toBe(1);
+    expect(html).not.toContain('<dt>合格率</dt>');
+    expect(renderHomePage()).not.toContain('home-qualification__facts');
   });
 
   it('lists upcoming schedule entries in date order', () => {
@@ -1526,27 +2050,28 @@ describe('B4 ended-schedule state and B5 home timeline dedup', () => {
   });
 
   it('marks past schedule events as ended with guidance, keeps future ones clean (B4)', () => {
-    const html = renderSchedulePage([
-      calendarEvent({
-        id: 'takken:past',
-        qualification: takken,
-        examYear: 2000,
-        dateValue: '2000-10-18',
-        displayValue: '2000年10月18日',
-        factKey: 'exam_date',
-      }),
-      calendarEvent({
-        id: 'takken:future',
-        qualification: takken,
-        examYear: 2999,
-        dateValue: '2999-10-18',
-        displayValue: '2999年10月18日',
-        factKey: 'exam_date',
-      }),
-    ]);
-    expect(
-      html.split('class="schedule-event schedule-event--ended"').length - 1,
-    ).toBe(1);
+    const html = renderSchedulePage(
+      [
+        calendarEvent({
+          id: 'takken:past',
+          qualification: takken,
+          examYear: 2000,
+          dateValue: '2000-10-18',
+          displayValue: '2000年10月18日',
+          factKey: 'exam_date',
+        }),
+        calendarEvent({
+          id: 'takken:future',
+          qualification: takken,
+          examYear: 2999,
+          dateValue: '2999-10-18',
+          displayValue: '2999年10月18日',
+          factKey: 'exam_date',
+        }),
+      ],
+      { range: 'all' },
+    );
+    expect(html.split('schedule-event--ended"').length - 1).toBe(1);
     expect(html).toContain('<span class="badge badge--info">');
     expect(html).toContain('終了');
     expect(html.split('この試験は終了しました').length - 1).toBe(1);
@@ -1556,18 +2081,21 @@ describe('B4 ended-schedule state and B5 home timeline dedup', () => {
   });
 
   it('uses type-specific guidance for past application deadlines (B4)', () => {
-    const html = renderSchedulePage([
-      calendarEvent({
-        id: 'takken:deadline',
-        qualification: takken,
-        type: 'application_deadline',
-        label: '申込締切',
-        examYear: 2000,
-        dateValue: '2000-07-31',
-        displayValue: '2000年7月31日',
-        factKey: 'application_deadline',
-      }),
-    ]);
+    const html = renderSchedulePage(
+      [
+        calendarEvent({
+          id: 'takken:deadline',
+          qualification: takken,
+          type: 'application_deadline',
+          label: '申込締切',
+          examYear: 2000,
+          dateValue: '2000-07-31',
+          displayValue: '2000年7月31日',
+          factKey: 'application_deadline',
+        }),
+      ],
+      { range: 'all' },
+    );
     expect(html).toContain(
       'この申込締切は過ぎました。次回の申込日程は公式サイトでご確認ください。',
     );

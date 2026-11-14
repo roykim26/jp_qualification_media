@@ -99,6 +99,32 @@ export type FactDisplayInput = {
   normalizedValue?: unknown;
 };
 
+/**
+ * Update-log values come straight from `display_value`, so a date cell can be a
+ * raw ISO datetime even when the fact key is not a date key. Those, and any
+ * internal `qualification:<slug>` reference, must never reach the page.
+ */
+export function formatUpdateDisplayValue(
+  factKey: string,
+  displayValue: string,
+): string {
+  const sanitized = displayValue
+    .replace(/(?:qualification|fact)[:.][a-z0-9_.:-]+/gi, '公式情報')
+    .trim();
+  const formatted = formatFactDisplayValue({
+    factKey,
+    displayValue: sanitized,
+  });
+  if (formatted !== sanitized) return formatted;
+  if (looksRawIso(sanitized)) {
+    return sanitized
+      .split(',')
+      .map((part) => formatSingleIso(part.trim()) ?? part.trim())
+      .join('／');
+  }
+  return sanitized;
+}
+
 export function formatFactDisplayValue(input: FactDisplayInput): string {
   const { factKey, displayValue, normalizedValue } = input;
   const value = displayValue;

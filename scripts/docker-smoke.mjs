@@ -368,10 +368,7 @@ async function main() {
       page.contentType.includes('text/html'),
       `expected text/html, got ${page.contentType}`,
     );
-    expect(
-      page.body.includes('資格試験の公式情報'),
-      'home page lost its brand',
-    );
+    expect(page.body.includes('シカクチェック'), 'home page lost its brand');
   });
 
   await runChecked('the qualification pages render', async () => {
