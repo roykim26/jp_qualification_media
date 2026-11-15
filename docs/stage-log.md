@@ -1,5 +1,15 @@
 # 阶段记录与剩余问题
 
+## 2026-11-15（GA4 拍板＋M2 合规前置轮）：Cookie 同意门控＋外部送信告知＋opt-out 实现（`GA_MEASUREMENT_ID` 仍空、未启用；零库写入／零迁移／零判级面改动；vitest 17 文件／187、verify:all 6/6、gate 40/0）
+
+- 授权链：号主「指导我把网站接入GA」→ 现状调研（GA 钩子已在生产 `23111cd`：`apps/web/src/layout.ts` analyticsSnippet＋compose `GA_MEASUREMENT_ID` 透传＋env 模板空值；线上首页 gtag 引用计数现取 **0**）→ AskUserQuestion 拍板 **「先做 M2 再接 GA」**（备选＝Umami／直接接）→ 实现＋本地判据 → AskUserQuestion 授权「启动容器并跑 verify:all」→ 待 commit／push／PR 各一句话。
+- **改动（M2＝合规审计 2026-11-13 §M2，電気通信事業法 2023 改正 Cookie 外部送信）**：① `layout.ts` gtag 改为**同意后加载**（localStorage `sqc-analytics-consent`：granted 加载／denied 不加载／未决定显示横幅），横幅「同意する／同意しない」＋隐私政策链接，页脚加「Cookie設定」撤回入口（仅 GA 启用时渲染），统计脚本由 head 移到 body 末尾；② `styles.ts` 横幅样式（fixed bottom、移动端避让底部导航、z-index 35 低于菜单 40/50）＋页脚按钮样式＋打印隐藏；③ `editorial.ts` 隐私政策「アクセス解析」从「利用する場合があります」改为同意门控实际状态，新增「Cookie等による外部送信について」节（送信信息／送信先 Google LLC／利用目的＋Google プライバシーポリシー与 opt-out アドオン链接）与「同意の撤回（オプトアウト）」节；④ `render.ts` EditorialSection 支持 `links`（外链 target=_blank＋noopener noreferrer）；⑤ `deploy/env.prod.example` 注释、runbook 新增「GA4 启用」节、开工单 §2 待办 4／§3 测试面计数同步。
+- **本机判据（现取）**：typecheck EXIT=0、vitest **17 文件／187**（186→187＝＋1 同意门控用例；既有 GA 断言适配门控：不再有无条件 `<script async src=googletagmanager`，ID 内联脚本承载）、build EXIT=0、lint EXIT=0（`--ignore-pattern "Python/**"`）、prettier 改动文件全绿（test 文件一次 `--write` 后复检）、verify:all **6/6 passed**、gate **40 pass／0 fail**。pytest 未跑（零 Python 改动，CI 会跑）。
+- **浏览器实测（本地 dist 服务＋测试 ID `G-TEST1234`；内嵌浏览器面板未开、截图不可用，用 a11y 快照＋脚本断言）**：首访横幅显示、gtag 未加载；「同意しない」→ 横幅隐藏、`denied` 记忆、零 Google 请求、刷新后仍无横幅；页脚「Cookie設定」→ 横幅重现、决定清除；「同意する」→ gtag async 注入（gtag.js **200**＋collect **204**）、`granted` 记忆、刷新直载无横幅；隐私政策两新节与两条外链（target=_blank＋noopener noreferrer）渲染正确。唯一 console 错误＝hero 图 502（tsc 不拷 public/ 进 dist、Dockerfile 有拷贝步骤，生产不受影响），与本轮无关。测试服务已停（PID 经 CommandLine 核验）、测试 localStorage 已清。
+- **零变化确认**：`GA_MEASUREMENT_ID` 仍空 ⇒ 生产行为不变（无横幅、无 gtag、无 Cookie設定 按钮）；零库写入／零迁移／零 config 判级面／零计数链改动。启用后行为＝首访横幅，同意前零 Google 请求；拒绝持久记忆；页脚可随时撤回。
+- 环境注记：轮起 Docker Desktop 未运行（55432 ECONNREFUSED），为跑 verify:all 启动 Docker Desktop＋经授权 `docker start jpqm-pg18`；开工单 §3「容器现运行中」为 11-13 快照、已过期。本轮改动在主工作树（轮起 main＝`e38c79a` UX 整改收口轮、tracked 干净），未提交。
+- 下一步（各需单独授权）：① 本轮 commit／push／PR（默认 squash）；② 合并后按 runbook「更新发布」部署；③ 号主 GA 后台取衡量 ID（管理 → 数据收集和修改 → 数据流 → 网站数据流详情），按 runbook「GA4 启用」节填 `deploy/.env`＋`up -d web`＋验收（横幅、同意しない无 gtag 请求、GA 实时报告见访问）。
+
 ## 2026-11-13（baseline／CI 夹具刷新轮 999→**1007 facts／37 snapshots 不变**＋落账）：D2 八条纯新增零值差、四处计数链同批（零抓取／零入库／零批准／零事实增减／零迁移／零判级面改动；squash PR #79 合并 `1158457`，PR CI `43339301778`＋main push CI `43342694532` 双绿；本机库／baseline／CI 夹具三方一致）
 
 - 授权链：【交接】只读决策材料（未拍板前零写入）→ AskUserQuestion 拍板 **「刷＋squash PR」**（同轮另一问＝未合并遗留分支 `feat/p0-1-core-facts` 处置，拍板**保留**）→ 执行四处计数链＋本机判据 → 号主「提交」（`b00ce53`）→「push 并开 PR」（PR #79，分支 `chore/baseline-fixture-1007`）→「1」（盯 CI，run `43339301778` 双绿）→「合并」（squash `1158457`，2026-11-13T01:09:08Z）→「1」（盯合并后 CI，run `43342694532` 双绿）→「删分支」→「落账」（本段所在轮，纯文档）。轮前现取：main＝origin/main＝`696ff03`（D2 文档落账合并点）、容器 `jpqm-pg18` 运行中；facts 1007／pending 0／FE 28；夹具 999／37。

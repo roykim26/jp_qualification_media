@@ -1244,6 +1244,8 @@ describe('shared qualification page rendering', () => {
       expect(html).toContain('"item":"https://shikakucheck.com/"');
       expect(html).not.toContain('google-site-verification');
       expect(html).not.toContain('googletagmanager');
+      expect(html).not.toContain('data-cookie-banner');
+      expect(html).not.toContain('data-cookie-settings');
       expect(renderHomePage()).toContain('"@type":"WebSite"');
 
       process.env.GOOGLE_SITE_VERIFICATION = 'verification_token_123456';
@@ -1252,18 +1254,55 @@ describe('shared qualification page rendering', () => {
       expect(enabled).toContain(
         '<meta name="google-site-verification" content="verification_token_123456">',
       );
-      expect(enabled).toContain(
-        'https://www.googletagmanager.com/gtag/js?id=G-ABC12345',
+      expect(enabled).toContain("var ID='G-ABC12345'");
+      expect(enabled).toContain('https://www.googletagmanager.com/gtag/js?id=');
+      expect(enabled).not.toContain(
+        '<script async src="https://www.googletagmanager.com',
       );
 
       process.env.GA_MEASUREMENT_ID = 'G-"><script>alert(1)</script>';
       expect(renderGuideIndex([])).not.toContain('googletagmanager');
+      expect(renderGuideIndex([])).not.toContain('data-cookie-banner');
     } finally {
       if (previousOrigin === undefined) delete process.env.SITE_ORIGIN;
       else process.env.SITE_ORIGIN = previousOrigin;
       if (previousVerification === undefined)
         delete process.env.GOOGLE_SITE_VERIFICATION;
       else process.env.GOOGLE_SITE_VERIFICATION = previousVerification;
+      if (previousAnalytics === undefined) delete process.env.GA_MEASUREMENT_ID;
+      else process.env.GA_MEASUREMENT_ID = previousAnalytics;
+    }
+  });
+
+  it('gates GA4 behind cookie consent and documents external transmission', () => {
+    const previousAnalytics = process.env.GA_MEASUREMENT_ID;
+    process.env.GA_MEASUREMENT_ID = 'G-ABC12345';
+    try {
+      const html = renderHomePage();
+      expect(html).toContain('data-cookie-banner');
+      expect(html).toContain('data-cookie-accept');
+      expect(html).toContain('data-cookie-decline');
+      expect(html).toContain('data-cookie-settings');
+      expect(html).toContain('sqc-analytics-consent');
+      expect(html).toContain('同意しない');
+      expect(html).not.toContain(
+        '<script async src="https://www.googletagmanager.com',
+      );
+
+      const privacy = editorialAboutPage('privacy');
+      expect(privacy).toBeDefined();
+      const privacyHtml = renderEditorialPage(
+        privacy!,
+        'about',
+        '/about/privacy/',
+      );
+      expect(privacyHtml).toContain('Cookie等による外部送信について');
+      expect(privacyHtml).toContain('送信先：Google LLC');
+      expect(privacyHtml).toContain('https://policies.google.com/privacy');
+      expect(privacyHtml).toContain('https://tools.google.com/dlpage/gaoptout');
+      expect(privacyHtml).toContain('同意の撤回（オプトアウト）');
+      expect(privacyHtml).toContain('Cookie設定');
+    } finally {
       if (previousAnalytics === undefined) delete process.env.GA_MEASUREMENT_ID;
       else process.env.GA_MEASUREMENT_ID = previousAnalytics;
     }

@@ -371,3 +371,25 @@ cd /opt/jpqm && git pull && docker compose -f deploy/docker-compose.prod.yml up 
 ```
 
 有新迁移时随后补跑第 5 步的 migrate 与 provision（新表由默认权限获得 `SELECT`，provision 重新对齐授权）。判据＝`docker compose ... ps` 全 running 且第 7 步验收复跑通过。动了 Dockerfile、`.dockerignore`、compose 或依赖版本的发布，先在本机或 CI 跑 `npm run smoke:docker` 绿了再 merge。
+
+### GA4 启用（同意门控已内置，M2）
+
+前置＝M2 合规机制已随代码内置（2026-11-15 轮）：Cookie 同意横幅（同意する／同意しない）、隐私政策的外部送信告知与 opt-out、页脚「Cookie設定」撤回入口。GA4 只在访客同意后加载；`GA_MEASUREMENT_ID` 为空时不加载任何统计脚本。衡量 ID 由号主在 GA 后台取得（管理 → 数据收集和修改 → 数据流 → 网站数据流详情第一行，形如 `G-XXXXXXXXXX`）。
+
+```bash
+cd /opt/jpqm && grep -n "^GA_MEASUREMENT_ID=" deploy/.env
+```
+
+判据＝输出一行（空值）。把 `G-XXXXXXXXXX` 换成真实 ID 后执行：
+
+```bash
+cd /opt/jpqm && sed -i "s/^GA_MEASUREMENT_ID=.*/GA_MEASUREMENT_ID=G-XXXXXXXXXX/" deploy/.env && docker compose -f deploy/docker-compose.prod.yml up -d web
+```
+
+无需重建镜像（钩子已在代码里），compose 会因环境变量变化重建 web 容器。判据：
+
+```bash
+cd /opt/jpqm && docker compose -f deploy/docker-compose.prod.yml ps ; curl -s https://shikakucheck.com/ | grep -c "data-cookie-banner"
+```
+
+web 为 running/healthy，横幅计数由 0（2026-11-15 启用前实测）变 1。再用浏览器打开站点：横幅点「同意する」后 GA 后台「报告 → 实时」应出现该次访问（可延迟几十秒）；点「同意しない」则不应发出任何 gtag 请求。回滚＝把变量值清空后重跑 `up -d web`。

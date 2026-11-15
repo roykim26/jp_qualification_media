@@ -15,6 +15,7 @@ export type EditorialSection = {
   heading: string;
   paragraphs: readonly string[];
   items?: readonly string[];
+  links?: readonly { href: string; label: string }[];
 };
 
 export type EditorialPage = {
@@ -493,8 +494,35 @@ const aboutPages: Record<string, EditorialPage> = {
       {
         heading: 'アクセス解析',
         paragraphs: [
-          '本サイトでは、利用状況を把握するために Google Analytics 4 を利用する場合があります。Google Analytics は Cookie を使用し、個人を特定しない形でアクセス情報を収集します。収集される情報とその扱いは、Google のプライバシーポリシーに従います。',
-          'ブラウザの設定で Cookie を無効にすると、解析の対象から外れる場合があります。',
+          '本サイトでは、利用状況を把握し掲載内容を改善するために Google Analytics 4 を利用します。ただし、Cookie等の利用に関するお知らせで「同意する」を選択した場合に限り、閲覧情報を送信します。同意しない場合、Google への情報送信は行われません。',
+          'Google Analytics は Cookie やこれに類する識別子を使用し、個人を特定しない形でアクセス情報を収集します。収集される情報とその扱いは、Google のプライバシーポリシーに従います。',
+        ],
+      },
+      {
+        heading: 'Cookie等による外部送信について',
+        paragraphs: [
+          'アクセス解析にあたり、本サイトは次の情報を Cookie 等を通じて Google へ外部送信します。送信先における情報の取り扱いは、送信先のプライバシーポリシーをご確認ください。',
+        ],
+        items: [
+          '送信される情報：Cookie等に保存された識別子（クライアントID）、閲覧したページのURL、参照元、アクセス日時、ブラウザ・端末の種類、IPアドレスから推定される地域',
+          '送信先：Google LLC',
+          '利用目的：サイトの利用状況の把握と掲載内容の改善',
+        ],
+        links: [
+          {
+            href: 'https://policies.google.com/privacy',
+            label: 'Google プライバシーポリシー',
+          },
+          {
+            href: 'https://tools.google.com/dlpage/gaoptout',
+            label: 'Google Analytics オプトアウト アドオン',
+          },
+        ],
+      },
+      {
+        heading: '同意の撤回（オプトアウト）',
+        paragraphs: [
+          'ページ下部のお知らせで「同意しない」を選ぶと、Google Analytics による収集は行われません。一度同意した後も、フッターの「Cookie設定」からいつでも同意を撤回できます。ブラウザの設定で Cookie を無効にする方法や、Google Analytics オプトアウト アドオンを利用する方法もあります。',
         ],
       },
       {

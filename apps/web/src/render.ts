@@ -2130,7 +2130,7 @@ export function renderEditorialPage(
   const sections = page.sections
     .map(
       (section) =>
-        `<section class="editorial-section"><h2>${escapeHtml(section.heading)}</h2>${section.paragraphs.map((paragraph) => `<p>${escapeHtml(paragraph)}</p>`).join('')}${section.items?.length ? `<ul>${section.items.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul>` : ''}</section>`,
+        `<section class="editorial-section"><h2>${escapeHtml(section.heading)}</h2>${section.paragraphs.map((paragraph) => `<p>${escapeHtml(paragraph)}</p>`).join('')}${section.items?.length ? `<ul>${section.items.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul>` : ''}${section.links?.length ? `<ul class="editorial-links">${section.links.map((link) => `<li><a href="${escapeHtml(link.href)}" target="_blank" rel="noopener noreferrer">${escapeHtml(link.label)}</a></li>`).join('')}</ul>` : ''}</section>`,
     )
     .join('');
   const related = page.related
