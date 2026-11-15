@@ -478,6 +478,18 @@ export const webStyles = String.raw`
 }
 .unofficial-notice { margin-top: var(--space-6); padding-top: var(--space-4); border-top: 1px solid var(--color-border); color: var(--color-text-secondary); font-size: var(--font-size-sm); line-height: 1.7; }
 .footer-note--unofficial { margin-top: var(--space-3); padding-top: 0; border-top: 0; }
+.cookie-banner { position: fixed; z-index: 35; right: 0; bottom: 0; left: 0; border-top: 1px solid var(--color-border); background: var(--color-surface); box-shadow: 0 -8px 24px rgb(23 32 51 / 12%); }
+.cookie-banner[hidden] { display: none; }
+.cookie-banner__inner { display: flex; align-items: center; gap: var(--space-6); padding-block: var(--space-4); }
+.cookie-banner__text { flex: 1 1 auto; margin: 0; font-size: 14px; line-height: 1.7; }
+.cookie-banner__actions { display: flex; flex: 0 0 auto; gap: var(--space-2); }
+.footer-link-button { padding: 0; border: 0; background: transparent; color: var(--color-muted); font-size: 14px; text-align: left; cursor: pointer; }
+.footer-link-button:hover { color: var(--color-primary); text-decoration: underline; }
+@media (max-width: 767px) {
+  .cookie-banner { bottom: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom)); }
+  .cookie-banner__inner { flex-direction: column; align-items: stretch; gap: var(--space-3); }
+  .cookie-banner__actions .button { flex: 1 1 0; }
+}
 
 /* Print: keep the facts, sources, and confirmation dates; drop the chrome. */
 @media print {
@@ -485,6 +497,7 @@ export const webStyles = String.raw`
   html { scroll-behavior: auto; }
   body { padding-bottom: 0; background: #fff; color: #000; font-size: 11pt; line-height: 1.6; }
   .site-header, .subnav, .site-footer, .mobile-bottom-nav, .mobile-menu-panel, .mobile-menu-backdrop,
+  .cookie-banner,
   .skip-link, .breadcrumbs, .detail-sidebar, .page-hero__actions, .schedule-event__actions,
   .schedule-download, .schedule-filter, .filter-chips, .qualification-search, .home-search,
   .home-intro__actions, .popular-links, .popular-pages, .pagination, .page-hero__years,
