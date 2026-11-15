@@ -374,6 +374,8 @@ cd /opt/jpqm && git pull && docker compose -f deploy/docker-compose.prod.yml up 
 
 ### GA4 启用（同意门控已内置，M2）
 
+**现态＝生产已启用（2026-11-15，PR #103 部署后）**：服务器 `deploy/.env` 已填 `GA_MEASUREMENT_ID=G-G9SN61J5LS` 并 `up -d web`（无需重建镜像；2026-11-15 原媒体资源 `G-LV4250LZNY` 因 GA 权限问题被号主删除并重建为 `G-G9SN61J5LS`，已换 ID 重启用＋复测）；首页 `data-cookie-banner` 计数 **1**、无条件 GA 脚本计数 **0**（同意前零 Google 请求）；生产同意流 playwright 实测 **19/19**（同意する → gtag.js＋collect 带 ID；同意しない → 零 gtag；页脚 Cookie設定 → 横幅重开）。GA「报告 → 实时」由号主自查（号主账号，agent 无法访问）。下方为通用启用/回滚步骤（ID 用占位符 `G-XXXXXXXXXX`；现已填真实值，换 ID 或回滚后重启用时照此）。
+
 前置＝M2 合规机制已随代码内置（2026-11-15 轮）：Cookie 同意横幅（同意する／同意しない）、隐私政策的外部送信告知与 opt-out、页脚「Cookie設定」撤回入口。GA4 只在访客同意后加载；`GA_MEASUREMENT_ID` 为空时不加载任何统计脚本。衡量 ID 由号主在 GA 后台取得（管理 → 数据收集和修改 → 数据流 → 网站数据流详情第一行，形如 `G-XXXXXXXXXX`）。
 
 ```bash
