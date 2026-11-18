@@ -308,6 +308,11 @@ details.disclosure > div { padding-bottom: var(--space-4); color: var(--color-mu
   .footer-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
+@media (min-width: 768px) {
+  .footer-group--collapsible > summary { display: none; }
+  .footer-group__columns h2 { color: var(--color-ink); font-size: 16px; }
+}
+
 @media (max-width: 767px) {
   :root { --header-height: 56px; }
   html { scroll-behavior: auto; }
