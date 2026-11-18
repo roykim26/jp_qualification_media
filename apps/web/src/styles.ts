@@ -478,6 +478,10 @@ export const webStyles = String.raw`
 }
 .unofficial-notice { margin-top: var(--space-6); padding-top: var(--space-4); border-top: 1px solid var(--color-border); color: var(--color-text-secondary); font-size: var(--font-size-sm); line-height: 1.7; }
 .footer-note--unofficial { margin-top: var(--space-3); padding-top: 0; border-top: 0; }
+.footer-badges { display: flex; flex-wrap: wrap; gap: var(--space-3); margin-top: var(--space-6); }
+.footer-badges a { display: inline-flex; border-radius: 8px; transition: opacity .15s ease; }
+.footer-badges a:hover { opacity: .72; }
+.footer-badges img { width: 148px; height: 40px; }
 .cookie-banner { position: fixed; z-index: 35; right: 0; bottom: 0; left: 0; border-top: 1px solid var(--color-border); background: var(--color-surface); box-shadow: 0 -8px 24px rgb(23 32 51 / 12%); }
 .cookie-banner[hidden] { display: none; }
 .cookie-banner__inner { display: flex; align-items: center; gap: var(--space-6); padding-block: var(--space-4); }
