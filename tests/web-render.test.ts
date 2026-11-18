@@ -15,6 +15,7 @@ import {
   renderNotFoundPage,
 } from '../apps/web/src/render.js';
 import {
+  contactEmail,
   correctionsIssueUrl,
   editorialAboutPage,
   editorialAboutSlugs,
@@ -1741,6 +1742,7 @@ describe('section content gating and discovery', () => {
       '/about/corrections/',
     ])
       expect(html).toContain(`href="${href}"`);
+    expect(html).toContain(`href="mailto:${contactEmail}"`);
     expect(html).not.toContain('class="is-disabled"');
   });
 
@@ -1754,6 +1756,7 @@ describe('section content gating and discovery', () => {
       '<title>訂正のご連絡｜資格試験の調べ方と確認手順｜シカクチェック</title>',
     );
     expect(html).toContain(`href="${correctionsIssueUrl}"`);
+    expect(html).toContain(`href="mailto:${contactEmail}"`);
     expect(html).toContain('<link rel="canonical" href="/about/corrections/">');
     expect(html).not.toContain('<meta name="robots"');
   });
@@ -1784,6 +1787,25 @@ describe('section content gating and discovery', () => {
         '/about/contact/',
       ),
     ).toContain(`href="${correctionsIssueUrl}"`);
+    expect(
+      renderEditorialPage(
+        editorialAboutPage('contact')!,
+        'about',
+        '/about/contact/',
+      ),
+    ).toContain(`href="mailto:${contactEmail}"`);
+  });
+
+  it('exposes the business contact mailbox on contact-facing legal pages', () => {
+    for (const slug of ['contact', 'corrections', 'operator', 'privacy']) {
+      const html = renderEditorialPage(
+        editorialAboutPage(slug)!,
+        'about',
+        `/about/${slug}/`,
+      );
+      expect(html).toContain(`href="mailto:${contactEmail}"`);
+      expect(html).toContain(contactEmail);
+    }
   });
 
   it('renders the pass-rate index as a sortable comparison table', () => {

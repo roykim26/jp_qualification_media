@@ -312,6 +312,9 @@ const guidePages: Record<string, EditorialPage> = {
 export const correctionsIssueUrl =
   'https://github.com/roykim26/jp_qualification_media/issues/new';
 
+/** Business contact mailbox (Cloudflare Email Routing -> personal inbox). */
+export const contactEmail = 'contact@shikakucheck.com';
+
 const aboutPages: Record<string, EditorialPage> = {
   sources: {
     title: '情報源について',
@@ -397,6 +400,13 @@ const aboutPages: Record<string, EditorialPage> = {
         heading: '受け付ける内容',
         paragraphs: [
           '掲載内容の確認や訂正のために、次のようなご連絡を受け付けています。',
+          '報告はメール（contact@shikakucheck.com）と GitHub の Issue で受け付けています。メールは非公開で扱い、Issue は公開されます。公開して差し支えない内容のみ Issue をご利用ください。',
+        ],
+        links: [
+          {
+            href: `mailto:${contactEmail}`,
+            label: `メールで訂正を報告する（${contactEmail}）`,
+          },
         ],
         items: [
           '事実の誤りや、公式発表より古い情報',
@@ -441,7 +451,7 @@ const aboutPages: Record<string, EditorialPage> = {
         paragraphs: [
           '本サイトは、個人開発者による小規模な運営で公開しています。特定の試験実施機関、予備校、企業から独立して運営しており、掲載内容の判断は本サイトの編集方針に基づきます。',
           unofficialNotice,
-          '運営者の氏名、所在地、連絡先などの詳細は、下記の窓口から開示をご請求ください。請求の目的を確認したうえで、法令に基づき対応します。',
+          '運営者の氏名、所在地、連絡先などの詳細は、メール（contact@shikakucheck.com）または下記の窓口から開示をご請求ください。請求の目的を確認したうえで、法令に基づき対応します。',
         ],
       },
       {
@@ -458,7 +468,13 @@ const aboutPages: Record<string, EditorialPage> = {
       {
         heading: '開示・訂正のご請求',
         paragraphs: [
-          '掲載内容の訂正、運営者情報の開示、個人情報の開示・訂正・削除のご請求は、訂正のご連絡からお送りください。対象ページのURLとご請求の内容を添えていただけると確認が進みます。',
+          '掲載内容の訂正、運営者情報の開示、個人情報の開示・訂正・削除のご請求は、メール（contact@shikakucheck.com）または訂正のご連絡からお送りください。対象ページのURLとご請求の内容を添えていただけると確認が進みます。',
+        ],
+        links: [
+          {
+            href: `mailto:${contactEmail}`,
+            label: `メールで請求する（${contactEmail}）`,
+          },
         ],
       },
     ],
@@ -541,7 +557,13 @@ const aboutPages: Record<string, EditorialPage> = {
       {
         heading: '開示・訂正・削除',
         paragraphs: [
-          'ご本人からの請求により、保有する個人情報の開示、訂正、利用停止、削除に応じます。訂正のご連絡からご請求ください。ご本人であることを確認できない場合は、対応をお断りすることがあります。',
+          'ご本人からの請求により、保有する個人情報の開示、訂正、利用停止、削除に応じます。メール（contact@shikakucheck.com）または訂正のご連絡からご請求ください。ご本人であることを確認できない場合は、対応をお断りすることがあります。',
+        ],
+        links: [
+          {
+            href: `mailto:${contactEmail}`,
+            label: `メールで請求する（${contactEmail}）`,
+          },
         ],
       },
       {
@@ -705,13 +727,14 @@ const aboutPages: Record<string, EditorialPage> = {
   contact: {
     title: 'お問い合わせ',
     description:
-      '本サイトへのご連絡方法と、お問い合わせの前に確認していただきたい事項をまとめています。',
+      '本サイトへのご連絡方法（メールとGitHub Issue）と、お問い合わせの前に確認していただきたい事項をまとめています。',
     eyebrow: '運営・方針',
     sections: [
       {
         heading: 'ご連絡方法',
         paragraphs: [
-          '本サイトへのご連絡は、GitHub の Issue で受け付けています。下のリンクから新しい Issue を作成し、対象ページのURLとご用件を記載してください。',
+          '本サイトへのご連絡は、メール（contact@shikakucheck.com）で受け付けています。下の「メールで連絡する」からメールソフトが開きます。対象ページのURLとご用件を記載してください。',
+          '掲載内容の誤りや表示不具合など、公開して差し支えない報告は、GitHub の Issue でも受け付けています。関連リンクから新しい Issue を作成し、対象ページのURLとご用件を記載してください。',
         ],
         items: [
           '掲載内容の誤り、古い情報、公式ソースとの不一致',
@@ -720,11 +743,17 @@ const aboutPages: Record<string, EditorialPage> = {
           '個人情報の開示・訂正・削除の請求',
           '引用・転載のご相談',
         ],
+        links: [
+          {
+            href: `mailto:${contactEmail}`,
+            label: `メールで連絡する（${contactEmail}）`,
+          },
+        ],
       },
       {
         heading: '記載しないでほしい情報',
         paragraphs: [
-          'Issue は公開されます。氏名、住所、電話番号、メールアドレス、受験票番号、その他個人を特定できる情報は記載しないでください。個別の事情がある場合は、その旨だけを記載していただければ、こちらから連絡方法をご案内します。',
+          'GitHub の Issue は公開されます。氏名、住所、電話番号、メールアドレス、受験票番号、その他個人を特定できる情報は Issue に記載しないでください。メールでご連絡いただく場合も、対応に必要な範囲を超える個人情報は記載しないでください。個別の事情がある場合は、その旨だけを記載していただければ、こちらから連絡方法をご案内します。',
         ],
       },
       {
