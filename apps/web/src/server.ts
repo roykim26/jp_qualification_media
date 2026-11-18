@@ -146,6 +146,7 @@ const STATIC_IMAGES: Record<string, string> = {
   'favicon-32.png': 'image/png',
   'apple-touch-icon.png': 'image/png',
   'og-brand.png': 'image/png',
+  'twelve-tools-badge0-white.svg': 'image/svg+xml',
 };
 
 const server = createServer(async (req, res) => {
@@ -153,7 +154,7 @@ const server = createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', 'http://127.0.0.1');
     const pathname = url.pathname;
     const imageMatch = pathname.match(
-      /^\/images\/([a-z0-9-]+\.(?:png|webp|avif))$/,
+      /^\/images\/([a-z0-9-]+\.(?:png|webp|avif|svg))$/,
     );
     const imageType = imageMatch ? STATIC_IMAGES[imageMatch[1]] : undefined;
     if (imageMatch && imageType) {
