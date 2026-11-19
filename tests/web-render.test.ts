@@ -1742,7 +1742,7 @@ describe('section content gating and discovery', () => {
       '/about/corrections/',
     ])
       expect(html).toContain(`href="${href}"`);
-    expect(html).toContain(`href="mailto:${contactEmail}"`);
+    expect(html).not.toContain(`href="mailto:${contactEmail}"`);
     expect(html).not.toContain('class="is-disabled"');
   });
 
@@ -1805,6 +1805,22 @@ describe('section content gating and discovery', () => {
       );
       expect(html).toContain(`href="mailto:${contactEmail}"`);
       expect(html).toContain(contactEmail);
+    }
+  });
+
+  it('keeps the mailbox out of the global footer on every page', () => {
+    const pages = [
+      renderGuideIndex([]),
+      renderEditorialPage(
+        editorialAboutPage('contact')!,
+        'about',
+        '/about/contact/',
+      ),
+    ];
+    for (const html of pages) {
+      const footer = html.slice(html.indexOf('<footer'));
+      expect(footer).not.toContain(contactEmail);
+      expect(footer).toContain('href="/about/contact/"');
     }
   });
 
