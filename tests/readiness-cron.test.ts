@@ -28,6 +28,8 @@ let workDir: string;
 let binDir: string;
 let stateFile: string;
 let loggerLog: string;
+let notifyLog: string;
+let notifyScript: string;
 
 function toPosixPath(value: string): string {
   if (process.platform !== 'win32') return value;
@@ -56,12 +58,15 @@ function writeFakeLogger(): void {
 function runScript(env: Record<string, string> = {}): {
   status: number | null;
   logs: string[];
+  notifications: string[];
   state: string;
 } {
   const assignments = {
     PATH: `${toPosixPath(binDir)}:$PATH`,
     READINESS_STATE_FILE: toPosixPath(stateFile),
     LOGGER_LOG: toPosixPath(loggerLog),
+    NOTIFY_SCRIPT: toPosixPath(notifyScript),
+    NOTIFY_LOG: toPosixPath(notifyLog),
     ...env,
   };
   const prefix = Object.entries(assignments)
@@ -82,9 +87,14 @@ function runScript(env: Record<string, string> = {}): {
         .split('\n')
         .filter((line) => line.length > 0)
     : [];
+  const notifications = existsSync(notifyLog)
+    ? readFileSync(notifyLog, 'utf8')
+        .split('\n')
+        .filter((line) => line.length > 0)
+    : [];
   const state = existsSync(stateFile) ? readFileSync(stateFile, 'utf8') : '';
 
-  return { status: result.status, logs, state };
+  return { status: result.status, logs, notifications, state };
 }
 
 function seedState(status: string, count: number): void {
@@ -123,7 +133,16 @@ beforeEach(() => {
   mkdirSync(binDir, { recursive: true });
   stateFile = join(workDir, 'last-status');
   loggerLog = join(workDir, 'logger.log');
+  notifyLog = join(workDir, 'notify.log');
+  notifyScript = join(workDir, 'notify-stub.sh');
   writeFakeLogger();
+  // The real notifier would post to Feishu. Tests only care that the wrapper
+  // called it, and with what, so a stub that records its arguments stands in.
+  writeFileSync(
+    notifyScript,
+    `#!/bin/sh\nprintf '%s\\n' "$*" >> "$NOTIFY_LOG"\n`,
+    'utf8',
+  );
 });
 
 afterEach(() => {
@@ -279,5 +298,104 @@ describe('readiness cron wrapper', () => {
 
     expect(status).toBe(0);
     expect(state).toBe('ready\n0\n');
+  });
+});
+
+describe('readiness cron notification wiring', () => {
+  it('sends one message when a failure starts', () => {
+    writeFakeDocker(`printf '%s\\n' ${quote(errorJson())}; exit 1`);
+
+    const { status, logs, notifications } = runScript();
+
+    expect(status).toBe(0);
+    expect(logs).toHaveLength(1);
+    expect(notifications).toHaveLength(1);
+    expect(notifications[0]).toContain('--text');
+    expect(notifications[0]).toContain('jpqm-readiness');
+    expect(notifications[0]).toContain('status=error');
+  });
+
+  it('sends one message when the failure recovers', () => {
+    seedState('error', 9);
+    writeFakeDocker(`printf '%s\\n' ${quote(readyJson())}; exit 0`);
+
+    const { status, notifications } = runScript();
+
+    expect(status).toBe(0);
+    expect(notifications).toHaveLength(1);
+    expect(notifications[0]).toContain('recovered');
+    expect(notifications[0]).toContain('after 9 checks');
+  });
+
+  it('sends nothing on a healthy steady state', () => {
+    seedState('ready', 0);
+    writeFakeDocker(`printf '%s\\n' ${quote(readyJson())}; exit 0`);
+
+    const { notifications } = runScript();
+
+    expect(notifications).toEqual([]);
+  });
+
+  it('sends nothing between heartbeats while a failure persists', () => {
+    seedState('error', 1);
+    writeFakeDocker(`printf '%s\\n' ${quote(errorJson())}; exit 1`);
+
+    const { notifications } = runScript();
+
+    expect(notifications).toEqual([]);
+  });
+
+  it('sends the heartbeat too, not just the transitions', () => {
+    seedState('error', 11);
+    writeFakeDocker(`printf '%s\\n' ${quote(errorJson())}; exit 1`);
+
+    const { notifications } = runScript();
+
+    expect(notifications).toHaveLength(1);
+    expect(notifications[0]).toContain('still');
+  });
+
+  it('keeps syslog but stops notifying when READINESS_NOTIFY is 0', () => {
+    writeFakeDocker(`printf '%s\\n' ${quote(errorJson())}; exit 1`);
+
+    const { status, logs, notifications, state } = runScript({
+      READINESS_NOTIFY: '0',
+    });
+
+    expect(status).toBe(0);
+    expect(logs).toHaveLength(1);
+    expect(logs[0]).toContain('daemon.err');
+    expect(notifications).toEqual([]);
+    expect(state).toBe('error\n1\n');
+  });
+
+  it('survives a notifier that always fails', () => {
+    writeFakeDocker(`printf '%s\\n' ${quote(errorJson())}; exit 1`);
+    // A notifier that exits non-zero and writes noise to both streams.
+    writeFileSync(
+      notifyScript,
+      `#!/bin/sh\necho 'boom' >&2\necho 'noise'\nexit 1\n`,
+      'utf8',
+    );
+
+    const { status, logs, state } = runScript();
+
+    // The wrapper's contract is that a delivery problem never becomes the
+    // probe's problem: exit stays 0, syslog still gets its line, state is written.
+    expect(status).toBe(0);
+    expect(logs).toHaveLength(1);
+    expect(logs[0]).toContain('status=error');
+    expect(state).toBe('error\n1\n');
+  });
+
+  it('survives a notifier that does not exist', () => {
+    writeFakeDocker(`printf '%s\\n' ${quote(errorJson())}; exit 1`);
+    notifyScript = join(workDir, 'missing-notifier.sh');
+
+    const { status, logs, state } = runScript();
+
+    expect(status).toBe(0);
+    expect(logs).toHaveLength(1);
+    expect(state).toBe('error\n1\n');
   });
 });

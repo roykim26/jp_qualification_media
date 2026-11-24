@@ -29,6 +29,8 @@
 #   COMPOSE_FILE           compose file used for `docker compose exec`
 #   COMPOSE_PROJECT        project name, if the file's directory does not imply it
 #   READINESS_TAG          syslog tag (default jpqm-readiness)
+#   READINESS_NOTIFY       set to 0 to keep syslog only (default 1)
+#   NOTIFY_SCRIPT          notifier to call (default: notify-feishu.sh next to this file)
 
 set -eu
 
@@ -36,6 +38,8 @@ TAG="${READINESS_TAG:-jpqm-readiness}"
 STATE_FILE="${READINESS_STATE_FILE:-var/readiness/last-status}"
 HEARTBEAT_EVERY="${HEARTBEAT_EVERY:-12}"
 TIMEOUT_MS="${READINESS_TIMEOUT_MS:-5000}"
+NOTIFY="${READINESS_NOTIFY:-1}"
+NOTIFY_SCRIPT="${NOTIFY_SCRIPT:-$(dirname "$0")/notify-feishu.sh}"
 
 COMPOSE_ARGS=""
 if [ -n "${COMPOSE_FILE:-}" ]; then
@@ -94,6 +98,12 @@ fi
 emit() {
   # emit <priority> <text>
   logger -t "$TAG" -p "daemon.$1" -- "$2" 2>/dev/null || true
+  # Second channel: syslog only reaches somebody who reads journald. The call is
+  # wrapped so a notification failure cannot change this run's verdict, its exit
+  # status, or the state file written below.
+  if [ "$NOTIFY" != "0" ]; then
+    sh "$NOTIFY_SCRIPT" --text "[$TAG] $2" >/dev/null 2>&1 || true
+  fi
 }
 
 detail="status=$status"

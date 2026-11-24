@@ -372,6 +372,67 @@ crontab -l | grep -v readiness-cron | crontab -
 
 **不要**顺手把 `/ready` 接进 compose healthcheck 或 Caddy——理由见上一节。
 
+## 飞书通知
+
+syslog 只有会去看 journald 的人才有用。这一节把同一批告警再发一份到飞书群，让故障自己找上门。
+
+### 凭据放哪
+
+在 `deploy/.env`（服务器上是 `/opt/jpqm/deploy/.env`）里加两个键，和 `DB_PASSWORD` 住一起。`.env` 已被 `.gitignore` 忽略，凭据不进仓库：
+
+```bash
+FEISHU_WEBHOOK=https://open.feishu.cn/open-apis/bot/v2/hook/<token>
+FEISHU_SIGN_SECRET=<机器人开启签名校验时才有，没开就留空>
+```
+
+`FEISHU_WEBHOOK` 留空 = 不发飞书，行为与 Sprint 3E 完全一致（只写 syslog）。`FEISHU_SIGN_SECRET` 留空 = 不签名；只有飞书机器人后台勾了「签名校验」才需要填。
+
+脚本按 `grep` + `cut -d= -f2-` 读这个文件，**不 source 它**——`.env` 是 compose 的插值文件，值里可能有空格或 `$`，source 会被 shell 解释。`-f2-` 的尾随 `-` 是必需的：base64 密钥末尾的 `=` 填充否则会被截掉。
+
+### 自检
+
+填完凭据先手动验一次，别等 cron 半夜发现发不出去：
+
+```bash
+cd /opt/jpqm && sh scripts/notify-feishu.sh --test
+```
+
+判据：飞书群里收到一条 `jpqm readiness self-check: ...`，且命令退出码为 `0`。失败时退出码 `1`，stderr 会给原因（`FEISHU_WEBHOOK is not configured` / `delivery failed (http=... curl=...) after N attempt(s)`）。
+
+**失败信息里不会出现 webhook 地址或密钥**——这行可能被 cron 抄进邮件或 syslog。地址只在你自己的 `deploy/.env` 里。
+
+### 什么时候会发
+
+由定时探针的状态机决定（见上一节），不是每次巡检都发：
+
+| 事件                                  | 消息内容                                            | syslog 级别 |
+| ------------------------------------- | --------------------------------------------------- | ----------- |
+| 故障开始                              | `status=error message=...`                          | err         |
+| 持续故障心跳（默认每 12 次 = 1 小时） | `still status=... for N checks`                     | warning     |
+| 恢复                                  | `recovered: status=ready after N checks`            | notice      |
+| 探针自身跑不起来                      | `status=unreachable message=probe did not run: ...` | err         |
+
+健康稳态下一条都不发。这个频率远低于飞书的限流阈值（5 次/秒、100 次/分钟），所以不需要额外限流。
+
+重试策略：HTTP 429、5xx、以及飞书返回的限流码 `9499` 会重试，共 3 次；签名错（`19021`）、token 失效这类每次都一样的错误不重试，直接报出来——重试只会延迟你知道它坏了。
+
+### 只留 syslog
+
+想临时关掉飞书、回到纯 syslog：
+
+```bash
+# 单次
+READINESS_NOTIFY=0 sh scripts/readiness-cron.sh
+# 长期：改 crontab 行
+*/5 * * * * cd /opt/jpqm && READINESS_NOTIFY=0 sh scripts/readiness-cron.sh
+```
+
+通知失败**不影响**巡检本身：状态文件照写、syslog 照记、退出码仍是 0。
+
+### 卸载
+
+删掉 `deploy/.env` 里的 `FEISHU_WEBHOOK=` 即可，或按上一节把 crontab 行去掉。
+
 ## 官方数据更新流程（SOP）
 
 触发：日报 `changed`/`blocked`/critical、`data:staleness` 到期、官方公告。采集、候选入库、审核批准仍是三次独立授权，逐段需所有者明示；巡检抓取与巡检落库也各算一次授权。
