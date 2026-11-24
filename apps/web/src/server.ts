@@ -219,7 +219,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 /**
  * `{ qualification: {...}, status: '...', facts: [...] }` -- the section pages.
  *
- * Two field checks that look cosmetic but are not:
+ * Three field checks that look cosmetic but are not:
  *
  * - `facts` elements: the renderer sorts by `fact.factKey` and prints
  *   `fact.displayValue`, so a single `null` throws mid-render. By then the
@@ -232,6 +232,16 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  *   failure 3A fixed at the error level, one level down. Requiring a non-empty
  *   string catches the broken shape without pinning the enum, so a status the
  *   API adds later degrades to "not in the sitemap" rather than to a 503.
+ * - the fact's provenance fields: `renderFactSource()` passes `sourceId`,
+ *   `sourceSnapshotId` and `sourceUrl` straight into `escapeHtml()`, which
+ *   calls `value.replaceAll`. A `null` there throws *after* the 200 header is
+ *   sent, so the reader gets a blank page -- measured, not assumed (see
+ *   Sprint 3K report §11 P2). `sourceUrl` and `officialVerifiedAt` are
+ *   optional in the schema, so they are only checked when present.
+ *
+ * Deliberately *not* checked: `valueType`, `riskLevel`, `provenanceStatus`.
+ * The renderer treats an unknown value as "not verified yet" and still
+ * renders; rejecting the whole page would be a downgrade.
  */
 function isQualificationView(value: unknown): boolean {
   if (!isRecord(value)) return false;
@@ -246,7 +256,13 @@ function isQualificationView(value: unknown): boolean {
       (fact) =>
         isRecord(fact) &&
         typeof fact.factKey === 'string' &&
-        typeof fact.displayValue === 'string',
+        typeof fact.displayValue === 'string' &&
+        typeof fact.examYear === 'number' &&
+        typeof fact.sourceId === 'string' &&
+        typeof fact.sourceSnapshotId === 'string' &&
+        (fact.sourceUrl === undefined || typeof fact.sourceUrl === 'string') &&
+        (fact.officialVerifiedAt === undefined ||
+          typeof fact.officialVerifiedAt === 'string'),
     )
   );
 }

@@ -46,20 +46,20 @@
 
 ### 3.1 `apps/web/src/server.ts`
 
-| 位置       | 改动                                                                                                             |
-| ---------- | ---------------------------------------------------------------------------------------------------------------- |
-| `:184-213` | 新增 `readJson<T>(response, label, isUsable)`：`response.json()` 抛错或形状不合格都转 `UpstreamUnavailableError` |
-| `:215-217` | 新增 `isRecord(value)`                                                                                           |
-| `:219-244` | `isQualificationView()` 加固：`facts` 的**每个元素**也必须是对象且带 string `factKey`/`displayValue`             |
-| `:246-249` | 新增 `hasArrayData(value)`                                                                                       |
-| `:251-258` | 新增 `isComparisonEnvelope(value)`：`data` 是**对象**，其下 `qualifications`/`rows` 都是数组                     |
-| `:260-320` | 四个 `read*` 全部改走 `readJson`，返回类型显式标注                                                               |
-| `:378-401` | 新增并导出 `closeAfterResponseStarted(req, res, error)`                                                          |
-| `:696-703` | `catch` 开头插入 `if (res.headersSent) { closeAfterResponseStarted(...); return; }`                              |
+| 位置       | 改动                                                                                                                                                                                                                                           |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `:184-213` | 新增 `readJson<T>(response, label, isUsable)`：`response.json()` 抛错或形状不合格都转 `UpstreamUnavailableError`                                                                                                                               |
+| `:215-217` | 新增 `isRecord(value)`                                                                                                                                                                                                                         |
+| `:219-244` | `isQualificationView()` 加固：`facts` 的**每个元素**也必须是对象且带 string `factKey`/`displayValue`；`status` 必须非空字符串（P1）；`examYear`/`sourceId`/`sourceSnapshotId` 必填，`sourceUrl`/`officialVerifiedAt` 存在时必须是 string（P2） |
+| `:246-249` | 新增 `hasArrayData(value)`                                                                                                                                                                                                                     |
+| `:251-258` | 新增 `isComparisonEnvelope(value)`：`data` 是**对象**，其下 `qualifications`/`rows` 都是数组                                                                                                                                                   |
+| `:260-320` | 四个 `read*` 全部改走 `readJson`，返回类型显式标注                                                                                                                                                                                             |
+| `:378-401` | 新增并导出 `closeAfterResponseStarted(req, res, error)`                                                                                                                                                                                        |
+| `:696-703` | `catch` 开头插入 `if (res.headersSent) { closeAfterResponseStarted(...); return; }`                                                                                                                                                            |
 
 `UpstreamUnavailableError`、503/502 的状态码语义、`/sitemap.xml` 的独立 catch、`/` 的 `Promise.allSettled` 兜底**全部未改**。
 
-### 3.2 `tests/web-upstream-shape.test.ts`（新增，345 行，16 用例）
+### 3.2 `tests/web-upstream-shape.test.ts`（新增，现 420 行，21 用例）
 
 见 §5。
 
@@ -208,35 +208,43 @@ Task B 覆盖的是「形状明显不对」。但形状校验永远不可能穷�
 
 ## 8. 测试结果
 
-### 8.1 新增用例（`tests/web-upstream-shape.test.ts`，14 条）
+### 8.1 新增用例（`tests/web-upstream-shape.test.ts`，现 420 行，21 用例）
 
-| 分组                        | 用例                                                                                                                         |
-| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| 坏形状 → 503                | `{}`、`null`、`[]`、缺 `facts`、截断 JSON、`200` + HTML、compare 缺 data 封装、calendar 缺 data、**`facts: [null]`**（9 条） |
-| 健康路径不变                | 正常 view 仍 200（1 条）                                                                                                     |
-| `/` 不返 5xx                | 坏形状下首页仍 200（1 条，守 healthcheck 语义）                                                                              |
-| sitemap XML 错误体          | 坏形状下 503 + `application/xml` + 无 `<urlset`（1 条，守 3A Task B）                                                        |
-| `closeAfterResponseStarted` | 不写状态、响应仍以已发出的 200 结束（1 条）；已 `end()` 时幂等（1 条）                                                       |
+| 分组                        | 用例                                                                                                                                                                                                                                             |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 坏形状 → 503                | `{}`、`null`、`[]`、缺 `facts`、截断 JSON、`200` + HTML、compare 缺 data 封装、calendar 缺 data、`facts: [null]`、缺 `status`、`examYear: null`、`sourceId: null`、`sourceSnapshotId: null`、`sourceUrl: 123`、`officialVerifiedAt: 99`（15 条） |
+| 健康路径不变                | 正常 view 仍 200（1 条）                                                                                                                                                                                                                         |
+| `/` 不返 5xx                | 坏形状下首页仍 200（1 条，守 healthcheck 语义）                                                                                                                                                                                                  |
+| sitemap XML 错误体          | 坏形状下 503 + `application/xml` + 无 `<urlset`（1 条，守 3A Task B）；缺 `status` 时同样（1 条，P1）                                                                                                                                            |
+| `closeAfterResponseStarted` | 不写状态、响应仍以已发出的 200 结束（1 条）；已 `end()` 时幂等（1 条）                                                                                                                                                                           |
 
 每条坏形状用例都断言三件事：**503**、**`retry-after: 60`**、**之后同一实例仍能 200**。第三件是关键——它证明进程没死。
 
 ### 8.2 变异测试（证明测试有效）
 
-| 变异                                               | 结果                                          |
-| -------------------------------------------------- | --------------------------------------------- |
-| `isQualificationView` 去掉 `facts.every(...)`      | ✅ 抓住（`facts: [null]` → 200 而非 503）     |
-| `closeAfterResponseStarted` 里加 `writeHead(502)`  | ✅ 抓住（用例 5s 超时：头已发，响应永不结束） |
-| `isComparisonEnvelope` 改回复用 `hasArrayData`     | ✅ 抓住（`/compare/` 503）                    |
-| 禁用整个 `headersSent` 守卫（`if (false && ...)`） | ⚠️ **未抓住**，原因见下                       |
+| 变异                                                 | 结果                                                     |
+| ---------------------------------------------------- | -------------------------------------------------------- |
+| `isQualificationView` 去掉 `facts.every(...)`        | ✅ 抓住（`facts: [null]` → 200 而非 503）                |
+| `closeAfterResponseStarted` 里加 `writeHead(502)`    | ✅ 抓住（用例 5s 超时：头已发，响应永不结束）            |
+| `isComparisonEnvelope` 改回复用 `hasArrayData`       | ✅ 抓住（`/compare/` 503）                               |
+| `isQualificationView` 去掉 `status` 非空校验         | ✅ 抓住（2 条：`missing-status` 页 + sitemap）           |
+| `isQualificationView` 去掉 `examYear` 校验           | ✅ 抓住（`answers 503 for a fact with a null examYear`） |
+| `isQualificationView` 去掉 `sourceId` 校验           | ✅ 抓住（`...null sourceId`）                            |
+| `isQualificationView` 去掉 `sourceSnapshotId` 校验   | ✅ 抓住（`...null sourceSnapshotId`）                    |
+| `isQualificationView` 去掉 `sourceUrl` 校验          | ✅ 抓住（`...sourceUrl is a number`）                    |
+| `isQualificationView` 去掉 `officialVerifiedAt` 校验 | ✅ 抓住（`...officialVerifiedAt is a number`）           |
+| 禁用整个 `headersSent` 守卫（`if (false && ...)`）   | ⚠️ **未抓住**，原因见下                                  |
 
-**关于第 4 条**：禁用守卫时 12 条测试仍全绿。原因是 Task B 把「明显不对的形状」都拦在了写头之前，能通过 HTTP 到达守卫的只剩「通过校验但渲染仍抛错」的移动靶。这正是把守卫抽成导出函数、直接驱动它的原因（§6.1）——守卫的行为由 2 条直接用例守着，不再依赖能否构造出完美触发场景。
+**关于最后一条**：禁用守卫时 12 条测试仍全绿。原因是 Task B 把「明显不对的形状」都拦在了写头之前，能通过 HTTP 到达守卫的只剩「通过校验但渲染仍抛错」的移动靶。这正是把守卫抽成导出函数、直接驱动它的原因（§6.1）——守卫的行为由 2 条直接用例守着，不再依赖能否构造出完美触发场景。
+
+**关于变异 5 的一次假阴性**：第一次跑 `officialVerifiedAt` 变异时 21 条全绿。原因是修复一处语法错误时把那一行连带恢复了，测试跑的是正确代码——变异根本没生效。重做后 1 条失败，确认抓住。教训：变异测试必须确认变异真的落盘了（`git diff` 或读回文件），否则「全绿」什么都不能证明。
 
 ### 8.3 全量矩阵
 
 | 检查项                                  | 结果                                          |
 | --------------------------------------- | --------------------------------------------- |
 | `pnpm typecheck`                        | EXIT 0                                        |
-| `pnpm test`                             | **28 files / 384 tests** 全过                 |
+| `pnpm test`                             | **28 files / 389 tests** 全过                 |
 | `pnpm test:verify-gate`                 | **51 pass / 0 fail**                          |
 | `pnpm build`                            | EXIT 0                                        |
 | `pnpm format:check`                     | EXIT 0                                        |
@@ -245,17 +253,44 @@ Task B 覆盖的是「形状明显不对」。但形状校验永远不可能穷�
 | `pnpm verify:all`                       | EXIT 0，6 资格全过，`errors: []`              |
 | `pnpm smoke:docker`                     | **11 项 ok**（含 noindex、sitemap、ICS、404） |
 
-对照 3J：`pnpm test` 从 27 files / 368 tests 增至 **28 files / 384 tests**（+1 file / +16 tests）。
+对照 3J：`pnpm test` 从 27 files / 368 tests 增至 **28 files / 389 tests**（+1 file / +21 tests）。其中 P1 贡献 +2（16），P2 贡献 +5（21）。
 
 ---
 
 ## 9. 未处理问题
 
 1. **`headersSent` 分支没有 HTTP 层回归**。如 §8.2 所述，Task B 生效后无法从外部稳定触发该分支。当前靠直接驱动 `closeAfterResponseStarted` 守住行为；如果将来需要一个端到端用例，得引入可控的渲染器注入点——那是架构改动，不在本轮。
-2. **形状校验是浅层的**。`facts` 元素只校验 `factKey`/`displayValue` 两个字段。`render.ts` 若开始解引用新字段，需同步加固，否则退回「200 后响应丢失」。
+2. **形状校验是浅层的**。`facts` 元素现在校验 `factKey`/`displayValue`/`examYear`/`sourceId`/`sourceSnapshotId`/`sourceUrl`/`officialVerifiedAt` 七个字段（P2 实测补的）。`render.ts` 若开始解引用新字段，需同步加固，否则退回「200 后响应丢失」。**已实测的字段边界见 §9.2。**
 3. **502 分支现在仍保留**，但正常路径已基本无法到达（所有 `response.json()` 失败都在 `readJson` 里转成了 503）。它是最后一道兜底，故意留着。
 4. **`status` 只校验「是非空字符串」，不校验枚举**。这样 API 将来新增一个状态值时，行为是「该资格不进 sitemap」而不是「整站 503」。代价是：如果 API 把状态拼错成另一个非空字符串，web 不会发现，该资格会静默从 sitemap 消失。**这是有意的取舍**——宁可少收录一个资格，也不因为一个字段值而让整站降级。要彻底解决得让 API 侧的 schema 测试覆盖状态枚举。
 5. **客户端看到的是截断响应**。走到守卫时，客户端收到的是「已写头 + 空 body」的 200，而不是 503。这在语义上不理想，但比进程崩溃好，且 Task B 让这种情况极难出现。
+
+### 9.2 P2 实测：`fact.*` 解引用的字段边界
+
+对 `render.ts` 里每个 `fact.xxx` 解引用逐个替换成坏值，请求 `/shikaku/it-passport/`，实测结果：
+
+| 形状                    | 结果            | 机制                                                          |
+| ----------------------- | --------------- | ------------------------------------------------------------- |
+| baseline（健康）        | `200 len=26114` | —                                                             |
+| `sourceId=null`         | **`200 len=0`** | `renderFactSource()` → `escapeHtml(null)` → `replaceAll` 抛错 |
+| `sourceSnapshotId=null` | **`200 len=0`** | 同上                                                          |
+| `sourceUrl=123`         | **`200 len=0`** | `escapeHtml(123)` → `value.replaceAll is not a function`      |
+| `officialVerifiedAt=99` | **`200 len=0`** | `formatVerifiedDay()` → `new Date(99)` 后字符串化失败         |
+| `displayValue=null`     | `503 len=18804` | 已被 3K 原有校验拦住                                          |
+| `examYear=null`         | `200 len=25285` | 不抛错，渲染成字面量 `null年度`（静默错误，非崩溃）           |
+| `provenanceStatus=99`   | `200 len=26086` | 不抛错，降级为「確認待ち」                                    |
+| `normalizedValue={}`    | `200 len=25175` | 不抛错                                                        |
+| `valueType=null`        | `200 len=26114` | 渲染器完全不读                                                |
+| `riskLevel=null`        | `200 len=26114` | 渲染器完全不读                                                |
+
+崩溃日志原文只有两种：
+
+```
+web: GET /shikaku/it-passport/ failed after the response started: Cannot read properties of null (reading 'replaceAll')
+web: GET /shikaku/it-passport/ failed after the response started: value.replaceAll is not a function
+```
+
+**处理原则**：只校验「无条件解引用且会抛错或渲染出错误内容」的字段。`provenanceStatus`/`normalizedValue`/`valueType`/`riskLevel` 故意不校验——渲染器把它们当「未确认」照常渲染，整页 503 反而是降级。`examYear` 虽然不抛错，但渲染成 `null年度` 是错误内容，一并校验。
 
 ---
 
@@ -275,13 +310,15 @@ Task B 覆盖的是「形状明显不对」。但形状校验永远不可能穷�
 
 **P1（已完成，随本轮一起提交）：`/sitemap.xml` 的 `status` 校验。** 原计划是「给 sitemap 补形状校验」，实测后修正了判断：`/sitemap.xml` 本来就复用 `readQualification()`，3K 的 Task B 已经覆盖了坏 JSON 与坏形状。真正的缺口在更下层——`view.status` 缺失时 `sitemapQualificationPaths()` 返回 `[]`，sitemap 照样 `200 <urlset>`，只是少了 5 个 `loc`。现在 `isQualificationView` 要求 `status` 是非空字符串，缺口补齐（见 §9 第 4 条的取舍说明）。
 
-**P2：确认 `facts` 元素校验的字段集是否够。** 扫一遍 `render.ts` 里所有 `fact.xxx` 的解引用，把「无条件解引用」的字段补进 `isQualificationView`。这是防 §9.2 那条风险的直接手段。
+**P2（已完成，随本轮一起提交）：`facts` 元素校验的字段集。** 扫了 `render.ts` 里全部 `fact.xxx` 解引用并逐个用坏值实测，发现 4 个字段漏检（`sourceId`/`sourceSnapshotId`/`sourceUrl`/`officialVerifiedAt`），它们会让页面 `200` 但 body 为空——正是 §9 第 5 条那条风险的具体成因。现已补进 `isQualificationView`，另加 `examYear`（不抛错但渲染成 `null年度`）。实测表与处理原则见 §9.2。5 个变异全部被抓。
 
 **P3：`/pass-rate/` 单资格故障观测。** 3A 定为方案 A（整页 503），切换触发条件是「生产观测到 503 中过半由单资格故障引起」——需要先有观测数据。
 
 **P4：`/ready` 外部可观测性。** 3D 的 `check-readiness.mjs` 已就绪但未在 Caddy 暴露。
 
 **P5：上线。** Sprint 3A–3K 的全部代码仍在 `chore/phase1-baseline`，VPS 是 `main@01b86dd`。属正式发布，需 Owner 单独授权。
+
+**P6（P2 的延伸）：`render.ts` 解引用与 `isQualificationView` 的同步机制。** 目前靠人工扫。若 `render.ts` 新增 `fact.xxx` 解引用，校验不会自动跟上。根治办法是让渲染器的类型收窄把「可空字段」显式标注出来，或加一条静态检查（例如测试里断言 `isQualificationView` 的字段集 ⊇ `render.ts` 解引用的字段集）。这是架构改动，需要单开一轮。
 
 另注：**3I 报告 §10 的 P1（VPS 装 crontab）因本机无 SSH 私钥无法执行**——不是授权问题，是缺凭据。
 

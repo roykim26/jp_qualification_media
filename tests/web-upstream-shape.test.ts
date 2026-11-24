@@ -34,6 +34,11 @@ type BodyMode =
   | 'compare-flat'
   | 'calendar-no-data'
   | 'fact-missing-fields'
+  | 'fact-null-exam-year'
+  | 'fact-null-source-id'
+  | 'fact-null-snapshot-id'
+  | 'fact-numeric-source-url'
+  | 'fact-numeric-verified-at'
   | 'missing-status';
 
 let bodyMode: BodyMode = 'ok';
@@ -98,15 +103,37 @@ function bodyFor(url: string): string {
     case 'calendar-no-data':
       return JSON.stringify({ events: [] });
     case 'fact-missing-fields':
-      // Passes `isQualificationView` (an object, a string slug, an array of
-      // facts) yet is not renderable: the renderer reads fields off each fact.
-      // This is the shape that proves the `headersSent` guard still matters
-      // after the body checks -- the body check cannot catch everything.
+      // A fact that is not even an object. Caught by the per-fact check now, so
+      // it answers 503 from the body check rather than from the guard -- kept
+      // because it is the cheapest probe of "facts elements are validated".
       return JSON.stringify({
         qualification: itPassport,
         status: 'verified',
         facts: [null],
       });
+    case 'fact-null-exam-year':
+    case 'fact-null-source-id':
+    case 'fact-null-snapshot-id':
+    case 'fact-numeric-source-url':
+    case 'fact-numeric-verified-at': {
+      // Sprint 3K P2, measured: these five fields reach the renderer. Four of
+      // them threw (`escapeHtml(null)`, `escapeHtml(123)`) *after* the 200
+      // header was sent, so the reader got a blank page instead of a 503.
+      // `examYear` is the quiet one: `null` renders as `null年度` -- no throw,
+      // but a page that claims a fact belongs to the year "null". Both are
+      // rejected here; the difference is only in how they used to fail.
+      const fact: Record<string, unknown> = { ...qualificationView().facts[0] };
+      if (bodyMode === 'fact-null-exam-year') fact.examYear = null;
+      if (bodyMode === 'fact-null-source-id') fact.sourceId = null;
+      if (bodyMode === 'fact-null-snapshot-id') fact.sourceSnapshotId = null;
+      if (bodyMode === 'fact-numeric-source-url') fact.sourceUrl = 123;
+      if (bodyMode === 'fact-numeric-verified-at') fact.officialVerifiedAt = 99;
+      return JSON.stringify({
+        qualification: itPassport,
+        status: 'verified',
+        facts: [fact],
+      });
+    }
     case 'missing-status':
       // No `status`. `sitemapQualificationPaths()` treats an unrecognised
       // status as "not indexable", so without the check this dropped the whole
@@ -209,6 +236,34 @@ describe('web server rejects unusable upstream bodies', () => {
       // Without the `headersSent` guard this one kills the process.
       mode: 'fact-missing-fields',
       label: 'a view whose facts are not renderable',
+      path: '/shikaku/it-passport/',
+    },
+    {
+      // The five fields measured in Sprint 3K P2: each one reached the
+      // renderer. Four produced `200` with an empty body; `examYear` rendered
+      // the literal string "null年度".
+      mode: 'fact-null-exam-year',
+      label: 'a fact with a null examYear',
+      path: '/shikaku/it-passport/',
+    },
+    {
+      mode: 'fact-null-source-id',
+      label: 'a fact with a null sourceId',
+      path: '/shikaku/it-passport/',
+    },
+    {
+      mode: 'fact-null-snapshot-id',
+      label: 'a fact with a null sourceSnapshotId',
+      path: '/shikaku/it-passport/',
+    },
+    {
+      mode: 'fact-numeric-source-url',
+      label: 'a fact whose sourceUrl is a number',
+      path: '/shikaku/it-passport/',
+    },
+    {
+      mode: 'fact-numeric-verified-at',
+      label: 'a fact whose officialVerifiedAt is a number',
       path: '/shikaku/it-passport/',
     },
     {
