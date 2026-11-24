@@ -1,4 +1,5 @@
 # DeepSeek Harness — Sprint 3A Task
+
 ## 数据可靠性与错误边界收敛
 
 **项目：** ShikakuCheck  
@@ -500,7 +501,7 @@ services/api/src/public-facts.ts
 存在：
 
 ```ts
-if (!databaseUrl) return []
+if (!databaseUrl) return [];
 ```
 
 这可能导致：
