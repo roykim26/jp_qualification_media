@@ -500,7 +500,13 @@ Caddy access log（7605 行，2026-11-14 11:29Z – 2026-11-24 23:19Z）：
 5. **生产从未跑过 patrol**，`coverageGap` 恒为 `not_run`（§10.3）。
 6. **Caddyfile 的本地改动仍未提交**。`blog.waystoneai.online` 的反代块只存在于 VPS 磁盘上，不在仓库里。下次有人 `git checkout` 就会丢。5 个 `??` 备份/验证文件同理。
 7. **`/pass-rate/` 观测数据只有约 20 分钟**。见 §13。
-8. **access log 无轮转配置**。`deploy/caddy-logs/access.log` 已 9.6 MB / 7605 行，Caddyfile 里的 `roll_size 10mb` 是**容器内**路径，宿主机上的 bind mount 未见轮转产物。
+8. **access log 的轮转配置正确，但尚未触发**。初稿这里写的是「无轮转配置、宿主机未见轮转产物」，实测后归因是错的，修正如下：
+   - `deploy/caddy/Caddyfile:8-11` 有 `output file /var/log/caddy/access.log { roll_size 10mb` + `roll_keep 5`。
+   - 挂载是**目录级**：`/opt/jpqm/deploy/caddy-logs -> /var/log/caddy`，不是单文件 bind mount。所以 Caddy 在容器内 rename，宿主机一定能看到轮转产物，不存在「产物落在容器层」的问题。
+   - `access.log` 实测 9641459 字节 = **9.196 MiB**，小于 `roll_size 10mb`（10485760 字节）→ **只是还没到阈值**。
+   - `roll_keep 5` 意味着 access.log 系列最多占 6 × 10 MB ≈ 60 MB，磁盘不是风险。
+   - 真正的待办只剩一条：`blog-access.log`（600740 字节，由 `blog` 这个 nginx 容器写入，不归本仓库的 Caddyfile 管）**没有轮转策略，已停在 11-23 13:42 不再增长**。这条要等博客那边处理，与本项目无关。
+   - 复核时机：`access.log` 跨过 10 MiB 后应能看到 `access-<timestamp>.log`，届时确认一次即可。
 
 ---
 
@@ -539,7 +545,7 @@ docker logs deploy-web-1 2>&1 | grep 'plan A: one failure fails the page'
 | `main` 与生产不一致                    | 新人 clone 到旧代码；回滚点混乱         | §12 第 1 条                                                                               |
 | Caddyfile 改动只存在于 VPS 磁盘        | 一次误操作让博客下线                    | 已备份到 `/root/jpqm-manual-backup/`；建议尽快提交进仓库                                  |
 | 就绪探针的假告警被学会忽略             | 真故障也忽略                            | 已修 `cac5a7e`；需观察是否还有别的「永远红」项                                            |
-| access log 无轮转                      | 磁盘写满 → caddy 挂                     | §12 第 8 条                                                                               |
+| access log 无轮转                      | 磁盘写满 → caddy 挂                     | **已复核：配置正确、目录级挂载、9.196 MiB 未达 10 MiB 阈值。风险不成立**                  |
 | 迁移 0030 不可回滚                     | 回滚代码后数据仍是新的                  | 0030 只动统计数据不动 schema，旧代码兼容                                                  |
 
 ---
@@ -554,7 +560,7 @@ docker logs deploy-web-1 2>&1 | grep 'plan A: one failure fails the page'
 4. **P2 — 把 Caddyfile 的博客 vhost 提交进仓库**，消除「线上配置不在版本控制里」这个隐患。
 5. **P3 — `status` 字段改名**（§10.1），或加独立的 `overallStatus`。
 6. **P3 — 生产跑一次 patrol**，让 `coverageGap` 有真值。
-7. **P4 — access log 轮转 + 404 噪声过滤**（§10.4）。
+7. **P4 — 404 噪声过滤**（§10.4）。access log 的轮转经复核已确认配置正确、只是未到阈值，不再是待办；剩下的只有 36.8% 的扫描器 404 噪声。
 
 ---
 
