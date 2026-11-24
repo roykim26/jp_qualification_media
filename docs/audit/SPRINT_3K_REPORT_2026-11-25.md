@@ -28,6 +28,8 @@
 
 - 执行前 HEAD：`9a11807`（`docs: 落账 Sprint 3J 执行报告`）
 - 本轮内容 commit：`66fcf7d`（`fix(web): 上游故障形状收敛（Sprint 3K）`）
+- 落账 commit：`d39b69e`（`docs: 落账 Sprint 3K 执行报告`）
+- 追加 commit：`68786ab`（`fix(web): 校验 sitemap 依赖的状态字段`）—— 即 §11 的 P1，见 §9 第 4 条
 - 工作树在 commit 前：
 
 | 状态 | 文件                                            |
@@ -57,7 +59,7 @@
 
 `UpstreamUnavailableError`、503/502 的状态码语义、`/sitemap.xml` 的独立 catch、`/` 的 `Promise.allSettled` 兜底**全部未改**。
 
-### 3.2 `tests/web-upstream-shape.test.ts`（新增，333 行，14 用例）
+### 3.2 `tests/web-upstream-shape.test.ts`（新增，345 行，16 用例）
 
 见 §5。
 
@@ -234,7 +236,7 @@ Task B 覆盖的是「形状明显不对」。但形状校验永远不可能穷�
 | 检查项                                  | 结果                                          |
 | --------------------------------------- | --------------------------------------------- |
 | `pnpm typecheck`                        | EXIT 0                                        |
-| `pnpm test`                             | **28 files / 382 tests** 全过                 |
+| `pnpm test`                             | **28 files / 384 tests** 全过                 |
 | `pnpm test:verify-gate`                 | **51 pass / 0 fail**                          |
 | `pnpm build`                            | EXIT 0                                        |
 | `pnpm format:check`                     | EXIT 0                                        |
@@ -243,7 +245,7 @@ Task B 覆盖的是「形状明显不对」。但形状校验永远不可能穷�
 | `pnpm verify:all`                       | EXIT 0，6 资格全过，`errors: []`              |
 | `pnpm smoke:docker`                     | **11 项 ok**（含 noindex、sitemap、ICS、404） |
 
-对照 3J：`pnpm test` 从 27 files / 368 tests 增至 **28 files / 382 tests**（+1 file / +14 tests）。
+对照 3J：`pnpm test` 从 27 files / 368 tests 增至 **28 files / 384 tests**（+1 file / +16 tests）。
 
 ---
 
