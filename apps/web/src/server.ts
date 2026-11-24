@@ -45,6 +45,51 @@ const port = Number(process.env.WEB_PORT ?? 3000);
 const apiBaseUrl = process.env.API_BASE_URL ?? 'http://127.0.0.1:4100';
 const updatesPageSize = 20;
 
+/**
+ * Hard ceiling for one upstream API request (Sprint 3A / G-10).
+ *
+ * Before this constant existed, `fetch()` had no deadline: a TCP connection
+ * that was accepted but never answered held the request (and the browser, and
+ * the crawler) open indefinitely, so neither the 503 outage path nor
+ * `Retry-After` ever fired.  A hanging upstream is the same fact as a refused
+ * one — "we do not know the truth right now" — so it must fail on the same
+ * clock and land on the same 503 path.
+ *
+ * 5000 ms is chosen because:
+ *   - it matches the only other timeout already in this codebase
+ *     (`connectionTimeoutMillis: 5000` in services/api/src/public-facts.ts and
+ *     public-updates.ts), so one number describes "the source did not answer";
+ *   - the upstream is a sibling container on the same Docker network running a
+ *     single indexed SQL query, so a healthy answer is milliseconds, not
+ *     seconds; 5 s is ~3 orders of magnitude of headroom, not a tight budget;
+ *   - it keeps the fan-out routes bounded: `/`, `/pass-rate/` and
+ *     `/sitemap.xml` fetch their qualifications in parallel, so the wall time
+ *     is one timeout rather than N, and the worst case stays inside the
+ *     deploy/docker-compose.prod.yml web healthcheck window.
+ *
+ * `UPSTREAM_TIMEOUT_MS` exists so the timeout can be exercised by a test
+ * without sleeping for the production value; it is not a tuning knob for
+ * production, which keeps the default.
+ */
+const upstreamTimeoutMs = parseUpstreamTimeoutMs();
+
+function parseUpstreamTimeoutMs(): number {
+  const parsed = Number(process.env.UPSTREAM_TIMEOUT_MS);
+  if (!Number.isInteger(parsed) || parsed < 100 || parsed > 60_000)
+    return 5_000;
+  return parsed;
+}
+
+/**
+ * `AbortSignal.timeout()` rejects with a `TimeoutError` DOMException; an
+ * aborted body stream rejects with `AbortError`.  Both mean the deadline we
+ * set was reached, not that the payload was malformed.
+ */
+function isAbortOrTimeout(error: unknown): boolean {
+  const name = (error as { name?: unknown } | null | undefined)?.name;
+  return name === 'TimeoutError' || name === 'AbortError';
+}
+
 function siteOrigin(): string {
   const fallback = `http://127.0.0.1:${port}`;
   const configured = process.env.SITE_ORIGIN?.trim() || fallback;
@@ -67,6 +112,21 @@ function escapeXml(value: string): string {
 
 function renderSitemap(urls: readonly string[]): string {
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls.map((url) => `<url><loc>${escapeXml(url)}</loc></url>`).join('')}</urlset>`;
+}
+
+/**
+ * Sprint 3A / Task B: a failed sitemap must fail *as a sitemap*.
+ *
+ * Sprint 2B answered 503 correctly but reused the HTML outage page, so a
+ * crawler that had already parsed the response as XML got an HTML document
+ * with a `text/html` content type.  The status was right and the payload was
+ * unreadable.  This keeps the status and the `Retry-After` contract and makes
+ * the body valid XML that deliberately carries no `<urlset>`: an empty
+ * `<urlset>` would be a *successful* sitemap claiming the site has no pages,
+ * which is exactly the misreading the 503 exists to prevent.
+ */
+function renderSitemapError(): string {
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<error xmlns="http://shikakucheck.com/ns/sitemap-error"><message>temporarily unavailable</message><retryAfterSeconds>60</retryAfterSeconds></error>`;
 }
 
 /**
@@ -94,10 +154,17 @@ export class UpstreamUnavailableError extends Error {
 async function fetchUpstream(input: string): Promise<Response> {
   let response: Response;
   try {
-    response = await fetch(input);
+    // The signal also covers reading the body: if the upstream sends headers
+    // and then stalls mid-payload, `response.json()` rejects once the same
+    // deadline expires, so a half-sent answer can never be parsed as data.
+    response = await fetch(input, {
+      signal: AbortSignal.timeout(upstreamTimeoutMs),
+    });
   } catch (error) {
     throw new UpstreamUnavailableError(
-      `API request failed: ${(error as Error).message}`,
+      isAbortOrTimeout(error)
+        ? `API request timed out after ${upstreamTimeoutMs}ms`
+        : `API request failed: ${(error as Error).message}`,
     );
   }
   if (!response.ok)
@@ -160,10 +227,15 @@ function parseUpdatesPage(value: string | null): number {
 async function proxyIcs(apiPath: string, res: ServerResponse) {
   let response: Response;
   try {
-    response = await fetch(`${apiBaseUrl}${apiPath}`);
+    // Same deadline as fetchUpstream(): the ICS proxy is the one fetch that
+    // does not go through that helper, and a hung calendar download would
+    // otherwise hold the connection open with no 503 and no Retry-After.
+    response = await fetch(`${apiBaseUrl}${apiPath}`, {
+      signal: AbortSignal.timeout(upstreamTimeoutMs),
+    });
   } catch {
-    // Same rule as the HTML routes: an unreachable upstream is a temporary
-    // outage (503), not a missing calendar.
+    // Same rule as the HTML routes: an unreachable or stalled upstream is a
+    // temporary outage (503), not a missing calendar.
     res.writeHead(503, {
       'content-type': 'text/html; charset=utf-8',
       'retry-after': '60',
@@ -268,12 +340,30 @@ export async function handleRequest(
         ...editorialGuideSlugs.map((slug) => `/guide/${slug}/`),
         ...editorialAboutSlugs.map((slug) => `/about/${slug}/`),
       ];
-      const views = await Promise.all(
-        launchQualifications.map(async (qualification) => ({
-          qualification,
-          view: await readQualification(qualification.slug),
-        })),
-      );
+      let views: {
+        qualification: (typeof launchQualifications)[number];
+        view: Awaited<ReturnType<typeof readQualification>>;
+      }[];
+      try {
+        views = await Promise.all(
+          launchQualifications.map(async (qualification) => ({
+            qualification,
+            view: await readQualification(qualification.slug),
+          })),
+        );
+      } catch (error) {
+        // Answer in the format the caller asked for (Task B): 503 keeps the
+        // outage semantics and Retry-After, but the body is XML without a
+        // <urlset>, never the HTML error page.
+        if (error instanceof UpstreamUnavailableError) {
+          res.writeHead(503, {
+            'content-type': 'application/xml; charset=utf-8',
+            'retry-after': '60',
+          });
+          return res.end(renderSitemapError());
+        }
+        throw error;
+      }
       const qualificationPaths = views.flatMap(({ qualification, view }) =>
         sitemapQualificationPaths(
           qualification.slug,
