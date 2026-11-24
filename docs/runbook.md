@@ -1,6 +1,8 @@
-# 阶段 0/1 运行说明
+# 运行说明（本机开发 → 生产部署）
 
-本项目仅支持本地开发。不得配置生产数据库、生产对象存储、AdSense 或真实凭据。
+本文件同时覆盖**本机开发**与**生产部署**两套形态。第 1–8 节与第 9 节的部分内容适用于本机；「生产部署（VPS）」一节及其后内容适用于生产。两者不得混用凭据：本机用 `qualification_dev`，生产用 `deploy/.env` 中的口令，真实凭据只存在于服务器上，不提交仓库。
+
+> 2026-11-24 修订：本文件此前在开头写「仅支持本地开发、不得配置生产数据库」，与后文的「生产部署（VPS）」章节自相矛盾（生产自 2026-11-15 起已在 https://shikakucheck.com 运行）。现已改为双形态说明，并把数据读数从 176 条更新为当前实际值。
 
 `SITE_ORIGIN` 用于 canonical、`robots.txt` 和 `sitemap.xml` 的绝对 URL；本地可使用 `http://127.0.0.1:3000`。已确认的生产值为 `https://shikakucheck.com`；应只在部署平台的生产环境变量中设置，不能提交真实生产凭据。生产环境缺少该变量时公开站拒绝生成 SEO 文件。
 
@@ -16,9 +18,11 @@
 
 ## 当前范围
 
-阶段 0/1/2/3 已归档：六资格页面、跨资格日程/比较/更新、ICS 下载与技术 SEO 基线均已完成。数据侧当前状态为 176 条已批准正式事实、覆盖缺口 0、`pnpm verify:all` 六资格全通过（读数见 `docs/data-gate-semantics.md` 第 10 节）。
+阶段 0/1/2/3 已归档：六资格页面、跨资格日程/比较/更新、ICS 下载与技术 SEO 基线均已完成。生产站自 2026-11-15 起在 `https://shikakucheck.com` 运行。
 
-仍不在范围内：生产发布与生产数据库/对象存储、实时定时采集、正式认证与外部通知。页面完成不等于数据完成；每个资格哪些字段有官方事实、哪些靠规则型说明闭合，以对应的 `docs/<qualification>-source-contract.md` 为准。
+数据侧当前状态为 **1007 条**已批准正式事实（宅建 16／行政書士 15／IT Passport 10／基本情報技術者 28／簿記 863／FP 75）、覆盖缺口 0、`pnpm verify:all` 六资格全通过（读数见 `docs/data-gate-semantics.md` 第 10 节）。注意 1007 条里簿記占 863 条（85.7%）且几乎全是历年合格率统计，**条数不代表六个资格信息同等丰富**；`coverageGaps=0` 也不代表字段齐备（`conditional` 档在维度未命中时整条跳过、`post_event` 档永不参与），语义见 `docs/data-gate-semantics.md`。
+
+仍不在生产范围：实时定时采集（采集继续在开发机本机跑）、admin 与采集链上 VPS、正式认证与外部通知。页面完成不等于数据完成；每个资格哪些字段有官方事实、哪些靠规则型说明闭合，以对应的 `docs/<qualification>-source-contract.md` 为准。
 
 API 契约见 [docs/api-contract.md](api-contract.md)。阶段 1 宅建闭环说明见 [docs/stage1-takken.md](stage1-takken.md)。门禁语义、判级规则与三级授权边界见 [docs/data-gate-semantics.md](data-gate-semantics.md)。
 
@@ -95,7 +99,7 @@ pnpm release:check
 首次开通或轮换口令（PowerShell，整条复制）：
 
 ```powershell
-$env:DATABASE_URL="postgresql://qualification_dev:qualification_dev@127.0.0.1:5432/qualification_media"; $env:API_DB_PASSWORD="本机口令"; npm run db:migrate; npm run db:provision-api-role -- --confirm=PROVISION_API_DB_ROLE
+$env:DATABASE_URL="postgresql://qualification_dev:qualification_dev@127.0.0.1:5432/qualification_media"; $env:API_DB_PASSWORD="本机口令"; pnpm db:migrate; pnpm db:provision-api-role -- --confirm=PROVISION_API_DB_ROLE
 ```
 
 成功输出 `status: ok`、`login: true`。脚本只允许 localhost；角色不存在时提示先跑 `db:migrate`；重复执行会重新对齐授权，口令轮换也走同一条命令。
@@ -103,7 +107,7 @@ $env:DATABASE_URL="postgresql://qualification_dev:qualification_dev@127.0.0.1:54
 验证写操作确实被拒绝：
 
 ```powershell
-$env:API_DATABASE_URL="postgresql://qualification_api_ro:本机口令@127.0.0.1:5432/qualification_media"; npm run db:verify-readonly
+$env:API_DATABASE_URL="postgresql://qualification_api_ro:本机口令@127.0.0.1:5432/qualification_media"; pnpm db:verify-readonly
 ```
 
 判据：`status` 为 `ok`、`currentUser` 为 `qualification_api_ro`、`role` 的 `superuser`／`createRole`／`createDb` 均为 `false`、`write` 的 `insert`／`update`／`delete`／`create_table` 全部为 `denied`，且 `read` 能数出事实与来源。任一项为 `allowed`、`error:<其他 SQLSTATE>` 或退出码非 0 都算失败。口令含 `@`、`:`、`/` 等字符时需按 URL 编码写进连接串。
@@ -123,13 +127,13 @@ CI 在 `release-gate` 的迁移与夹具恢复之后，用 CI 专用口令开通
 整条复制执行（PowerShell，一行）：
 
 ```powershell
-$env:DATABASE_URL="postgresql://qualification_dev:qualification_dev@127.0.0.1:5432/qualification_media"; npm run data:staleness
+$env:DATABASE_URL="postgresql://qualification_dev:qualification_dev@127.0.0.1:5432/qualification_media"; pnpm data:staleness
 ```
 
 Git Bash / WSL 用同一件事的另一种写法：
 
 ```bash
-DATABASE_URL="postgresql://qualification_dev:qualification_dev@127.0.0.1:5432/qualification_media" npm run data:staleness
+DATABASE_URL="postgresql://qualification_dev:qualification_dev@127.0.0.1:5432/qualification_media" pnpm data:staleness
 ```
 
 输出字段（`status` 为 `ok` 时）：
@@ -214,13 +218,13 @@ EXIT=0。这是「本机没有库」时的正常形态，不代表检查失败�
 第一步·巡检抓取（需所有者明示授权；只写 `var/patrol/` 与 `var/official-snapshots/<qual>/`，不连库）：
 
 ```bash
-PATROL_LIVE_AUTHORIZED=1 PYTHONIOENCODING=utf-8 npm run patrol:sources
+PATROL_LIVE_AUTHORIZED=1 PYTHONIOENCODING=utf-8 pnpm patrol:sources
 ```
 
 只巡个别来源（授权单写明的 id）：
 
 ```bash
-PATROL_LIVE_AUTHORIZED=1 PATROL_SOURCE_IDS="source:fundamental-it:cbt-s" PYTHONIOENCODING=utf-8 npm run patrol:sources
+PATROL_LIVE_AUTHORIZED=1 PATROL_SOURCE_IDS="source:fundamental-it:cbt-s" PYTHONIOENCODING=utf-8 pnpm patrol:sources
 ```
 
 判据＝报告 `database_write: not_run`、`candidate_ingest: not_run`；`var/patrol/patrol-report.json` 每来源一条四态结果；`changed` 来源在对应快照目录有新 hash 文件。`NODE_ENV=production` 或缺开关直接拒绝。
@@ -228,7 +232,7 @@ PATROL_LIVE_AUTHORIZED=1 PATROL_SOURCE_IDS="source:fundamental-it:cbt-s" PYTHONI
 第二步·巡检落库（独立授权；只写 `capture_runs`／`snapshots`／`source_checks` 三张运营表，绝不写候选与事实）：
 
 ```bash
-DATABASE_URL="postgresql://postgres@127.0.0.1:55432/qualification_media" PATROL_LOCAL_WRITE=1 PYTHONIOENCODING=utf-8 npm run patrol:record
+DATABASE_URL="postgresql://postgres@127.0.0.1:55432/qualification_media" PATROL_LOCAL_WRITE=1 PYTHONIOENCODING=utf-8 pnpm patrol:record
 ```
 
 判据＝`status: recorded`、`candidates: 0`、`approval: not_run`；仅 localhost 库。同一条报告重跑，`capture_runs`／`source_checks` 新增为 0（幂等），`snapshots` 按 `(source_id,content_hash)` 对齐。
@@ -238,7 +242,7 @@ DATABASE_URL="postgresql://postgres@127.0.0.1:55432/qualification_media" PATROL_
 用途：一条只读命令产出当日运营日报，回答「今天先处理什么」。聚合来源健康（最近检查、连续失败、告警级）、到期事实/滞后来源（与 `data:staleness` 同口径）、待审队列、facts 对基线只读比对、巡检覆盖缺口。告警分级：连续失败 ≥3、`blocked`、404/410 单次 → critical；连续失败 1–2、来源 >7 天无成功检查 → warning。阈值在 `config/source-ops.json`。
 
 ```bash
-DATABASE_URL="postgresql://postgres@127.0.0.1:55432/qualification_media" npm run ops:daily
+DATABASE_URL="postgresql://postgres@127.0.0.1:55432/qualification_media" pnpm ops:daily
 ```
 
 判据＝`status: ok`；报告落 `var/ops-reports/<JST日期>.json` 与 `.md`，markdown 置顶「今日需处理」（critical → 待审 → 到期事实）。有 critical 时 EXIT=1，否则 0；未设 `DATABASE_URL` 输出 `not_run`、EXIT=0。全程 `BEGIN READ ONLY`，不写库、不抓取、不发外部请求。不装定时任务、不装外部通知（2026-11-11 所有者拍板）；每日手动跑。
@@ -267,7 +271,7 @@ cd /opt/jpqm && docker compose -f deploy/docker-compose.prod.yml exec -T web nod
 2. 离线分析（analyze/precheck，不写库），确认候选与官方原文一致。
 3. 入库授权（明示）→ 对应 ingest 脚本，候选 `pending_review`（第二态，未公开）。
 4. 批准授权（明示）→ admin 以 `x-reviewer-id` 头逐条对照官方原文批准（第三态）。
-5. `npm run build`＋`npm run verify:all` 6/6。
+5. `pnpm build`＋`pnpm verify:all` 6/6。
 6. 仅当 facts 计数变化：`baseline:update`＋`ci:fixture:export` 同批，同步 `scripts/verify-ci-fixture.mjs` 四处计数断言与 `scripts/docker-smoke.mjs` 冒烟断言，`ci:fixture:verify` 通过；同一 PR 进 main（见第 9 节口径）。
 7. 全量回归绿 → commit → push（明示）→ PR（明示）→ 合并（「合并」明示）。
 8. `pg_dump` 数据包导出备用。上线按「生产部署 → 更新发布」节执行，每次发布仍需所有者明示授权；admin 与采集链不上 VPS。
@@ -352,9 +356,9 @@ curl -s https://shikakucheck.com/sitemap.xml | grep -c '?year='
 curl -s "https://shikakucheck.com/shikaku/bookkeeping/pass-rate/?year=2010" | grep -c 'content="noindex,follow"'
 ```
 
-判据＝六个路径全 200（ICS 为 `text/calendar`，`/sitemap.xml` 为 XML，其余 `text/html`）；robots 里 Sitemap 行是 `https://shikakucheck.com/sitemap.xml`；sitemap 含簿記 pass-rate 页、`?year=` 计数为 **0**；年份筛选页 noindex 计数为 **1**。再抽一眼内容：首页含「資格試験の公式情報」、`/shikaku/bookkeeping/` 含「日商簿記」。
+判据＝六个路径全 200（ICS 为 `text/calendar`，`/sitemap.xml` 为 XML，其余 `text/html`）；robots 里 Sitemap 行是 `https://shikakucheck.com/sitemap.xml`；sitemap 含簿記 pass-rate 页、`?year=` 计数为 **0**；年份筛选页 noindex 计数为 **1**。再抽一眼内容：首页含「資格試験の日程・受験料を」（H1）与「本サイトは個人が運営する非公式の参考情報サイト」、`/shikaku/bookkeeping/` 含「日商簿記」。**不要再用「資格試験の公式情報」当判据**：2026-11-24 复核时首页已无该短语（它只剩在 `/guide/*` 三处正文里，见 `docs/compliance-audit-2026-11-13.md` 的 H1 遗留项）。
 
-以上第 3–7 步的机器版＝`npm run smoke:docker`（CI 的 `docker-smoke` job 跑同一条命令）：构建镜像 → 临时 `postgres:18-alpine` → migrate（含二次幂等）→ seed → 恢复 CI 夹具 → 开通只读角色并验证写被拒 → 起 api+web → 断言 1007 条事实与 37 个夹具快照、首页/资格页/API/sitemap/noindex/ICS/robots/404。改动 Dockerfile、compose 或依赖后先让这条冒烟绿，再上 VPS。
+以上第 3–7 步的机器版＝`pnpm smoke:docker`（CI 的 `docker-smoke` job 跑同一条命令）：构建镜像 → 临时 `postgres:18-alpine` → migrate（含二次幂等）→ seed → 恢复 CI 夹具 → 开通只读角色并验证写被拒 → 起 api+web → 断言 1007 条事实与 37 个夹具快照、首页/资格页/API/sitemap/noindex/ICS/robots/404。改动 Dockerfile、compose 或依赖后先让这条冒烟绿，再上 VPS。
 
 ### 例行备份（VPS root crontab）
 
@@ -370,7 +374,7 @@ curl -s "https://shikakucheck.com/shikaku/bookkeeping/pass-rate/?year=2010" | gr
 cd /opt/jpqm && git pull && docker compose -f deploy/docker-compose.prod.yml up -d --build
 ```
 
-有新迁移时随后补跑第 5 步的 migrate 与 provision（新表由默认权限获得 `SELECT`，provision 重新对齐授权）。判据＝`docker compose ... ps` 全 running 且第 7 步验收复跑通过。动了 Dockerfile、`.dockerignore`、compose 或依赖版本的发布，先在本机或 CI 跑 `npm run smoke:docker` 绿了再 merge。
+有新迁移时随后补跑第 5 步的 migrate 与 provision（新表由默认权限获得 `SELECT`，provision 重新对齐授权）。判据＝`docker compose ... ps` 全 running 且第 7 步验收复跑通过。动了 Dockerfile、`.dockerignore`、compose 或依赖版本的发布，先在本机或 CI 跑 `pnpm smoke:docker` 绿了再 merge。
 
 ### GA4 启用（同意门控已内置，M2）
 

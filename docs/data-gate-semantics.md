@@ -23,10 +23,10 @@
 
 `evaluateCoverage()` 先按 `examYear` + requirement 维度筛出 `scoped` 事实；若 `requiredLevel === 'conditional'` 且 `scoped.length === 0`，**整条 requirement 被跳过**。
 
-后果：维度没打上 ⇒ 不检查 ⇒ 0 缺口。这不是「字段齐备」。实测判据（2026-10-09 本机跑 `evaluateCoverage()`）：
+后果：维度没打上 ⇒ 不检查 ⇒ 0 缺口。这不是「字段齐备」。以下判据是 **2026-10-09 的历史实测**，已不适用于当前 FE 口径（现行口径见本节末的 2026-11-11 段，`gaps` 现为 0 但构成不同）：
 
-- 基本情報技術者现有 10 条事实 `delivery_mode = NULL` ⇒ 三条 `conditional` requirement 全部跳过 ⇒ `gaps = 0`。
-- 同批事实若补上 `delivery_mode = 'cbt'`（不新增事实）⇒ `gaps = 10`：`application_rule`、`booking_window`、`venue_rule`、`eligibility`、`fee`、`scoring_method`、`passing_standard`、`exam_time`、`question_count`、`question_format`。
+- ~~基本情報技術者现有 10 条事实 `delivery_mode = NULL` ⇒ 三条 `conditional` requirement 全部跳过 ⇒ `gaps = 0`。~~
+- ~~同批事实若补上 `delivery_mode = 'cbt'`（不新增事实）⇒ `gaps = 10`：`application_rule`、`booking_window`、`venue_rule`、`eligibility`、`fee`、`scoring_method`、`passing_standard`、`exam_time`、`question_count`、`question_format`。~~
 
 任何维度补打、fact_key 改名或 requirement 维度调整，都要先用这条判据复算，再决定动数据。
 
@@ -113,7 +113,7 @@ Why：审核人 ID 放进 URL 就可被任意 `<img src=…>`、浏览器历史�
 
 ## 9. baseline 与 CI 夹具维护
 
-- ⚠ **baseline 是「下限」不是「相等」**：`scripts/verify-lib.mjs:215` 判 `approved_official < expectedFacts` 为失败，API 侧同理比 `facts.length`。因此**抬高 baseline 必须与 CI 夹具同批改、同一个 PR 进 main**——只跑 `baseline:update` 不重导夹具，本机 `verify:all` 照样绿（本机有真数据），CI 必红在 `approved official 58 below regression floor 863`（夹具只有 58 条簿记）。2026-10-13 即按这条把 58 → 863 与夹具 176 → 981 一起提。
+- ⚠ **baseline 是「下限」不是「相等」**：`scripts/verify-lib.mjs:292` 判 `database.approved_official < gate.expectedFacts` 为失败（读数在 `:289`），API 侧同理在 `:329` 比 `api.facts?.length < gate.expectedFacts`。因此**抬高 baseline 必须与 CI 夹具同批改、同一个 PR 进 main**——只跑 `baseline:update` 不重导夹具，本机 `verify:all` 照样绿（本机有真数据），CI 必红在 `approved official 58 below regression floor 863`（夹具只有 58 条簿记）。2026-10-13 即按这条把 58 → 863 与夹具 176 → 981 一起提。
 - 更新基线：`RELEASE_BASELINE_CONFIRM=UPDATE_RELEASE_GATE_BASELINE` + `pnpm baseline:update -- --confirm=UPDATE_RELEASE_GATE_BASELINE`，双重确认，仅 localhost，仍有真实待审核候选时拒绝更新。
 - 重导夹具：`CI_FIXTURE_EXPORT_CONFIRM=EXPORT_SANITIZED_CI_FIXTURE` + `pnpm ci:fixture:export -- --confirm=...`（同样在非合成 `pending_review` 未清零时**直接拒绝**：`official candidates pending review: …`），然后 `pnpm ci:fixture:verify` 与 `pnpm release:check`。
 - 夹具现状（2026-11-13 baseline／CI 夹具刷新轮合并后现取；前值 999／37）：`fixtures/ci/approved-facts.sql` = **1007 facts / 1007 candidate_facts / 1007 fact_revisions / 37 snapshots**，逐资格 16／15／**10**／**28**／863／75，文件 2,218,265 字节（3,214 行；2026-11-12 重导、2026-11-13 随 squash PR #79＝`1158457` 合并，D2 八条纯新增、按 `fact_id` 比对零值差）。**重导后必须同步改 `scripts/verify-ci-fixture.mjs` 第 9–12 行的四个硬编码断言，以及 `scripts/docker-smoke.mjs` 的四处（第 346／356 行的事实数＋第 359／360 行的快照数）**，否则得到 `ERR_ASSERTION actual:981 expected:176` 或 `expected 981 approved facts, got 982` 这类失败（后者在 2026-11-10 PR #58 首轮 CI 实际发生过）。⚠ 快照数断言（29→37）历次交接单都漏记，2026-11-12 那轮全仓扫描才补上；2026-11-13 本轮快照数不变（37），只改事实数两处（346／356）。
