@@ -36,6 +36,7 @@
 #   PUBLIC_READY_URL       also require this URL to serve a complete page
 #                          (default: unset = data plane only)
 #   COMPOSE_FILE           compose file used for `docker compose exec`
+#                          (default: deploy/docker-compose.prod.yml)
 #   COMPOSE_PROJECT        project name, if the file's directory does not imply it
 #   READINESS_TAG          syslog tag (default jpqm-readiness)
 #   READINESS_NOTIFY       set to 0 to keep syslog only (default 1)
@@ -50,6 +51,14 @@ TIMEOUT_MS="${READINESS_TIMEOUT_MS:-5000}"
 PUBLIC_URL="${PUBLIC_READY_URL:-}"
 NOTIFY="${READINESS_NOTIFY:-1}"
 NOTIFY_SCRIPT="${NOTIFY_SCRIPT:-$(dirname "$0")/notify-feishu.sh}"
+# Compose needs the file spelled out. Without it `docker compose` walks up from
+# the cwd and picks whatever compose file it finds first -- on the VPS that is
+# /opt/jpqm/docker-compose.yml, an unrelated stack (project "jpqm", services
+# minio/...), so `exec api` answered `service "api" is not running` and the
+# probe reported "unreachable" forever. The path is relative because the
+# documented install line runs from the repository root, same as
+# scripts/ops-daily-cron.sh.
+COMPOSE_FILE="${COMPOSE_FILE:-deploy/docker-compose.prod.yml}"
 
 COMPOSE_ARGS=""
 if [ -n "${COMPOSE_FILE:-}" ]; then

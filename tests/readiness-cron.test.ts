@@ -436,6 +436,33 @@ describe('readiness cron public entry passthrough', () => {
     expect(args()).not.toContain('-e ');
   });
 
+  it('always names the compose file so the cwd cannot pick the wrong stack', () => {
+    // The VPS has two compose files: deploy/docker-compose.prod.yml (project
+    // "deploy", services api/db/web/caddy) and a stale /opt/jpqm/
+    // docker-compose.yml (project "jpqm", services minio/...). With no -f,
+    // compose walks up from the cwd, finds the stale one, and `exec api`
+    // answers `service "api" is not running` -- so the probe reported
+    // "unreachable" on a perfectly healthy box, forever. The documented
+    // install line passes no COMPOSE_FILE, so the default has to carry it.
+    writeRecordingDocker(readyJson(), 0);
+
+    runScript({ DOCKER_ARGS: toPosixPath(dockerArgs) });
+
+    expect(args()).toContain('-f deploy/docker-compose.prod.yml');
+  });
+
+  it('lets COMPOSE_FILE be overridden for a differently laid out host', () => {
+    writeRecordingDocker(readyJson(), 0);
+
+    runScript({
+      DOCKER_ARGS: toPosixPath(dockerArgs),
+      COMPOSE_FILE: '/srv/other/docker-compose.yml',
+    });
+
+    expect(args()).toContain('-f /srv/other/docker-compose.yml');
+    expect(args()).not.toContain('deploy/docker-compose.prod.yml');
+  });
+
   it('forwards the URL to the probe as an environment variable', () => {
     writeRecordingDocker(readyJson(), 0);
 
