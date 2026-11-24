@@ -2,7 +2,8 @@
 
 ## Public
 
-- `GET /health` → `{ status: "ok", stage: 0 }`
+- `GET /health` → `{ status: "ok", stage: 0 }`；**liveness only**，不访问数据库，数据面不可用时仍返回 200。
+- `GET /ready` → 就绪探针。数据面可用时 `200 { status: "ready", database: "ok" }`；数据库不可达时 `503 { status: "unavailable", database: "error", message }`；未配置数据库时 `503 { status: "unavailable", database: "unconfigured" }`。只执行 `SELECT 1`，不读业务表、不写、不缓存结果。**与 `/health` 的区别是 liveness vs readiness**：`/health` 回答「进程活着吗」，`/ready` 回答「现在能服务查询吗」。`/ready` 未接入 compose healthcheck（有意为之，见 `docs/runbook.md`）。
 - `GET /api/v1/qualifications` → `{ data: Qualification[] }`，只返回稳定主数据。
 - `GET /api/v1/search/qualifications?q={query}` → `{ data: QualificationSearchResult[], query }`，按正式名称、简称、别名和 slug 搜索稳定资格主数据。
 - `GET /api/v1/facts` → `{ data: PublicFact[] }`，实现必须只查询 `status=approved`、存在 `source_snapshot_id` 且当前修订的正式事实；候选事实、审核任务、冲突和未验证事实禁止返回。
@@ -11,6 +12,20 @@
 - `GET /api/v1/updates?qualification={slug}&limit={1-100}&offset={n}` → `{ data: PublicUpdateEvent[], query, pagination: { limit, offset, hasMore } }`，从 `change_events` 读取公开事实变更和订正记录，展示变更前后值、影响页面、来源和反映时间；`limit` 默认 100、`offset` 默认 0，越界值收敛到安全范围；页面巡检但事实未变时不得生成记录。
 - `GET /api/v1/ics/{qualification}/{year}[/{event_id}]` → `text/calendar`，下载资格全年或单事件 ICS；仅包含有明确日期的已批准事实，UID 在事实变更后保持稳定，`SEQUENCE` 随批准变更或回滚递增；定时事件以 UTC 传输并保留日本时间语义，以兼容 Outlook 等不识别 IANA `TZID` 的客户端。
 - `GET /api/v1/qualifications/{slug}` → `{ qualification, status, facts, officialVerifiedAt }`；没有非 synthetic 的已批准事实时返回 `status=awaiting_official`、空 `facts` 和 `officialVerifiedAt=null`。
+
+### 数据端点的错误分层
+
+上列数据端点（`/api/v1/facts`、`/api/v1/calendar`、`/api/v1/compare`、`/api/v1/updates`、`/api/v1/ics/*`、`/api/v1/qualifications`、`/api/v1/qualifications/{slug}`、`/api/v1/qualifications/takken`）在两种失败下**不再伪装成合法空数据**：
+
+| 情形                                                          | 响应                                                          | 语义                         |
+| ------------------------------------------------------------- | ------------------------------------------------------------- | ---------------------------- |
+| 数据库**未配置**（`DATABASE_URL`／`API_DATABASE_URL` 均为空） | `500 { statusCode: 500, code: "database_not_configured", … }` | 永久性配置错误，重试不会自愈 |
+| 数据库**不可达**（连接被拒／超时）                            | `5xx`，`code` 为驱动错误码（如 `ECONNREFUSED`）               | 瞬态故障，稍后重试有意义     |
+| 已配置、连接正常、确实没有已批准事实                          | `200` + 空数组／`awaiting_official`                           | 合法的「暂无数据」           |
+
+用 500 而不是 503 表示配置缺失，是为了把「永久错」和「瞬态错」分开：503 会向客户端承诺「稍后再试就好」，对配置错误是假承诺。
+
+> `NODE_ENV=test` 下保留旧的 fail-empty 行为（返回空数组），因为单元测试套件刻意不连库（`tests/setup.ts` 删除 `DATABASE_URL`）。该逃生口**仅**作用于数据读取路径，`/ready` 在任何环境下都不会对配置缺失报告就绪。
 
 ## Internal draft
 

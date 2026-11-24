@@ -356,6 +356,23 @@ curl -s https://shikakucheck.com/sitemap.xml | grep -c '?year='
 curl -s "https://shikakucheck.com/shikaku/bookkeeping/pass-rate/?year=2010" | grep -c 'content="noindex,follow"'
 ```
 
+#### liveness 与 readiness 是两件事（别混用）
+
+- **`/health` = liveness**：只证明 API 进程活着，**不访问数据库**，数据面全挂时仍返回 200。compose 的 `depends_on: api: service_healthy` 与 web 的启动都挂在这个信号上。**不要拿它判断数据面是否正常。**
+- **`/ready` = readiness**：真实对数据库执行 `SELECT 1`，回答「现在能不能服务查询」。手工排查数据面时用它：
+
+```bash
+# 容器内
+docker compose -f deploy/docker-compose.prod.yml exec -T api node -e "fetch('http://127.0.0.1:4100/ready').then(async r=>console.log(r.status, await r.text()))"
+
+# 或从宿主机打（/ready 未在 Caddy 里暴露到公网，见下）
+```
+
+判据：`200 {"status":"ready","database":"ok"}` = 数据面正常；`503 {"database":"error",…}` = 数据库不可达（看 `message` 里的驱动错误）；`503 {"database":"unconfigured"}` = 进程没拿到 `DATABASE_URL`／`API_DATABASE_URL`。
+
+- **`/ready` 有意未接入 compose healthcheck。** 若把它接上，数据库一抖动 → api 变 unhealthy → web 因 `depends_on` 不再启动 → Caddy 跟着下线 → **整站不可用**。那比它要解决的问题严重得多。将来若要接，必须先解决这条级联依赖（例如把 web 对 api 的依赖从 `service_healthy` 降级为 `service_started`）。
+- 数据面故障的排查顺序：先 `/ready` 定位是「配置缺失」还是「连不上」，再看 API 数据路由的 `code`（`database_not_configured` 是配置错，`ECONNREFUSED` 一类是连接错）。配置缺失时数据路由返回 **500**，不是 200 空数据——这是 Sprint 3B 有意改的语义，别把它当回归。
+
 判据＝六个路径全 200（ICS 为 `text/calendar`，`/sitemap.xml` 为 XML，其余 `text/html`）；robots 里 Sitemap 行是 `https://shikakucheck.com/sitemap.xml`；sitemap 含簿記 pass-rate 页、`?year=` 计数为 **0**；年份筛选页 noindex 计数为 **1**。再抽一眼内容：首页含「資格試験の日程・受験料を」（H1）与「本サイトは個人が運営する非公式の参考情報サイト」、`/shikaku/bookkeeping/` 含「日商簿記」。**不要再用「資格試験の公式情報」当判据**：2026-11-24 复核时首页已无该短语（它只剩在 `/guide/*` 三处正文里，见 `docs/compliance-audit-2026-11-13.md` 的 H1 遗留项）。
 
 以上第 3–7 步的机器版＝`pnpm smoke:docker`（CI 的 `docker-smoke` job 跑同一条命令）：构建镜像 → 临时 `postgres:18-alpine` → migrate（含二次幂等）→ seed → 恢复 CI 夹具 → 开通只读角色并验证写被拒 → 起 api+web → 断言 1007 条事实与 37 个夹具快照、首页/资格页/API/sitemap/noindex/ICS/robots/404。改动 Dockerfile、compose 或依赖后先让这条冒烟绿，再上 VPS。

@@ -18,12 +18,35 @@ import {
 } from '../../../packages/schema/src/index.js';
 import { config } from '../../../packages/config/src/index.js';
 import { TakkenPipeline } from './takken.js';
+import { DatabaseNotConfiguredError } from './database-config.js';
 import { readApprovedFacts, readPendingFactCoverage } from './public-facts.js';
 import { readPublicUpdates } from './public-updates.js';
 import { buildPublicQualificationView } from './public-view.js';
+import { checkDatabaseReadiness } from './database-ready.js';
 
 export const app = Fastify({ logger: false });
 export const takkenPipeline = new TakkenPipeline();
+
+/**
+ * Captured before the custom handler replaces it, so unknown errors keep
+ * Fastify's exact default payload (verified against plain throws, errors with a
+ * `code`, errors carrying `statusCode`, schema validation 400s and 404s).
+ */
+const defaultErrorHandler = app.errorHandler;
+
+app.setErrorHandler((error, request, reply) => {
+  // Configuration absence is a permanent fault: retrying cannot fix it, so it
+  // must not borrow the 503 that is reserved for transient unavailability.
+  if (error instanceof DatabaseNotConfiguredError) {
+    return reply.code(500).send({
+      statusCode: 500,
+      code: 'database_not_configured',
+      error: 'Internal Server Error',
+      message: error.message,
+    });
+  }
+  return defaultErrorHandler.call(app, error, request, reply);
+});
 
 const calendarEventTypes: readonly PublicCalendarEvent['type'][] = [
   'application_open',
@@ -43,6 +66,25 @@ function boundedQueryInteger(
   return Math.min(maximum, Math.max(minimum, parsed));
 }
 app.get('/health', async () => ({ status: 'ok', stage: 0 }));
+/**
+ * Readiness probe — liveness lives at `/health` and is intentionally unchanged.
+ *
+ * `/health` answers "is the process up", so it never touches the database and
+ * compose keys `depends_on: api: service_healthy` off it. Turning it into a
+ * data-plane check would let a brief database blip mark the API unhealthy, stop
+ * the web container from starting, and take the whole site down through Caddy.
+ * `/ready` is therefore a separate, additive signal that is NOT wired into any
+ * healthcheck.
+ */
+app.get('/ready', async (_request, reply) => {
+  const report = await checkDatabaseReadiness(config.apiDatabaseUrl);
+  if (report.ready) return { status: 'ready', database: report.database };
+  return reply.code(503).send({
+    status: 'unavailable',
+    database: report.database,
+    ...(report.database === 'error' ? { message: report.message } : {}),
+  });
+});
 app.get<{ Querystring: { q?: string } }>(
   '/api/v1/qualifications',
   async (request) => ({
@@ -209,15 +251,15 @@ app.get('/api/v1/qualifications/takken', async () => {
     (item) => item.slug === 'takken',
   );
   if (!qualification) return { error: 'not found' };
-  if (config.apiDatabaseUrl) {
-    const facts = await readApprovedFacts(config.apiDatabaseUrl, 'takken');
-    return buildPublicQualificationView(
-      qualification,
-      facts,
-      await readPendingFactCoverage(config.apiDatabaseUrl, 'takken'),
-    );
-  }
-  return buildPublicQualificationView(qualification, []);
+  // No `if (config.apiDatabaseUrl)` branch: branching here made a missing
+  // configuration indistinguishable from "no approved facts yet". The readers
+  // now decide (and throw when the configuration is genuinely absent).
+  const facts = await readApprovedFacts(config.apiDatabaseUrl, 'takken');
+  return buildPublicQualificationView(
+    qualification,
+    facts,
+    await readPendingFactCoverage(config.apiDatabaseUrl, 'takken'),
+  );
 });
 app.get<{ Params: { slug: string } }>(
   '/api/v1/qualifications/:slug',
