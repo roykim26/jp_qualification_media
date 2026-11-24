@@ -250,6 +250,71 @@ test('markdown renders the action list and source table', () => {
   assert.ok(markdown.includes('facts 对基线'));
 });
 
+// The report used to print `qualification/examYear/factKey` and nothing else, so
+// the seven 日商簿記 2026 fee facts (one per exam level × delivery mode) came out
+// as seven identical lines and a reviewer could not tell them apart. Each line
+// must now name the axes that actually distinguish the facts.
+test('due facts that differ only in dimensions render as distinct actions', () => {
+  const fact = (examLevelId, deliveryMode, ageDays) => ({
+    factId: `fact:${examLevelId}:${deliveryMode}`,
+    qualification: 'bookkeeping',
+    examYear: 2026,
+    factKey: 'fee',
+    dimensions: { examLevelId, deliveryMode },
+    displayValue: '7,500円',
+    ageDays,
+    windowDays: 90,
+  });
+  const report = buildDailyReport({
+    now,
+    config,
+    sourceHealth: [],
+    staleness: {
+      referenceYear: 2026,
+      summary: {
+        approvedFacts: 6,
+        historicalSkipped: 0,
+        checked: 6,
+        dueFacts: 6,
+        sourcesBehindOnSnapshot: 0,
+      },
+      dueFacts: [
+        fact('bookkeeping:1', 'unified', 100),
+        fact('bookkeeping:1', 'network', 100),
+        fact('bookkeeping:2', 'unified', 100),
+        fact('bookkeeping:2', 'network', 100),
+        fact('bookkeeping:3', 'unified', 100),
+        fact('bookkeeping:3', 'network', 100),
+      ],
+      dueSources: [],
+    },
+    pendingReview: [],
+    factsVsBaseline: [],
+    coverageGap: {
+      status: 'ok',
+      missingFromRegistry: [],
+      missingFromDatabase: [],
+    },
+  });
+
+  const targets = report.todayActions
+    .filter((action) => action.kind === 'due_fact')
+    .map((action) => action.target);
+  assert.equal(targets.length, 6);
+  assert.equal(new Set(targets).size, 6);
+  assert.equal(
+    targets[0],
+    'bookkeeping/2026/fee (examLevel=bookkeeping:1, delivery=unified)',
+  );
+
+  const markdown = renderMarkdown(report);
+  const factLines = markdown
+    .split('\n')
+    .filter((line) => line.startsWith('- bookkeeping/2026/fee'));
+  assert.equal(factLines.length, 6);
+  assert.equal(new Set(factLines).size, 6);
+});
+
 test('empty report says there is nothing to handle', () => {
   const report = buildDailyReport({
     now,

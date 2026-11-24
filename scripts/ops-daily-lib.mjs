@@ -1,4 +1,4 @@
-import { ageInDays } from './staleness-lib.mjs';
+import { ageInDays, formatFactTarget } from './staleness-lib.mjs';
 
 export function groupChecksBySource(checks) {
   const grouped = new Map();
@@ -264,7 +264,7 @@ export function buildDailyReport({
   for (const fact of staleness.dueFacts.slice(0, 10)) {
     todayActions.push({
       kind: 'due_fact',
-      target: `${fact.qualification}/${fact.examYear}/${fact.factKey}`,
+      target: formatFactTarget(fact),
       detail: `已 ${fact.ageDays} 天未复核（窗口 ${fact.windowDays} 天）`,
     });
   }
@@ -397,7 +397,7 @@ export function renderMarkdown(report) {
   } else {
     for (const fact of report.staleness.dueFacts.slice(0, 20)) {
       lines.push(
-        `- ${fact.qualification}/${fact.examYear}/${fact.factKey}：${fact.ageDays} 天（窗口 ${fact.windowDays}）`,
+        `- ${formatFactTarget(fact)}：${fact.ageDays} 天（窗口 ${fact.windowDays}）`,
       );
     }
   }
