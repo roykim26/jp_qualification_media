@@ -31,6 +31,7 @@
 - 落账 commit：`d39b69e`（`docs: 落账 Sprint 3K 执行报告`）
 - 追加 commit：`68786ab`（`fix(web): 校验 sitemap 依赖的状态字段`）—— 即 §11 的 P1，见 §9 第 4 条
 - 追加 commit：`ae6101a`（`fix(web): 校验渲染器解引用的 fact 字段（Sprint 3K P2）`）—— 即 §11 的 P2，见 §9.2
+- 追加 commit：`5f5e8c1`（`feat(web): 观测 /pass-rate/ 单资格故障（Sprint 3K P3）`）—— 即 §11 的 P3
 - 工作树在 commit 前：
 
 | 状态 | 文件                                            |
