@@ -98,6 +98,7 @@ let workDir = '';
 let portFile = '';
 let requestLog = '';
 let modeFile = '';
+let deliveryLog = '';
 
 function toPosixPath(value: string): string {
   if (!isWindows) return value;
@@ -131,10 +132,11 @@ function run(
   args: string,
   stdin?: string,
 ): Promise<RunResult> {
+  const pathKeys = new Set(['FEISHU_ENV_FILE', 'FEISHU_DELIVERY_LOG']);
   const assignments = Object.entries(env)
     .map(([key, value]) => {
-      // FEISHU_ENV_FILE is a filesystem path; everything else is a URL or literal.
-      const resolved = key === 'FEISHU_ENV_FILE' ? toPosixPath(value) : value;
+      // These two are filesystem paths; everything else is a URL or literal.
+      const resolved = pathKeys.has(key) ? toPosixPath(value) : value;
       return `${key}=${quote(resolved)}`;
     })
     .join(' ');
@@ -180,6 +182,7 @@ beforeAll(async () => {
   portFile = join(workDir, 'port.txt');
   requestLog = join(workDir, 'requests.log');
   modeFile = join(workDir, 'mode.txt');
+  deliveryLog = join(workDir, 'deliveries.jsonl');
   writeFileSync(modeFile, 'ok', 'utf8');
 
   const serverSource = join(workDir, 'fake-feishu-server.mjs');
@@ -197,8 +200,9 @@ beforeAll(async () => {
 
 beforeEach(() => {
   setMode('ok');
-  // Start every test from an empty request log.
+  // Start every test from an empty request log and an empty delivery log.
   writeFileSync(requestLog, '', 'utf8');
+  writeFileSync(deliveryLog, '', 'utf8');
 });
 
 afterEach(() => {
@@ -216,8 +220,19 @@ function baseEnv(extra: Record<string, string> = {}): Record<string, string> {
     FEISHU_WEBHOOK: hookUrl,
     FEISHU_TIMEOUT: '5',
     FEISHU_RETRY_DELAY: '0',
+    // Keep every record inside the test directory instead of var/notifications.
+    FEISHU_DELIVERY_LOG: deliveryLog,
     ...extra,
   };
+}
+
+/** Records the script appended to the delivery log during the current test. */
+function deliveries(): Array<Record<string, unknown>> {
+  if (!existsSync(deliveryLog)) return [];
+  return readFileSync(deliveryLog, 'utf8')
+    .split('\n')
+    .filter((line) => line.trim().length > 0)
+    .map((line) => JSON.parse(line) as Record<string, unknown>);
 }
 
 describe('notify-feishu payload', () => {
@@ -308,18 +323,111 @@ describe('notify-feishu signing', () => {
 });
 
 describe('notify-feishu credentials', () => {
-  it('fails with a clear message when the webhook is missing', async () => {
+  it('reports env-file-missing when the fallback file does not exist', async () => {
+    const missing = join(workDir, 'absent.env');
     const result = await run(
-      baseEnv({
-        FEISHU_WEBHOOK: '',
-        FEISHU_ENV_FILE: join(workDir, 'absent.env'),
-      }),
+      baseEnv({ FEISHU_WEBHOOK: '', FEISHU_ENV_FILE: missing }),
       '--text x',
     );
 
     expect(result.code).toBe(1);
-    expect(result.stderr).toContain('FEISHU_WEBHOOK is not configured');
+    expect(result.stderr).toContain('reason=env-file-missing');
+    expect(result.stderr).toContain('absent');
     expect(received()).toHaveLength(0);
+  });
+
+  it('reports key-absent when the file has no such line', async () => {
+    // The exact Sprint 3F failure: the editor showed the new line, the disk did
+    // not have it, and the only message was "not configured".
+    const envFile = join(workDir, 'no-key.env');
+    writeFileSync(envFile, 'DB_PASSWORD=whatever\n', 'utf8');
+    const result = await run(
+      baseEnv({ FEISHU_WEBHOOK: '', FEISHU_ENV_FILE: envFile }),
+      '--text x',
+    );
+
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain('reason=key-absent');
+    // The path and the file's size/mtime are what tell "wrong file" apart from
+    // "unsaved edit", so both must appear.
+    expect(result.stderr).toContain(
+      envFile.replace(/\\/g, '/').split('/').pop(),
+    );
+    expect(result.stderr).toMatch(/\d+ bytes, mtime \d{4}-\d{2}-\d{2}T/);
+    expect(received()).toHaveLength(0);
+  });
+
+  it('reports value-empty when the key has no value', async () => {
+    const envFile = join(workDir, 'empty.env');
+    writeFileSync(envFile, 'FEISHU_WEBHOOK=\n', 'utf8');
+    const result = await run(
+      baseEnv({ FEISHU_WEBHOOK: '', FEISHU_ENV_FILE: envFile }),
+      '--text x',
+    );
+
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain('reason=value-empty');
+  });
+
+  it('reports value-not-url when the placeholder was never replaced', async () => {
+    const envFile = join(workDir, 'placeholder.env');
+    writeFileSync(envFile, 'FEISHU_WEBHOOK=把完整 URL 粘在这里\n', 'utf8');
+    const result = await run(
+      baseEnv({ FEISHU_WEBHOOK: '', FEISHU_ENV_FILE: envFile }),
+      '--text x',
+    );
+
+    expect(result.code).toBe(1);
+    // The space is detected first, which is the more actionable of the two.
+    expect(result.stderr).toMatch(/reason=value-(has-space|not-url)/);
+    expect(received()).toHaveLength(0);
+  });
+
+  it('reports value-has-space and shows only the shape', async () => {
+    const envFile = join(workDir, 'spaced.env');
+    writeFileSync(envFile, `FEISHU_WEBHOOK=${hookUrl} extra\n`, 'utf8');
+    const result = await run(
+      baseEnv({ FEISHU_WEBHOOK: '', FEISHU_ENV_FILE: envFile }),
+      '--text x',
+    );
+
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain('reason=value-has-space');
+    expect(result.stderr).toContain('scheme=http');
+    // Shape only: the token must never be echoed, not even in a diagnostic.
+    expect(result.stderr).not.toContain('test-token');
+  });
+
+  it('points at the quotes when the value is wrapped in them', async () => {
+    // The most common paste mistake: `.env` is not a shell script, so quotes
+    // become part of the value and the URL stops being a URL.
+    const envFile = join(workDir, 'quoted.env');
+    writeFileSync(envFile, `FEISHU_WEBHOOK="${hookUrl}"\n`, 'utf8');
+    const result = await run(
+      baseEnv({ FEISHU_WEBHOOK: '', FEISHU_ENV_FILE: envFile }),
+      '--text x',
+    );
+
+    expect(result.code).toBe(1);
+    // Quoted URL: no space, so it lands on value-not-url — the point is that the
+    // hint names the quotes instead of leaving the caller to guess.
+    expect(result.stderr).toContain('reason=value-not-url');
+    expect(result.stderr).toContain('quoted=yes');
+    expect(result.stderr).toContain('wrapped in quotes');
+    expect(result.stderr).not.toContain('test-token');
+  });
+
+  it('strips a trailing CR and says so', async () => {
+    const envFile = join(workDir, 'crlf.env');
+    writeFileSync(envFile, `FEISHU_WEBHOOK=${hookUrl}\r\n`, 'utf8');
+    const result = await run(
+      baseEnv({ FEISHU_WEBHOOK: '', FEISHU_ENV_FILE: envFile }),
+      "--text 'crlf'",
+    );
+
+    expect(result.code).toBe(0);
+    expect(result.stderr).toContain('stripped a trailing CR');
+    expect(received()).toHaveLength(1);
   });
 
   it('falls back to the env file and keeps "=" padding in the secret', async () => {
@@ -401,5 +509,119 @@ describe('notify-feishu retry policy', () => {
     expect(result.code).toBe(1);
     expect(result.stderr).toContain('delivery failed');
     expect(result.stderr).not.toContain('dead');
+  });
+});
+
+/**
+ * The delivery log is the only evidence ops:daily has that the alert channel is
+ * alive: the daily report is a read-only database inspection and must not probe
+ * the webhook itself. So the log has to be written on every path, and it has to
+ * be machine-readable without carrying anything secret.
+ */
+describe('notify-feishu delivery log', () => {
+  it('records a successful delivery and prints a receipt', async () => {
+    const result = await run(baseEnv(), "--text 'logged'");
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain('delivered (http=200)');
+    const records = deliveries();
+    expect(records).toHaveLength(1);
+    expect(records[0]).toMatchObject({
+      ok: true,
+      http: 200,
+      curl: 0,
+      attempts: 1,
+      reason: null,
+    });
+    expect(String(records[0].at)).toMatch(
+      /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/,
+    );
+  });
+
+  it('records a failure with the attempt count and a reason', async () => {
+    setMode('http-500');
+    const result = await run(baseEnv(), "--text 'logged failure'");
+
+    expect(result.code).toBe(1);
+    const records = deliveries();
+    expect(records).toHaveLength(1);
+    expect(records[0]).toMatchObject({
+      ok: false,
+      http: 500,
+      attempts: 3,
+      reason: 'http-error',
+    });
+  });
+
+  it('classifies a bad signature and does not retry it', async () => {
+    setMode('bad-sign');
+    const result = await run(baseEnv(), "--text 'bad sign'");
+
+    expect(result.code).toBe(1);
+    const records = deliveries();
+    expect(records).toHaveLength(1);
+    expect(records[0]).toMatchObject({ ok: false, reason: 'bad-signature' });
+    expect(result.stderr).toContain('reason=bad-signature');
+  });
+
+  it('classifies the rate-limit code after retrying', async () => {
+    setMode('rate-limit');
+    const result = await run(baseEnv(), "--text 'rate limited'");
+
+    expect(result.code).toBe(1);
+    expect(deliveries()[0]).toMatchObject({
+      ok: false,
+      reason: 'rate-limited',
+      attempts: 3,
+    });
+  });
+
+  it('records a null status when no response was read at all', async () => {
+    const result = await run(
+      baseEnv({
+        FEISHU_WEBHOOK: 'http://127.0.0.1:1/open-apis/bot/v2/hook/dead',
+      }),
+      "--text 'nobody home'",
+    );
+
+    expect(result.code).toBe(1);
+    const records = deliveries();
+    expect(records).toHaveLength(1);
+    // `000` is not a status code and is not valid JSON, so it must be null.
+    expect(records[0]).toMatchObject({
+      ok: false,
+      http: null,
+      reason: 'unreachable',
+    });
+  });
+
+  it('appends rather than truncates, so history survives', async () => {
+    await run(baseEnv(), "--text 'first'");
+    await run(baseEnv(), "--text 'second'");
+
+    expect(deliveries()).toHaveLength(2);
+  });
+
+  it('never writes the webhook or the secret into the log', async () => {
+    setMode('http-500');
+    await run(
+      baseEnv({ FEISHU_SIGN_SECRET: 'super-secret-value' }),
+      "--text 'x'",
+    );
+
+    const text = readFileSync(deliveryLog, 'utf8');
+    expect(text).not.toContain('test-token');
+    expect(text).not.toContain('super-secret-value');
+  });
+
+  it('still delivers when the log directory cannot be created', async () => {
+    // A log that cannot be written must never be the reason an alert is lost.
+    const result = await run(
+      baseEnv({ FEISHU_DELIVERY_LOG: '/proc/definitely-not-writable/x.log' }),
+      "--text 'no log for me'",
+    );
+
+    expect(result.code).toBe(0);
+    expect(received()).toHaveLength(1);
   });
 });

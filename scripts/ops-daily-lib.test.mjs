@@ -3,11 +3,13 @@ import test from 'node:test';
 import {
   buildDailyReport,
   buildFactsVsBaseline,
+  buildNotificationHealth,
   buildSourceHealth,
   classifySource,
   computeCoverageGap,
   computeFailedStreak,
   groupChecksBySource,
+  parseDeliveryLog,
   renderMarkdown,
 } from './ops-daily-lib.mjs';
 
@@ -18,6 +20,8 @@ const config = {
   consecutiveFailureThreshold: 3,
   sourceBehindDays: 7,
   goneStatusCodes: [404, 410],
+  notificationFailureThreshold: 3,
+  notificationStaleDays: 14,
 };
 
 function check(status, days, httpStatus = 200) {
@@ -270,4 +274,170 @@ test('empty report says there is nothing to handle', () => {
   assert.equal(report.hasCritical, false);
   assert.equal(report.summary.coverageGap, null);
   assert.ok(renderMarkdown(report).includes('无。所有来源健康'));
+});
+
+// ---------------------------------------------------------------------------
+// Notification channel (Sprint 3G Task B)
+//
+// The alert channel is judged from the local delivery log rather than by
+// probing the webhook, because the daily report must not make network requests.
+// A dead channel is the one failure that hides all the others, so it is graded
+// at the same level as a dead source.
+// ---------------------------------------------------------------------------
+
+function delivery(at, ok, extra = {}) {
+  return { at, ok, http: ok ? 200 : 500, curl: 0, attempts: 1, ...extra };
+}
+
+test('notification health: no records is not_run and stays info', () => {
+  const health = buildNotificationHealth({ records: [], now, config });
+  assert.equal(health.status, 'not_run');
+  assert.equal(health.level, 'info');
+  assert.equal(health.consecutiveFailures, 0);
+});
+
+test('notification health: a recent success is healthy', () => {
+  const health = buildNotificationHealth({
+    records: [delivery(daysAgo(1), true)],
+    now,
+    config,
+  });
+  assert.equal(health.status, 'ok');
+  assert.equal(health.level, 'info');
+  assert.equal(health.reason, 'healthy');
+  assert.equal(health.lastOk, true);
+  assert.equal(health.ageDays, 1);
+});
+
+test('notification health: one failure is a warning, not critical', () => {
+  const health = buildNotificationHealth({
+    records: [delivery(daysAgo(2), true), delivery(daysAgo(1), false)],
+    now,
+    config,
+  });
+  assert.equal(health.level, 'warning');
+  assert.equal(health.reason, 'recent_failure');
+  assert.equal(health.consecutiveFailures, 1);
+  // The fixture has no `reason` field, which is what a pre-3G log line looks
+  // like; it must read as "unknown", not crash the report.
+  assert.equal(health.lastFailureReason, null);
+});
+
+test('notification health: consecutive failures reach critical', () => {
+  const health = buildNotificationHealth({
+    records: [
+      delivery(daysAgo(5), true),
+      delivery(daysAgo(3), false, { reason: 'unreachable' }),
+      delivery(daysAgo(2), false, { reason: 'unreachable' }),
+      delivery(daysAgo(1), false, { reason: 'bad-token' }),
+    ],
+    now,
+    config,
+  });
+  assert.equal(health.level, 'critical');
+  assert.equal(health.reason, 'consecutive_failures');
+  assert.equal(health.consecutiveFailures, 3);
+  assert.equal(health.lastFailureReason, 'bad-token');
+  assert.equal(health.lastSuccessAt, daysAgo(5));
+});
+
+test('notification health: a quiet channel past the window is stale', () => {
+  const health = buildNotificationHealth({
+    records: [delivery(daysAgo(30), true)],
+    now,
+    config,
+  });
+  assert.equal(health.level, 'warning');
+  assert.equal(health.reason, 'channel_stale');
+  assert.equal(health.ageDays, 30);
+});
+
+test('notification health: records are ordered by timestamp, not file order', () => {
+  const health = buildNotificationHealth({
+    records: [
+      delivery(daysAgo(1), false, { reason: 'bad-token' }),
+      delivery(daysAgo(9), true),
+    ],
+    now,
+    config,
+  });
+  assert.equal(health.lastOk, false);
+  assert.equal(health.consecutiveFailures, 1);
+  assert.equal(health.lastFailureReason, 'bad-token');
+});
+
+test('parseDeliveryLog skips a truncated last line without throwing', () => {
+  const text = [
+    JSON.stringify(delivery(daysAgo(1), true)),
+    '{"at":"2026-11-11T00:00:00Z","ok":tr',
+    '',
+  ].join('\n');
+  const { records, skipped } = parseDeliveryLog(text);
+  assert.equal(records.length, 1);
+  assert.equal(skipped, 1);
+});
+
+test('parseDeliveryLog handles empty and missing text', () => {
+  assert.deepEqual(parseDeliveryLog(''), { records: [], skipped: 0 });
+  assert.deepEqual(parseDeliveryLog(undefined), { records: [], skipped: 0 });
+});
+
+function channelReport(records) {
+  return buildDailyReport({
+    now,
+    config,
+    sourceHealth: [],
+    staleness: {
+      referenceYear: 2026,
+      summary: {
+        approvedFacts: 0,
+        historicalSkipped: 0,
+        checked: 0,
+        dueFacts: 0,
+        sourcesBehindOnSnapshot: 0,
+      },
+      dueFacts: [],
+      dueSources: [],
+    },
+    pendingReview: [],
+    factsVsBaseline: [],
+    coverageGap: {
+      status: 'ok',
+      missingFromRegistry: [],
+      missingFromDatabase: [],
+    },
+    notificationChannel: buildNotificationHealth({ records, now, config }),
+  });
+}
+
+test('a dead notification channel is critical on its own', () => {
+  const report = channelReport([
+    delivery(daysAgo(3), false, { reason: 'bad-token' }),
+    delivery(daysAgo(2), false, { reason: 'bad-token' }),
+    delivery(daysAgo(1), false, { reason: 'bad-token' }),
+  ]);
+  assert.equal(report.summary.notificationLevel, 'critical');
+  // No source is broken, yet the report must not be green: every future alert
+  // would be lost, so the exit code has to go non-zero.
+  assert.equal(report.hasCritical, true);
+  assert.equal(report.todayActions[0].kind, 'notification_channel');
+});
+
+test('a warning-level channel does not add an action or flip hasCritical', () => {
+  const report = channelReport([delivery(daysAgo(1), true)]);
+  assert.equal(report.summary.notificationLevel, 'info');
+  assert.equal(report.hasCritical, false);
+  assert.deepEqual(report.todayActions, []);
+});
+
+test('markdown renders the notification channel section', () => {
+  const healthy = renderMarkdown(channelReport([delivery(daysAgo(1), true)]));
+  assert.ok(healthy.includes('## 通知渠道'));
+  assert.ok(healthy.includes('最近一次投递'));
+
+  const stale = renderMarkdown(channelReport([delivery(daysAgo(30), true)]));
+  assert.ok(stale.includes('没有成功投递'));
+
+  const never = renderMarkdown(channelReport([]));
+  assert.ok(never.includes('未检查'));
 });

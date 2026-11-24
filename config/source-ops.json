@@ -3,5 +3,7 @@
   "patrolIntervalSeconds": 1,
   "consecutiveFailureThreshold": 3,
   "sourceBehindDays": 7,
-  "goneStatusCodes": [404, 410]
+  "goneStatusCodes": [404, 410],
+  "notificationFailureThreshold": 3,
+  "notificationStaleDays": 14
 }

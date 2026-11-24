@@ -397,9 +397,58 @@ FEISHU_SIGN_SECRET=<机器人开启签名校验时才有，没开就留空>
 cd /opt/jpqm && sh scripts/notify-feishu.sh --test
 ```
 
-判据：飞书群里收到一条 `jpqm readiness self-check: ...`，且命令退出码为 `0`。失败时退出码 `1`，stderr 会给原因（`FEISHU_WEBHOOK is not configured` / `delivery failed (http=... curl=...) after N attempt(s)`）。
+判据：飞书群里收到一条 `jpqm readiness self-check: ...`，且命令退出码为 `0`。成功时 stdout 会有一行 `notify-feishu: delivered (http=200) after 1 attempt(s)`。
 
-**失败信息里不会出现 webhook 地址或密钥**——这行可能被 cron 抄进邮件或 syslog。地址只在你自己的 `deploy/.env` 里。
+失败时退出码 `1`，stderr 给出**原因码**（Sprint 3G 之前所有故障都是同一句 `FEISHU_WEBHOOK is not configured`，四种完全不同的情况无法区分）：
+
+| `reason=`          | 含义                                    | 怎么修                                                                                                            |
+| ------------------ | --------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `env-file-missing` | 读的 `.env` 根本不存在                  | 报错里有绝对路径；确认 `FEISHU_ENV_FILE` 或工作目录                                                               |
+| `key-absent`       | 文件在，但没有 `FEISHU_WEBHOOK=` 这一行 | **最可能是编辑器没保存**（报错里的 `mtime` 会是旧时间）；或 `printf 'FEISHU_WEBHOOK=%s\n' '<url>' >> deploy/.env` |
+| `value-empty`      | 有这一行，但 `=` 后面是空的             | 补上完整 URL                                                                                                      |
+| `value-has-space`  | 值里有空格或制表符                      | 常见于把 URL 连同引号一起粘进来                                                                                   |
+| `value-not-url`    | 值不以 `http://` / `https://` 开头      | 占位符没替换，或值被引号包住（看 `quoted=yes`）                                                                   |
+
+投递阶段的失败另有 `reason=`：`bad-signature`（签名密钥不对，或机器人开了签名校验但没填密钥）、`bad-token`（webhook 被重置／机器人被移出群）、`rate-limited`、`http-error`、`unreachable`（连不上飞书）、`timeout`。
+
+**失败信息里不会出现 webhook 地址或密钥**——这行可能被 cron 抄进邮件或 syslog。诊断只会给出形状：`len=81 scheme=https host=open.feishu.cn quoted=no`，host 之后一律不打印。地址只在你自己的 `deploy/.env` 里。
+
+### 投递记录
+
+每次投递结束（成功或失败）都会往 `var/notifications/feishu.log` 追加一行 JSON：
+
+```json
+{
+  "at": "2026-11-25T00:28:42Z",
+  "ok": true,
+  "http": 200,
+  "curl": 0,
+  "attempts": 1,
+  "reason": null
+}
+```
+
+`http` 为 `null` 表示一个响应都没读到（curl 连不上），不是状态码。这个文件里**没有任何凭据**，只有状态。
+
+看一眼最近几次：
+
+```bash
+tail -5 /opt/jpqm/var/notifications/feishu.log
+```
+
+`ops:daily` 会读这个文件来判断**告警通道本身**还活着没有（见「人工日检」）。这是刻意的：日检是只读数据库巡检，不发任何外部请求，所以不能现场探测 webhook，只能读本地证据。判定规则：
+
+| 情况                         | 级别         | `reason`               |
+| ---------------------------- | ------------ | ---------------------- |
+| 从未投递过                   | info         | `not_run`              |
+| 最近一次成功且在 14 天内     | info         | `healthy`              |
+| 最近一次失败，连续失败 < 3   | warning      | `recent_failure`       |
+| 连续失败 ≥ 3                 | **critical** | `consecutive_failures` |
+| 最近一次成功，但已超过 14 天 | warning      | `channel_stale`        |
+
+`channel_stale` 只提示不下结论：两周安静可能是**一直没故障**，也可能是 **webhook 早已失效而没人发现**。手动跑一次 `--test` 就能区分。
+
+**通道连续失败是 critical，和来源挂了同级**——因为通道挂了会让此后所有告警静默消失，比来源故障更危险。
 
 ### 什么时候会发
 
