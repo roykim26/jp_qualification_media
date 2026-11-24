@@ -6,12 +6,12 @@
 
 ## 0. Git 基线
 
-| 项              | 值                            |
-| --------------- | ----------------------------- |
-| 分支            | `chore/phase1-baseline`       |
-| 执行前 HEAD     | `bf37922`                     |
-| 本轮内容 commit | `35168b1`                     |
-| 生产运行版本    | `cac5a7e`（本轮改动尚未部署） |
+| 项              | 值                             |
+| --------------- | ------------------------------ |
+| 分支            | `chore/phase1-baseline`        |
+| 执行前 HEAD     | `bf37922`                      |
+| 本轮内容 commit | `35168b1`                      |
+| 部署后生产 HEAD | `b9b5228`（2026-11-25 07:38Z） |
 
 报告无法在自己那个 commit 里引用自己的 hash，所以内容 commit 先落，再由一个
 `docs: 落账…` 收口 commit 把上面的 `<CONTENT_SHA>` 换成真实值 —— 现在表里填的
@@ -181,7 +181,7 @@ test('the staleness query selects every dimension the target format prints', () 
 ```
 
 它测的是「查询和格式化的字段集一致」这个不变量，而不是 SQL 的执行结果。
-这是权衡后的次优解，已记入 §7 未处理问题。
+这是权衡后的次优解，已记入 §8 未处理问题。
 
 ### 5.3 变异测试
 
@@ -239,7 +239,55 @@ docker smoke passed
 PowerShell 对 stderr 的包装噪声（`$ node scripts/docker-smoke.mjs` 这行提示走了
 stderr），不代表失败 —— 以退出码和最后的 `docker smoke passed` 为准。
 
-## 6. 兼容性
+## 6. 生产验证（2026-11-25 07:38Z 部署后）
+
+部署方式与 3A–3M 一致：`git merge --ff-only`（`cac5a7e..b9b5228`，6 files +1084/−4）
+→ `docker compose build` → `up -d`。回滚点 `deploy-api:pre-duefact` / `deploy-web:pre-duefact`
+指向部署前的镜像（`f05d957e2ce1` / `b8c0cfb3e558`）。镜像内 `grep -c formatFactTarget`
+= 1（`staleness-lib.mjs`）与 3（`ops-daily-lib.mjs`），确认新代码真的进了镜像。
+
+部署后在 VPS 上跑了一次 `sh scripts/ops-daily-cron.sh`（`OPS_EXIT=0`），报告落在
+`/opt/jpqm/var/ops-reports/2026-11-25.json`：
+
+```
+status=ok hasCritical=true
+todayActions=12
+  [source_critical] source:bookkeeping:candidate-data-class2
+  [source_critical] source:bookkeeping:candidate-data-class3
+  [due_fact] bookkeeping/2026/payment_deadline_rule (examLevel=bookkeeping:1, delivery=unified)
+  [due_fact] bookkeeping/2026/payment_deadline_rule (examLevel=bookkeeping:2, delivery=unified)
+  [due_fact] bookkeeping/2026/payment_deadline_rule (examLevel=bookkeeping:3, delivery=unified)
+  [due_fact] bookkeeping/2026/fee (examLevel=bookkeeping:2, delivery=network)
+  [due_fact] bookkeeping/2026/fee (examLevel=bookkeeping:3, delivery=network)
+  [due_fact] bookkeeping/2026/fee (examLevel=bookkeeping:basic, delivery=network)
+  [due_fact] bookkeeping/2026/fee (examLevel=bookkeeping:cost-accounting-basic, delivery=network)
+  [due_fact] bookkeeping/2026/fee (examLevel=bookkeeping:1, delivery=unified)
+  [due_fact] bookkeeping/2026/fee (examLevel=bookkeeping:2, delivery=unified)
+  [due_fact] bookkeeping/2026/fee (examLevel=bookkeeping:3, delivery=unified)
+distinct=12 duplicatedTargets=0
+```
+
+**这条结果修正了部署前对验收标准的判断。** 我在写这份报告时预计「12 条 → 5 条」，依据是
+「4 个 distinct target + 2 条 source_critical」。实际是 **12 条，但 12 个都不同**：
+`todayActions` 本来就是 12 条不同的动作（10 条 `due_fact` + 2 条 `source_critical`），
+问题从来不是**条数**，而是那 10 条 `due_fact` 里有 7 条渲染成**同样的文本**。
+所以正确的验收标准是 `duplicatedTargets=0`，不是条数下降。修完之后：
+
+- `payment_deadline_rule` 3 条，分别带 `examLevel=bookkeeping:1/2/3`；
+- `fee` 7 条，分别带 `examLevel=bookkeeping:{1,2,3,basic,cost-accounting-basic}` ×
+  `delivery={unified,network}` 的不同组合；
+- 无维度的事实（`gyoseishoshi/2026/fee`、`takken/2026/fee`）保持原样，没有多余括号。
+
+markdown 的「今日需处理」与「到期事实（前 20）」两处都已带上维度，
+`fp/2026/fee (provider=jafp, examLevel=fp:2, component=academic, delivery=cbt)` 这种
+四维的都正常渲染。**报告里的 12 条与 JSON 的 12 条一一对应，没有截断。**
+
+其余复验：公网 `/` `/shikaku/` `/pass-rate/` `/schedule/` `/updates/` `/compare/`
+`/sitemap.xml` `/robots.txt` 全 200、`/ready` 仍 404、`var/readiness/last-status` 仍
+`ready\n0`、数据面探针 `{"status":"ready","database":"ok"}`、Caddyfile 里
+`blog.waystoneai.online` 计数仍 1（博客 vhost 未受影响）。
+
+## 7. 兼容性
 
 - **`data:staleness` CLI 输出**（`scripts/check-staleness.mjs` 把 `dueFacts`
   原样 JSON 输出）多了一个 `dimensions` 键。这是**新增键**，没有删除或重命名
@@ -248,7 +296,7 @@ stderr），不代表失败 —— 以退出码和最后的 `docker smoke passed
   是字符串，没有下游按格式解析它；markdown 是给人看的。
 - **无维度的事实输出逐字节不变**，有测试守着。
 
-## 7. 未处理
+## 8. 未处理
 
 1. **SQL 仍无执行期测试**。本轮只加了文本断言。真正的守卫需要一条连库的集成
    测试（跑一次 `STALENESS_QUERY`，断言返回行里带六列），而这需要 CI 里有库 ——
@@ -259,18 +307,19 @@ stderr），不代表失败 —— 以退出码和最后的 `docker smoke passed
    target 的长度上限还没有实测过。
 3. **`status: 'ok'` 与 `hasCritical: true` 并存**（部署报告 §10.1）未动，
    属于同一份报告里的另一个语义问题。
-4. **生产尚未部署本次改动**。VPS 跑的是 `cac5a7e`，本次改动在其之后。
+4. **报告里 `status=ok` 与 `hasCritical=true` 同时出现在本轮实测输出中**，
+   这正是上面第 3 条的现场证据，保留原样以便下一轮处理时对照。
 
-## 8. 下一步建议
+## 9. 下一步建议
 
 - **P1**：把 `chore/phase1-baseline` 落到 `main`（需 Owner 授权 merge），
   否则生产永远是手工 FF 的游离状态。
-- **P2**：部署本次改动后跑一次 `pnpm ops:daily`，确认「今日需处理」从 12 条
-  变成 5 条（4 个 distinct target + 2 条 source_critical），并核对 target 文本。
-- **P3**：给 `release-gate.yml` 加一条连库的 `STALENESS_QUERY` 测试，补上 §7.1 的缺口。
-- **P4**：处理部署报告 §10.1 的 `status` 语义问题。
+- **P2**：给 `release-gate.yml` 加一条连库的 `STALENESS_QUERY` 测试，补上 §8.1 的缺口。
+- **P3**：处理部署报告 §10.1 的 `status` 语义问题（把「报告生成成功」与
+  「有 critical」拆成两个字段）。
+- **P4**：生产跑一次 patrol，消掉 `coverageGap: not_run`。
 
-## 9. 停止声明
+## 10. 停止声明
 
 本次改动只涉及 `due_fact` 动作的粒度，未触碰查询条件、窗口天数、数据本身、
 报告的其他部分，也未进入任何新的 Sprint 范围。
