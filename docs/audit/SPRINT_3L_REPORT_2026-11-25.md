@@ -32,7 +32,9 @@
 - HEAD `d2c8e03`（`docs: 落账 Sprint 3K 的 P3 收尾`）
 - `git status --short` 无输出
 
-本轮内容 commit：`<CONTENT_SHA>`
+本轮内容 commit：`96bce93`（`feat(ops): 公网入口纳入就绪探针（Sprint 3L）`）
+
+报告自身无法在写它的那个 commit 里引用自己的 hash——这是循环依赖。所以沿用 3A 起的两段式：先提交内容，再用一个 `docs: 落账…` 的收口 commit 把 hash 回填进来。
 
 `git diff --stat`（提交前）：
 
