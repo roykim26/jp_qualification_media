@@ -40,6 +40,41 @@ type BodyMode =
   | 'fact-numeric-source-url'
   | 'fact-numeric-verified-at'
   | 'missing-status'
+  | 'qualification-null-aliases'
+  | 'qualification-string-aliases'
+  | 'qualification-numeric-alias'
+  | 'qualification-null-name'
+  | 'qualification-null-field'
+  | 'qualification-null-category'
+  | 'calendar-null-type'
+  | 'calendar-bogus-type'
+  | 'calendar-null-label'
+  | 'calendar-null-display-value'
+  | 'calendar-null-fact-key'
+  | 'calendar-numeric-source-url'
+  | 'calendar-numeric-date'
+  | 'calendar-null-name'
+  | 'calendar-null-slug'
+  | 'calendar-null-element'
+  | 'updates-null-event-label'
+  | 'updates-null-fact-key'
+  | 'updates-null-new-value'
+  | 'updates-numeric-previous-value'
+  | 'updates-null-affected-pages'
+  | 'updates-null-page'
+  | 'updates-null-created-at'
+  | 'updates-numeric-source-url'
+  | 'updates-null-element'
+  | 'compare-null-row-label'
+  | 'compare-null-cells'
+  | 'compare-null-entries'
+  | 'compare-null-entry'
+  | 'compare-null-entry-value'
+  | 'compare-null-entry-fact-key'
+  | 'compare-null-row'
+  | 'compare-null-qualification'
+  | 'compare-null-name'
+  | 'compare-null-slug'
   | 'single-failure';
 
 let bodyMode: BodyMode = 'ok';
@@ -75,6 +110,75 @@ function qualificationView() {
     ],
     officialVerifiedAt: '2026-08-11T00:00:00.000Z',
     missingReasons: {},
+  };
+}
+
+/**
+ * The real `/api/v1/calendar` body, shaped from `PublicCalendarEvent`
+ * (`packages/schema/src/calendar.ts:6-24`). `dateValue` must sit inside the
+ * default 90-day window -- `/schedule/` filters past events out silently, so a
+ * stale date would make every corrupted variant look identical to the baseline.
+ */
+function calendarEvent() {
+  return {
+    id: 'event:it-passport:exam_date:2026',
+    type: 'exam_date' as const,
+    label: '試験日',
+    qualification: itPassport,
+    examYear: 2026,
+    displayValue: '2026年12月15日',
+    dateValue: '2026-12-15',
+    startValue: null,
+    factKey: 'exam_dates',
+    verifiedAt: '2026-08-11T00:00:00.000Z',
+    sourceUrl: 'https://www.ipa.go.jp/shiken/',
+    sequence: 1,
+  };
+}
+
+/** The real `/api/v1/updates` body, from `PublicUpdateEvent` (`packages/schema/src/updates.ts:3-17`). */
+function updateEvent() {
+  return {
+    id: 'update:it-passport:fee:2026',
+    eventType: 'fee_change',
+    eventLabel: '料金の変更',
+    qualification: itPassport,
+    factKey: 'fee',
+    factLabel: '受験手数料',
+    examYear: 2026,
+    previousValue: '7,000円',
+    newValue: '7,500円',
+    affectedPages: ['/shikaku/it-passport/'],
+    sourceUrl: 'https://www.ipa.go.jp/shiken/',
+    createdAt: '2026-08-11T00:00:00.000Z',
+    verifiedAt: '2026-08-11T00:00:00.000Z',
+  };
+}
+
+/** The real `/api/v1/compare` body, from `PublicQualificationComparison` (`packages/schema/src/compare.ts:41-44`). */
+function comparison() {
+  return {
+    data: {
+      qualifications: [itPassport],
+      rows: [
+        {
+          key: 'fee' as const,
+          label: '受験手数料',
+          cells: {
+            'it-passport': {
+              entries: [
+                {
+                  factKey: 'fee',
+                  examYear: 2026,
+                  value: '7,500円',
+                  verifiedAt: '2026-08-11T00:00:00.000Z',
+                },
+              ],
+            },
+          },
+        },
+      ],
+    },
   };
 }
 
@@ -144,6 +248,152 @@ function bodyFor(url: string): string {
         qualification: itPassport,
         facts: [qualificationView().facts[0]],
       });
+    case 'qualification-null-aliases':
+    case 'qualification-string-aliases':
+    case 'qualification-numeric-alias':
+    case 'qualification-null-name':
+    case 'qualification-null-field':
+    case 'qualification-null-category': {
+      // Sprint 3M, measured: the section page renders `aliasesJa.map(...)`,
+      // `officialNameJa`, `field` and `category` directly. `aliasesJa: null`
+      // throws `Cannot read properties of null (reading 'map')`,
+      // `aliasesJa: 'IPA'` throws `aliasesJa.map is not a function`, and the
+      // other three throw from `escapeHtml()`. All of them after the 200
+      // header, so the reader got a blank page instead of a 503.
+      const qualification: Record<string, unknown> = { ...itPassport };
+      if (bodyMode === 'qualification-null-aliases')
+        qualification.aliasesJa = null;
+      if (bodyMode === 'qualification-string-aliases')
+        qualification.aliasesJa = 'IPA';
+      if (bodyMode === 'qualification-numeric-alias')
+        qualification.aliasesJa = [123];
+      if (bodyMode === 'qualification-null-name')
+        qualification.officialNameJa = null;
+      if (bodyMode === 'qualification-null-field') qualification.field = null;
+      if (bodyMode === 'qualification-null-category')
+        qualification.category = null;
+      return JSON.stringify({
+        qualification,
+        status: 'verified',
+        facts: [qualificationView().facts[0]],
+      });
+    }
+    case 'calendar-null-type':
+    case 'calendar-bogus-type':
+    case 'calendar-null-label':
+    case 'calendar-null-display-value':
+    case 'calendar-null-fact-key':
+    case 'calendar-numeric-source-url':
+    case 'calendar-numeric-date':
+    case 'calendar-null-name':
+    case 'calendar-null-slug':
+    case 'calendar-null-element': {
+      // Sprint 3M, measured. `/schedule/` renders each event's own fields and
+      // its qualification copy; `escapeHtml()` turns most of these into a
+      // throw, and an unknown `type` throws from `eventTone[type]` being
+      // `undefined`. `dateValue: 123` is the quiet one: no throw, but the
+      // `dateValue < today` comparison compares a number to a string and the
+      // event silently disappears from the schedule.
+      const event: Record<string, unknown> = { ...calendarEvent() };
+      const qualification: Record<string, unknown> = { ...itPassport };
+      if (bodyMode === 'calendar-null-type') event.type = null;
+      if (bodyMode === 'calendar-bogus-type') event.type = 'bogus';
+      if (bodyMode === 'calendar-null-label') event.label = null;
+      if (bodyMode === 'calendar-null-display-value') event.displayValue = null;
+      if (bodyMode === 'calendar-null-fact-key') event.factKey = null;
+      if (bodyMode === 'calendar-numeric-source-url') event.sourceUrl = 123;
+      if (bodyMode === 'calendar-numeric-date') event.dateValue = 123;
+      if (bodyMode === 'calendar-null-name')
+        qualification.officialNameJa = null;
+      if (bodyMode === 'calendar-null-slug') qualification.slug = null;
+      event.qualification = qualification;
+      return JSON.stringify({
+        data: bodyMode === 'calendar-null-element' ? [null] : [event],
+      });
+    }
+    case 'updates-null-event-label':
+    case 'updates-null-fact-key':
+    case 'updates-null-new-value':
+    case 'updates-numeric-previous-value':
+    case 'updates-null-affected-pages':
+    case 'updates-null-page':
+    case 'updates-null-created-at':
+    case 'updates-numeric-source-url':
+    case 'updates-null-element': {
+      // Sprint 3M, measured. `/updates/` reads `eventLabel`, `factKey`,
+      // `newValue` through `escapeHtml()`, and `factKey` again through
+      // `factLabel()` (`factKey.match(...)`); `affectedPages` is `.map`-ed and
+      // `createdAt` goes to `formatVerifiedDay()`. All of them blank the page.
+      const event: Record<string, unknown> = { ...updateEvent() };
+      if (bodyMode === 'updates-null-event-label') event.eventLabel = null;
+      if (bodyMode === 'updates-null-fact-key') event.factKey = null;
+      if (bodyMode === 'updates-null-new-value') event.newValue = null;
+      if (bodyMode === 'updates-numeric-previous-value')
+        event.previousValue = 123;
+      if (bodyMode === 'updates-null-affected-pages')
+        event.affectedPages = null;
+      if (bodyMode === 'updates-null-page') event.affectedPages = [null];
+      if (bodyMode === 'updates-null-created-at') event.createdAt = null;
+      if (bodyMode === 'updates-numeric-source-url') event.sourceUrl = 123;
+      return JSON.stringify({
+        data: bodyMode === 'updates-null-element' ? [null] : [event],
+        pagination: { hasMore: false },
+      });
+    }
+    case 'compare-null-row-label':
+    case 'compare-null-cells':
+    case 'compare-null-entries':
+    case 'compare-null-entry':
+    case 'compare-null-entry-value':
+    case 'compare-null-entry-fact-key':
+    case 'compare-null-row':
+    case 'compare-null-qualification':
+    case 'compare-null-name':
+    case 'compare-null-slug': {
+      // Sprint 3M, measured. `/compare/` prints the row label, each cell's
+      // entries and each entry's value; the qualification header goes through
+      // `escapeHtml()` too. `rows: null` was already caught by the pre-3M
+      // envelope check -- these are the element-level holes underneath it.
+      const payload = comparison();
+      const qualification: Record<string, unknown> = { ...itPassport };
+      if (bodyMode === 'compare-null-name') qualification.officialNameJa = null;
+      if (bodyMode === 'compare-null-slug') qualification.slug = null;
+      payload.data.qualifications = (
+        bodyMode === 'compare-null-qualification' ? [null] : [qualification]
+      ) as typeof payload.data.qualifications;
+
+      const row = payload.data.rows[0] as Record<string, unknown>;
+      if (bodyMode === 'compare-null-row-label') row.label = null;
+      // `row.cells: null` is its own hole: without the `isRecord(row.cells)`
+      // check, `Object.values(null)` throws inside the validator itself.
+      if (bodyMode === 'compare-null-cells') row.cells = null;
+      if (bodyMode === 'compare-null-entries') {
+        (row.cells as Record<string, Record<string, unknown>>)['it-passport'] =
+          {
+            entries: null,
+          };
+      }
+      if (
+        bodyMode === 'compare-null-entry' ||
+        bodyMode === 'compare-null-entry-value' ||
+        bodyMode === 'compare-null-entry-fact-key'
+      ) {
+        const cell = (
+          row.cells as Record<string, { entries: Record<string, unknown>[] }>
+        )['it-passport'];
+        const entry: Record<string, unknown> = { ...cell.entries[0] };
+        if (bodyMode === 'compare-null-entry-value') entry.value = null;
+        if (bodyMode === 'compare-null-entry-fact-key') entry.factKey = null;
+        cell.entries =
+          bodyMode === 'compare-null-entry'
+            ? ([null] as unknown as Record<string, unknown>[])
+            : [entry];
+      }
+      if (bodyMode === 'compare-null-row') {
+        payload.data.rows = [null] as unknown as typeof payload.data.rows;
+      }
+      return JSON.stringify(payload);
+    }
     case 'single-failure':
       // One qualification unusable, every sibling healthy. This is the shape
       // the `/pass-rate/` observation line exists for: it must still answer
@@ -277,6 +527,194 @@ describe('web server rejects unusable upstream bodies', () => {
       mode: 'missing-status',
       label: 'a view with no status',
       path: '/shikaku/it-passport/',
+    },
+    {
+      // The four qualification fields measured in Sprint 3M. `aliasesJa` is
+      // the loudest: a string throws `.map is not a function`, null throws
+      // "reading 'map'". The other three go through `escapeHtml()`.
+      mode: 'qualification-null-aliases',
+      label: 'a qualification whose aliasesJa is null',
+      path: '/shikaku/it-passport/',
+    },
+    {
+      mode: 'qualification-string-aliases',
+      label: 'a qualification whose aliasesJa is a string',
+      path: '/shikaku/it-passport/',
+    },
+    {
+      // `escapeHtml(123)` throws "value.replaceAll is not a function", so an
+      // array of non-strings is just as fatal as a non-array.
+      mode: 'qualification-numeric-alias',
+      label: 'a qualification whose aliasesJa holds a number',
+      path: '/shikaku/it-passport/',
+    },
+    {
+      mode: 'qualification-null-name',
+      label: 'a qualification whose officialNameJa is null',
+      path: '/shikaku/it-passport/',
+    },
+    {
+      mode: 'qualification-null-field',
+      label: 'a qualification whose field is null',
+      path: '/shikaku/it-passport/',
+    },
+    {
+      mode: 'qualification-null-category',
+      label: 'a qualification whose category is null',
+      path: '/shikaku/it-passport/',
+    },
+    // Sprint 3M: the same class of hole on the three sibling routes. Each of
+    // these answered 200 with an empty body before the element checks went in.
+    {
+      mode: 'calendar-null-type',
+      label: 'a calendar event with a null type',
+      path: '/schedule/',
+    },
+    {
+      // Unknown enum member: `eventTone[type]` is `undefined`, then
+      // `escapeHtml(undefined)` throws. A non-empty string is not enough.
+      mode: 'calendar-bogus-type',
+      label: 'a calendar event with an unknown type',
+      path: '/schedule/',
+    },
+    {
+      mode: 'calendar-null-label',
+      label: 'a calendar event with a null label',
+      path: '/schedule/',
+    },
+    {
+      mode: 'calendar-null-display-value',
+      label: 'a calendar event with a null displayValue',
+      path: '/schedule/',
+    },
+    {
+      mode: 'calendar-null-fact-key',
+      label: 'a calendar event with a null factKey',
+      path: '/schedule/',
+    },
+    {
+      mode: 'calendar-numeric-source-url',
+      label: 'a calendar event whose sourceUrl is a number',
+      path: '/schedule/',
+    },
+    {
+      // The quiet one: no throw, but `dateValue < today` compares a number to a
+      // string and the event silently leaves the schedule.
+      mode: 'calendar-numeric-date',
+      label: 'a calendar event whose dateValue is a number',
+      path: '/schedule/',
+    },
+    {
+      mode: 'calendar-null-name',
+      label: 'a calendar event whose qualification name is null',
+      path: '/schedule/',
+    },
+    {
+      mode: 'calendar-null-slug',
+      label: 'a calendar event whose qualification slug is null',
+      path: '/schedule/',
+    },
+    {
+      mode: 'calendar-null-element',
+      label: 'a null calendar event',
+      path: '/schedule/',
+    },
+    {
+      mode: 'updates-null-event-label',
+      label: 'an update with a null eventLabel',
+      path: '/updates/',
+    },
+    {
+      mode: 'updates-null-fact-key',
+      label: 'an update with a null factKey',
+      path: '/updates/',
+    },
+    {
+      mode: 'updates-null-new-value',
+      label: 'an update with a null newValue',
+      path: '/updates/',
+    },
+    {
+      mode: 'updates-numeric-previous-value',
+      label: 'an update whose previousValue is a number',
+      path: '/updates/',
+    },
+    {
+      mode: 'updates-null-affected-pages',
+      label: 'an update with null affectedPages',
+      path: '/updates/',
+    },
+    {
+      mode: 'updates-null-page',
+      label: 'an update whose affectedPages holds a null',
+      path: '/updates/',
+    },
+    {
+      mode: 'updates-null-created-at',
+      label: 'an update with a null createdAt',
+      path: '/updates/',
+    },
+    {
+      mode: 'updates-numeric-source-url',
+      label: 'an update whose sourceUrl is a number',
+      path: '/updates/',
+    },
+    {
+      mode: 'updates-null-element',
+      label: 'a null update',
+      path: '/updates/',
+    },
+    {
+      mode: 'compare-null-row-label',
+      label: 'a comparison row with a null label',
+      path: '/compare/',
+    },
+    {
+      // Distinct from `compare-null-entries`: the row itself loses its cell
+      // map, so the validator's own `Object.values(row.cells)` would throw.
+      mode: 'compare-null-cells',
+      label: 'a comparison row with null cells',
+      path: '/compare/',
+    },
+    {
+      mode: 'compare-null-entries',
+      label: 'a comparison cell with null entries',
+      path: '/compare/',
+    },
+    {
+      mode: 'compare-null-entry',
+      label: 'a null comparison entry',
+      path: '/compare/',
+    },
+    {
+      mode: 'compare-null-entry-value',
+      label: 'a comparison entry with a null value',
+      path: '/compare/',
+    },
+    {
+      mode: 'compare-null-entry-fact-key',
+      label: 'a comparison entry with a null factKey',
+      path: '/compare/',
+    },
+    {
+      mode: 'compare-null-row',
+      label: 'a null comparison row',
+      path: '/compare/',
+    },
+    {
+      mode: 'compare-null-qualification',
+      label: 'a null qualification in the comparison',
+      path: '/compare/',
+    },
+    {
+      mode: 'compare-null-name',
+      label: 'a comparison qualification with a null name',
+      path: '/compare/',
+    },
+    {
+      mode: 'compare-null-slug',
+      label: 'a comparison qualification with a null slug',
+      path: '/compare/',
     },
   ];
 

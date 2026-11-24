@@ -219,8 +219,15 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 /**
  * `{ qualification: {...}, status: '...', facts: [...] }` -- the section pages.
  *
- * Three field checks that look cosmetic but are not:
+ * Four field checks that look cosmetic but are not:
  *
+ * - the qualification's display fields: `renderQualificationSectionPage()`
+ *   renders `qualification.aliasesJa.map(escapeHtml)`, `officialNameJa`,
+ *   `field` and `category`. Measured in Sprint 3M: `aliasesJa: null` throws
+ *   `Cannot read properties of null (reading 'map')`, `aliasesJa: 'IPA'`
+ *   throws `aliasesJa.map is not a function`, and a null `officialNameJa`,
+ *   `field` or `category` throws from `escapeHtml()`. All four land after the
+ *   200 header, so the reader gets a blank page instead of a 503.
  * - `facts` elements: the renderer sorts by `fact.factKey` and prints
  *   `fact.displayValue`, so a single `null` throws mid-render. By then the
  *   route has already written `200` and the response is lost (see the
@@ -249,6 +256,11 @@ function isQualificationView(value: unknown): boolean {
   return (
     isRecord(qualification) &&
     typeof qualification.slug === 'string' &&
+    typeof qualification.officialNameJa === 'string' &&
+    Array.isArray(qualification.aliasesJa) &&
+    qualification.aliasesJa.every((alias) => typeof alias === 'string') &&
+    typeof qualification.field === 'string' &&
+    typeof qualification.category === 'string' &&
     typeof status === 'string' &&
     status.length > 0 &&
     Array.isArray(facts) &&
@@ -267,16 +279,145 @@ function isQualificationView(value: unknown): boolean {
   );
 }
 
-/** `{ data: [...] }` -- the envelope shared by calendar and updates. */
-function hasArrayData(value: unknown): boolean {
-  return isRecord(value) && Array.isArray(value.data);
+/** The qualification fields `/schedule/` and `/compare/` put in markup. */
+function hasQualificationIdentity(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    typeof value.slug === 'string' &&
+    typeof value.officialNameJa === 'string'
+  );
 }
 
-/** `{ data: { qualifications: [...], rows: [...] } }` -- the compare page. */
+/**
+ * Calendar event types the renderer has a label for.
+ *
+ * `renderSchedulePage()` does `escapeHtml(eventTone[event.type])`; an unknown
+ * type makes that lookup `undefined` and `escapeHtml()` throws on
+ * `undefined.replaceAll`. Measured in Sprint 3M: `type: 'bogus'` returns
+ * `200` with an empty body. Pinning the four types turns that blank page into
+ * a 503. A type the API adds later must be added here *and* to `eventTone` --
+ * the renderer cannot draw it before then anyway.
+ */
+const calendarEventTypes = new Set([
+  'application_open',
+  'application_deadline',
+  'exam_date',
+  'result_date',
+]);
+
+/**
+ * `{ data: PublicCalendarEvent[] }` -- the `/schedule/` page.
+ *
+ * Element-level checks, each measured in Sprint 3M against a real stub. All of
+ * these returned `200` with an empty body before the check, because the route
+ * writes the status before rendering:
+ *
+ * - `type`: unknown or null -> `escapeHtml(undefined)` throws.
+ * - `label`, `displayValue`, `factKey`: null -> `escapeHtml(null)` throws.
+ * - `sourceUrl`: a number -> `escapeHtml(123)` throws (it is optional, so only
+ *   checked when present).
+ * - `qualification.officialNameJa`, `qualification.slug`: null -> throws.
+ * - `dateValue`: a number -> no throw, but the event is silently dropped by
+ *   the `dateValue < today` filter, so the schedule quietly loses an entry --
+ *   the page looks fine and is missing a row, which is why it is checked too.
+ *
+ * The remaining fields are unchecked because a bad value degrades visibly
+ * without lying: `examYear` renders a literal `null年`, `startValue` is fed
+ * to `formatFactDisplayValue()` which stringifies it, `verifiedAt` renders
+ * as 未確認, `id` only affects the ICS link, `sequence` is not read.
+ */
+function isCalendarEnvelope(value: unknown): boolean {
+  if (!isRecord(value) || !Array.isArray(value.data)) return false;
+  return value.data.every(
+    (event) =>
+      isRecord(event) &&
+      typeof event.type === 'string' &&
+      calendarEventTypes.has(event.type) &&
+      typeof event.label === 'string' &&
+      typeof event.displayValue === 'string' &&
+      typeof event.factKey === 'string' &&
+      (event.dateValue === null || typeof event.dateValue === 'string') &&
+      (event.sourceUrl === undefined || typeof event.sourceUrl === 'string') &&
+      hasQualificationIdentity(event.qualification),
+  );
+}
+
+/**
+ * `{ data: { qualifications: [...], rows: [...] } }` -- the `/compare/` page.
+ *
+ * `renderComparePage()` walks `comparison.qualifications` for the table header
+ * and `comparison.rows[].cells[slug].entries[]` for the body. Sprint 3M
+ * measured every one of these as `200` plus an empty body:
+ *
+ * - a `null` qualification, a `null` `officialNameJa` or `slug`;
+ * - a `null` row, a `null` `row.label`;
+ * - `row.cells` set to null;
+ * - a `null` cell `entries` array, a `null` entry;
+ * - a `null` entry `factKey` or `value`.
+ *
+ * Not checked because they do not throw: `row.key`, `qualification.aliasesJa`
+ * and `qualification.field` (the selector renders the local qualification
+ * list, not the comparison's copy), `entry.examYear`, `missingReason`.
+ *
+ * `entry.examYear` is deliberately left alone even though `/schedule/` checks
+ * its own: the compare cell prints it as `適用年度: ${entry.examYear}年`, which
+ * degrades to a visible `null年` rather than a blank page, and rejecting the
+ * whole comparison table over one year label is the worse trade.
+ */
 function isComparisonEnvelope(value: unknown): boolean {
   if (!isRecord(value) || !isRecord(value.data)) return false;
-  return (
-    Array.isArray(value.data.qualifications) && Array.isArray(value.data.rows)
+  const { qualifications, rows } = value.data;
+  if (!Array.isArray(qualifications) || !Array.isArray(rows)) return false;
+  if (!qualifications.every(hasQualificationIdentity)) return false;
+  return rows.every((row) => {
+    if (!isRecord(row)) return false;
+    if (typeof row.label !== 'string') return false;
+    if (!isRecord(row.cells)) return false;
+    return Object.values(row.cells).every(
+      (cell) =>
+        isRecord(cell) &&
+        Array.isArray(cell.entries) &&
+        cell.entries.every(
+          (entry) =>
+            isRecord(entry) &&
+            typeof entry.factKey === 'string' &&
+            typeof entry.value === 'string',
+        ),
+    );
+  });
+}
+
+/**
+ * `{ data: PublicUpdateEvent[], pagination?: {...} }` -- the `/updates/` page.
+ *
+ * `renderUpdatesPage()` builds a card per batch: it slices `createdAt`, runs
+ * `formatUpdateDisplayValue()` over the before/after values, spreads
+ * `affectedPages`, and passes `eventLabel` and `factKey` through
+ * `escapeHtml()`. Sprint 3M measured all of these as `200` plus an empty body:
+ * `eventLabel: null`, `factKey: null`, `newValue: null`,
+ * `previousValue: 123`, `affectedPages: null`, `affectedPages: [null]`,
+ * `createdAt: null`, `sourceUrl: 123`, and a `null` element in `data`.
+ *
+ * Not checked because they do not throw: `factLabel`, `verifiedAt`,
+ * `eventType`, `id`, `examYear`, and `qualification.*` (unlike `/schedule/`
+ * and `/compare/`, this page interpolates the qualification into a template
+ * string before escaping it, so a null name renders as text rather than
+ * throwing -- measured, not assumed).
+ */
+function isUpdatesEnvelope(value: unknown): boolean {
+  if (!isRecord(value) || !Array.isArray(value.data)) return false;
+  return value.data.every(
+    (event) =>
+      isRecord(event) &&
+      typeof event.eventLabel === 'string' &&
+      typeof event.factKey === 'string' &&
+      typeof event.newValue === 'string' &&
+      (event.previousValue === null ||
+        typeof event.previousValue === 'string') &&
+      typeof event.createdAt === 'string' &&
+      Array.isArray(event.affectedPages) &&
+      event.affectedPages.every((page) => typeof page === 'string') &&
+      (event.sourceUrl === undefined || typeof event.sourceUrl === 'string'),
   );
 }
 
@@ -304,7 +445,7 @@ async function readCalendar(query: URLSearchParams) {
   return readJson<{ data: PublicCalendarEvent[] }>(
     response,
     'calendar',
-    hasArrayData,
+    isCalendarEnvelope,
   );
 }
 
@@ -334,7 +475,7 @@ async function readUpdates(query: URLSearchParams, page: number) {
   return readJson<{
     data: PublicUpdateEvent[];
     pagination?: { hasMore?: boolean };
-  }>(response, 'updates', hasArrayData);
+  }>(response, 'updates', isUpdatesEnvelope);
 }
 
 function parseUpdatesPage(value: string | null): number {
