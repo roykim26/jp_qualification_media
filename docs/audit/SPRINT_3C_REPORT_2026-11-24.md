@@ -65,7 +65,18 @@ HEAD：f09e4388ed3bdc983cbe355896bee008c9fc4af6
 
 ### 2.3 提交
 
-见 §12。
+| 项      | 值                                                                |
+| ------- | ----------------------------------------------------------------- |
+| commit  | **`9bc946fa8dc8008ab8afd9caeea76be5aeceeb81`**（short `9bc946f`） |
+| parent  | `f09e438`                                                         |
+| subject | `feat: gate the web process on required production configuration` |
+| 文件    | 8 files changed, 1183 insertions(+), 23 deletions(-)              |
+
+提交方式：逐路径 `git add --`（8 个文件全列出，未用 `-A`）；message 用 `[System.IO.File]::WriteAllText` + `new UTF8Encoding($false)` 写入，subject 首字节经 `Format-Hex` 校验为 `66 65 61 74 3A 20` = `feat: `，无 BOM。
+
+提交后基线链：`a319d46 → 9a42cb4 → 4796f8b → 013e680 → 864535e → f09e438 → 9bc946f`
+
+> 与 Sprint 3A/3B 同样的 hash 循环依赖：报告里引用 commit hash，写进去 hash 就会变。这里沿用既有做法——代码与报告先合成一个 commit，再由一个 `docs:` commit 只改报告里的 hash 字段收口，不反复 `--amend`。
 
 ---
 
