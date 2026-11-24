@@ -27,7 +27,7 @@
 ## 2. Git 状态与基线
 
 - 执行前 HEAD：`9a11807`（`docs: 落账 Sprint 3J 执行报告`）
-- 本轮内容 commit：`<CONTENT_SHA>`（`fix(web): 上游故障形状收敛（Sprint 3K）`）
+- 本轮内容 commit：`66fcf7d`（`fix(web): 上游故障形状收敛（Sprint 3K）`）
 - 工作树在 commit 前：
 
 | 状态 | 文件                                            |
