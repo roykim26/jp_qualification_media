@@ -15,7 +15,7 @@
 | 部署前生产 HEAD     | `dc4e0ec`（`fix: 页脚法務・連絡欄移除郵箱直顯… (#109)`）  |
 | 部署后生产 HEAD     | `cac5a7e`（`fix(ops): 就绪探针默认自带 compose 文件`）    |
 | 分支                | `chore/phase1-baseline`（生产 main 被 fast-forward 到此） |
-| 本报告内容 commit   | `<CONTENT_SHA>`                                           |
+| 本报告内容 commit   | `1969846`（`docs(audit): 3A–3M 生产部署报告`）            |
 | 报告撰写时本地 HEAD | `cac5a7e`                                                 |
 
 本报告本身无法在自己的 commit 里引用自己的 hash，因此沿用项目既有做法：先提交内容，再用一个 `docs: 落账…` 的收口 commit 把 `<CONTENT_SHA>` 替换为真实 hash。**基线链只列到内容 commit，HEAD 以 `git log --oneline -1` 为准。**
