@@ -73,14 +73,14 @@ HEAD：031e9af（工作树干净）
 | commit                                     | 内容                                                                            |
 | ------------------------------------------ | ------------------------------------------------------------------------------- |
 | `525098ee55067bf9867c37e0303f5fa15152630a` | 代码 + 测试 + 两份文档 + runbook + `.gitattributes`（6 files, 1126 insertions） |
-| `TBD-DOCS`                                 | `docs: 落账 Sprint 3E 执行报告`（只改本节的 hash 与基线链）                     |
+| `ef975a8`                                  | `docs: 落账 Sprint 3E 执行报告`（只改本节的 hash 与基线链）                     |
 
 提交方式：逐路径 `git add --`（未用 `-A`），message 用 `[System.IO.File]::WriteAllText` + `new UTF8Encoding($false)` 写入 `var/commit-msg-3e.txt`，subject 首字节校验 `66 65 61 74 3A 20` = `feat: `，无 BOM。`scripts/readiness-cron.sh` 以 `100755` 入库（`git update-index --chmod=+x`），blob 内 CR 数为 0。
 
 提交后基线链：
 
 ```text
-a319d46 → 9a42cb4 → 4796f8b → 013e680 → 864535e → f09e438 → 9bc946f → 9fc9c72 → f99e475 → 3142605 → 2afa33d → 031e9af → 525098e → TBD-DOCS
+a319d46 → 9a42cb4 → 4796f8b → 013e680 → 864535e → f09e438 → 9bc946f → 9fc9c72 → f99e475 → 3142605 → 2afa33d → 031e9af → 525098e → ef975a8
 ```
 
 ---
