@@ -11,6 +11,7 @@
 | 分支            | `chore/phase1-baseline`        |
 | 执行前 HEAD     | `bf37922`                      |
 | 本轮内容 commit | `35168b1`                      |
+| 门禁补充 commit | `<CONTENT_SHA>`                |
 | 部署后生产 HEAD | `b9b5228`（2026-11-25 07:38Z） |
 
 报告无法在自己那个 commit 里引用自己的 hash，所以内容 commit 先落，再由一个
@@ -181,7 +182,10 @@ test('the staleness query selects every dimension the target format prints', () 
 ```
 
 它测的是「查询和格式化的字段集一致」这个不变量，而不是 SQL 的执行结果。
-这是权衡后的次优解，已记入 §8 未处理问题。
+
+**这条缺口随后被补上了**（`scripts/verify-staleness-query.mjs`，见 §5.6）。文本断言
+只能证明「SQL 里写了这些列」，不能证明「查询真的跑得通、真的返回这些列、返回的行
+喂进 `formatFactTarget` 后 target 真的互不相同」。后三件事只有连库执行才知道。
 
 ### 5.3 变异测试
 
@@ -238,6 +242,53 @@ docker smoke passed
 注意 `pnpm smoke:docker` 输出开头那行 `node : ... NativeCommandError` 是
 PowerShell 对 stderr 的包装噪声（`$ node scripts/docker-smoke.mjs` 这行提示走了
 stderr），不代表失败 —— 以退出码和最后的 `docker smoke passed` 为准。
+
+### 5.6 补上执行期守卫：`scripts/verify-staleness-query.mjs`
+
+§5.2 的缺口（SQL 没有任何执行期测试）在本轮一并补上了。新脚本真的连库跑一次
+`STALENESS_QUERY`，做三件事：
+
+1. **列存在**：`result.fields` 必须包含 `factDimensionFields` 里的每一个
+   `column`。少一列就报 `STALENESS_QUERY does not return: …`。
+2. **行带键**：每一行都必须带这些 key，否则 `factDimensions()` 会静默返回 `{}`。
+3. **target 互不相同**：把返回的行喂给 `computeStaleness()` 再
+   `formatFactTarget()`，**29 条到期事实必须给出 29 个不同 target**。这才是
+   真正的回归判据 —— 12 条动作里只有 4 个不同 target 就是当初的 bug。
+
+```json
+{
+  "status": "ok",
+  "rows": 1007,
+  "dueFacts": 29,
+  "distinctTargets": 29,
+  "dimensionColumns": [
+    "provider_id",
+    "exam_level_id",
+    "exam_component",
+    "delivery_mode",
+    "payment_method",
+    "exam_session"
+  ],
+  "sampleTargets": [
+    "bookkeeping/2026/payment_deadline_rule (examLevel=bookkeeping:1, delivery=unified)",
+    "bookkeeping/2026/fee (examLevel=bookkeeping:2, delivery=network)",
+    "bookkeeping/2026/fee (examLevel=bookkeeping:3, delivery=network)"
+  ],
+  "problems": []
+}
+```
+
+没有 `DATABASE_URL` 时输出 `{"status":"not_run", …}` 并 **exit 0**，让没有库的
+开发者也能跑完整流程；CI 一定有库。
+
+**变异验证 5/5 全抓**（`var/mutate-vsq.mjs`，每个都读回确认落盘）：
+从 SELECT 删 `exam_level_id` / `delivery_mode` / `exam_session` / `provider_id`、
+以及让 `formatFactTarget` 直接 `return base`（不打印维度）—— 五种全部 CAUGHT，
+`RESTORED=true`、`PROBLEMS=0`。
+
+接入方式：`package.json` 新增 `db:verify-staleness`，并追加到 `release:check`
+末尾。`release-gate.yml` 的 `release-gate` job 本来就在已迁移 + 已播种的
+postgres service 上跑 `release:check`，所以**不需要改 workflow** 就获得了这道门禁。
 
 ## 6. 生产验证（2026-11-25 07:38Z 部署后）
 
@@ -298,10 +349,11 @@ markdown 的「今日需处理」与「到期事实（前 20）」两处都已�
 
 ## 8. 未处理
 
-1. **SQL 仍无执行期测试**。本轮只加了文本断言。真正的守卫需要一条连库的集成
-   测试（跑一次 `STALENESS_QUERY`，断言返回行里带六列），而这需要 CI 里有库 ——
-   `release-gate.yml` 的 `release-gate` job 确实起了一个 postgres service，
-   但目前没有跑这类脚本测试。
+1. ~~**SQL 仍无执行期测试**~~ **已补上**：`scripts/verify-staleness-query.mjs`
+   连库跑 `STALENESS_QUERY`，断言列存在、行带键、target 互不相同（§5.6）。
+   它已进 `release:check`，CI 的 postgres service 会自动喂给它一个已迁移的库。
+   残余风险：本地无 `DATABASE_URL` 时它会 `not_run` + exit 0，所以「本地全绿」
+   不等于「门禁跑过」—— 判断依据是 `pnpm db:verify-staleness` 的 `status` 字段。
 2. **`exam_session` 维度尚未在真实数据里出现**。2026 年统一试验有 173 回 / 172 回
    两场，一旦入库，`session=` 会自动出现在 target 里，无需再改代码。但这意味着
    target 的长度上限还没有实测过。
@@ -314,7 +366,11 @@ markdown 的「今日需处理」与「到期事实（前 20）」两处都已�
 
 - **P1**：把 `chore/phase1-baseline` 落到 `main`（需 Owner 授权 merge），
   否则生产永远是手工 FF 的游离状态。
-- **P2**：给 `release-gate.yml` 加一条连库的 `STALENESS_QUERY` 测试，补上 §8.1 的缺口。
+- ~~**P2**：给 `release-gate.yml` 加一条连库的 `STALENESS_QUERY` 测试~~ **已完成**：
+  `scripts/verify-staleness-query.mjs` 已进 `release:check`（§5.6）。
+- **P2（新）**：把 §5.6 的三条断言也用到 `/ready` 之外的其他连库脚本上 ——
+  `scripts/verify-api-readonly.mjs` 已连库，但 `audit-mvp.mjs` / `check-staleness.mjs`
+  仍然只做文本或纯函数层面的检查。
 - **P3**：处理部署报告 §10.1 的 `status` 语义问题（把「报告生成成功」与
   「有 critical」拆成两个字段）。
 - **P4**：生产跑一次 patrol，消掉 `coverageGap: not_run`。
