@@ -310,6 +310,46 @@ crontab -l | grep -v ops-daily-cron | crontab -
 
 **日检仍然只读**：定时化只改了「谁来按这个按钮」，不改按钮里做的事——`BEGIN READ ONLY`、不发外部请求两条契约不变。
 
+### `var/` 留存物清理（prune-var）
+
+日检每天往 `var/ops-reports/` 写两个文件，投递记录每次投递追加一行，两者都没有上限。`scripts/prune-var.sh` 按白名单收敛它们：
+
+```bash
+cd /opt/jpqm && sh scripts/prune-var.sh            # dry-run，只打印将要做什么（默认）
+cd /opt/jpqm && sh scripts/prune-var.sh --apply    # 真的删
+```
+
+| 目标                                   | 策略                           | 默认值 |
+| -------------------------------------- | ------------------------------ | ------ |
+| `var/ops-reports/YYYY-MM-DD.{json,md}` | 按 mtime 删除超过保留期的      | 90 天  |
+| `var/notifications/feishu.log`         | 超过 N 行时截断，保留最后 N 行 | 500 行 |
+| `var/test-*/`（测试崩溃的残留）        | 按 mtime 删除超过保留期的      | 7 天   |
+
+环境变量：`VAR_DIR`、`OPS_REPORT_RETENTION_DAYS`、`NOTIFICATION_LOG_MAX_LINES`、`TEST_DIR_RETENTION_DAYS`、`PRUNE_APPLY=1`（等同 `--apply`）。
+
+装进 cron（可选，与日检错开半小时）：
+
+```bash
+(crontab -l 2>/dev/null; echo '47 9 * * 0 cd /opt/jpqm && sh scripts/prune-var.sh --apply') | crontab -
+```
+
+**为什么是白名单，而不是 `find var -mtime +90 -delete`。** 开发机实测的 `var/` 构成：
+
+| 目录                      | 文件数 | 大小     | 是什么                 |
+| ------------------------- | ------ | -------- | ---------------------- |
+| `var/pg-run`              | 1645   | 104.7 MB | 本地 postgres 数据目录 |
+| `var/pglite-run`          | 1529   | 63.9 MB  | pglite 运行目录        |
+| `var/chrome-shot-profile` | 206    | 15.9 MB  | Chrome 用户配置        |
+| `var/qa`                  | 459    | 14.9 MB  | QA 证据                |
+| `var/audit-2026-11-24`    | 149    | 13.6 MB  | 审计证据               |
+| `var/official-snapshots`  | 180    | 11.7 MB  | 官方快照               |
+| `var/ops-reports`         | 7      | 0.16 MB  | **日检报告**           |
+| `var/notifications`       | 0      | 0        | **投递记录**           |
+
+那条 `find` 会在第一次运行时把本地数据库和全部证据目录一起静默删掉。所以脚本只认死三个目标：日期命名的报告文件、投递记录、`test-*` 目录；`cron.err`（最近一次失败的 stderr，可能正是排查的唯一线索）和任何人手工放进 `var/ops-reports/` 的文件都不碰——文件名模式 `????-??-??.json` 天然排除了它们。
+
+投递记录按**行数**截断而不是按 mtime 删除：文件的 mtime 是最后一次投递的时间，不是内容的年龄；按龄删会让一个长期安静的通道丢掉全部投递历史，而这正是判断「告警到底有没有发出去」的唯一证据。
+
 ## 访问日志统计（access-report，只读）
 
 用途：MVP 验证期的保底访问统计（不装第三方分析脚本）。Caddy 站点块把 JSON 访问日志写到容器内 `/var/log/caddy/access.log`（10MB 滚动、保留 5 份），compose 以 `./caddy-logs:/var/log/caddy` bind mount 到宿主机 `deploy/caddy-logs/`（gitignore，不入库）。`scripts/access-report.mjs` 只读解析日志，输出总请求、人类/bot 拆分、ユニークIP、状态码分布、参照元（直接/検索/SNS/内部）、功能利用（ICS・検索・比較）、上位页面、日别趋势；日期按 JST 聚合。空 User-Agent 与常见爬虫/脚本 UA 计入 bot，不进人类计数。
