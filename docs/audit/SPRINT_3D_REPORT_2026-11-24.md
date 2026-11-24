@@ -73,6 +73,29 @@ a319d46 → 9a42cb4 → 4796f8b → 013e680 → 864535e → f09e438 → 9bc946f 
 
 **没有改动**：`services/api/**`（`/ready` 实现一行未动）、`/health`、`deploy/**`、`Dockerfile`、`apps/web/**`、`scripts/ops-daily-report.mjs`。无新增依赖。
 
+### 2.4 提交结果
+
+| 项      | 值                                                                                                                                                              |
+| ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| commit  | `f99e4750e97f81d3d8a98fe9e7cb65b03e473405`（short `f99e475`）                                                                                                   |
+| parent  | `9fc9c72`                                                                                                                                                       |
+| subject | `feat: give the readiness endpoint a caller`                                                                                                                    |
+| 变更    | 8 files changed, 1532 insertions(+), 2 deletions(-)                                                                                                             |
+| 方式    | 逐路径 `git add --`（8 个文件全列出，未用 `-A`）；message 用 `[System.IO.File]::WriteAllText` + `new UTF8Encoding($false)` 写入 `var/commit-msg-3d.txt`，无 BOM |
+
+### 2.5 基线链（含本轮）
+
+```text
+a319d46 → 9a42cb4 → 4796f8b → 013e680 → 864535e → f09e438 → 9bc946f → 9fc9c72 → f99e475
+  基线      S1+S2       S3A代码     S3A文档     S3B代码     S3B文档     S3C代码     S3C文档     S3D
+```
+
+报告内引用自身 commit hash 存在天然的循环依赖（写 hash → 改报告 → hash 变）。沿用 3A/3B/3C 的做法：代码与报告同一个 commit 入库，随后用 `docs: 落账 Sprint 3D 执行报告` 一个 commit 把 hash 与基线链改成最终值，不反复 `--amend`。
+
+### 2.6 工作树
+
+commit 后 `git status --short` 无输出（完全干净）。
+
 ---
 
 ## §3 Task A：探针实现
@@ -322,7 +345,7 @@ EXIT 0
 | 11  | 未接 compose healthcheck | ✅ 且文档写明理由                                            |
 | 12  | 无新增依赖               | ✅                                                           |
 | 13  | 全量测试绿               | ✅ 9 项（`format:check` 见 §7.1）                            |
-| 14  | 工作树干净               | ✅ commit 后                                                 |
+| 14  | 工作树干净               | ✅ commit 后 `git status --short` 无输出                     |
 | 15  | 未进入 Sprint 3E / 4     | ✅                                                           |
 
 ---
@@ -333,4 +356,4 @@ Sprint 3D 到此结束。
 
 本轮**只做** `/ready` 的可观测化。**没有**：接定时调度、接告警、暴露 `/ready` 到公网、改 `/health` 语义、改 compose、改 Caddy、改 Dockerfile、改 `services/api/**`、动 `/pass-rate/` 的 `Promise.all`、进 Sprint 3E / Sprint 4。
 
-下一步（探针调度归属、`format:check`、G-15）由 Owner 根据本报告决定。
+代码已入库（`f99e475`）。下一步（探针调度归属、`format:check`、G-15）由 Owner 根据本报告决定。
