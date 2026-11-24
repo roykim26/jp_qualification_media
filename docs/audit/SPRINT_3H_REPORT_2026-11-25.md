@@ -50,7 +50,7 @@ b458e0b  Sprint 3F 报告
 a0baaf3  Sprint 3G 报告格式化
 ```
 
-本轮内容 commit：**`<CONTENT_SHA>`** `feat(ops): 日检接进 cron（Sprint 3H）`。
+本轮内容 commit：**`71ad2b6`** `feat(ops): 日检接进 cron（Sprint 3H）`。
 
 引用自身 hash 有天然的循环依赖（报告要写 commit，commit 要包含报告），所以沿用前几轮的两段式：先提交内容，再提交一次只改本节 hash 的收口 commit。理由与 Sprint 3A 报告 §2 相同。
 
