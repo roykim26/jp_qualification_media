@@ -29,7 +29,7 @@ Sprint 3H 报告 §9 的 P2 写的是「一个 `find var -mtime +90 -delete` 的
 
 开工时 HEAD = `942bbec`（`docs: 落账 Sprint 3H 执行报告`），工作树干净，分支 `chore/phase1-baseline`。
 
-本轮内容 commit：**`<CONTENT_SHA>`**
+本轮内容 commit：**`8713a63`** `feat(ops): var 留存物清理（Sprint 3I）`（6 files changed, 838 insertions）。
 
 按既有的两段式落账惯例（见 `docs/audit/SPRINT_3A_REPORT_2026-11-24.md` §2），报告里引用自身 commit hash 存在天然循环依赖，因此拆成「内容 commit + `docs: 落账…` 收口 commit」两个；本行在收口 commit 中回填。
 
