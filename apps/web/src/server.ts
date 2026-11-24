@@ -571,11 +571,57 @@ export async function handleRequest(
       return res.end(renderGuideIndex(editorialGuideEntries()));
     }
     if (pathname === '/pass-rate' || pathname === '/pass-rate/') {
-      const views = await Promise.all(
+      // Sprint 3A settled on plan A: one unusable qualification takes the whole
+      // page down (503), because a pass-rate table that silently drops a row
+      // looks complete while it is not. The trigger for revisiting that is
+      // "over half of the production 503s come from a single qualification
+      // failing" -- and that needs a measurement nobody was making.
+      //
+      // `allSettled` is the measurement, not a behaviour change: every
+      // rejection is still re-thrown, so the response is byte-for-byte what
+      // `Promise.all` produced. The difference is that we now know how many
+      // siblings were fine, which is the number that decides plan A vs plan B.
+      // Cost: a failure now waits for the slowest sibling instead of failing
+      // fast. Bounded by the upstream timeout (5s, Sprint 3A).
+      const settled = await Promise.allSettled(
         launchQualifications.map(async (qualification) => ({
           qualification,
           view: await readQualification(qualification.slug),
         })),
+      );
+      const failedSlugs: string[] = [];
+      const servedSlugs: string[] = [];
+      let firstFailure: unknown;
+      settled.forEach((result, index) => {
+        const slug = launchQualifications[index].slug;
+        if (result.status === 'fulfilled') {
+          servedSlugs.push(slug);
+        } else {
+          failedSlugs.push(slug);
+          if (failedSlugs.length === 1) firstFailure = result.reason;
+        }
+      });
+      if (failedSlugs.length > 0) {
+        // One line, greppable, with both counts: `grep 'pass-rate/ unusable'`
+        // over the container log answers "single qualification or whole
+        // upstream?" without a second deploy. The status is read off the first
+        // failure so the log and the response never disagree.
+        //
+        // This block is also where plan A is enforced: the `throw` below is
+        // the only thing that keeps a partial fetch from rendering as a
+        // complete-looking table. Deleting the log means deleting the
+        // throw (mutation: `if (false && ...)` -> 200, not 503).
+        const status =
+          firstFailure instanceof UpstreamUnavailableError ? 503 : 502;
+        console.error(
+          `web: /pass-rate/ unusable upstream for ${failedSlugs.length} of ${launchQualifications.length} qualifications ` +
+            `(failed: ${failedSlugs.join(', ')}; served: ${servedSlugs.join(', ') || 'none'}); ` +
+            `answering ${status} (plan A: one failure fails the page)`,
+        );
+        throw firstFailure;
+      }
+      const views = settled.flatMap((result) =>
+        result.status === 'fulfilled' ? [result.value] : [],
       );
       // G-02 / ADR 0002 §2: whitelist the sort parameters and mark every
       // parameter variant noindex; the canonical stays on /pass-rate/.

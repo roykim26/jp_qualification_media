@@ -39,7 +39,8 @@ type BodyMode =
   | 'fact-null-snapshot-id'
   | 'fact-numeric-source-url'
   | 'fact-numeric-verified-at'
-  | 'missing-status';
+  | 'missing-status'
+  | 'single-failure';
 
 let bodyMode: BodyMode = 'ok';
 let stubServer: ReturnType<typeof createServer>;
@@ -143,6 +144,12 @@ function bodyFor(url: string): string {
         qualification: itPassport,
         facts: [qualificationView().facts[0]],
       });
+    case 'single-failure':
+      // One qualification unusable, every sibling healthy. This is the shape
+      // the `/pass-rate/` observation line exists for: it must still answer
+      // 503 (plan A), but the log has to say "1 of 6", not just "503".
+      if (url.includes('/qualifications/it-passport')) return '{}';
+      break;
     default:
       break;
   }
@@ -345,6 +352,61 @@ describe('web server rejects unusable upstream bodies', () => {
       const xml = await response.text();
       expect(xml).not.toContain('<urlset');
     } finally {
+      await web.close();
+    }
+  });
+
+  it('keeps plan A on /pass-rate/ but logs how many qualifications failed', async () => {
+    // Sprint 3A chose plan A: one unusable qualification fails the whole page.
+    // Revisiting that decision needs "how often is it one qualification, not
+    // the whole upstream?" -- so the failure must still be a 503 *and* carry
+    // both counts. This case pins both halves: changing either one is a
+    // decision, not a refactor.
+    bodyMode = 'single-failure';
+    const errors: string[] = [];
+    const spy = vi.spyOn(console, 'error').mockImplementation((...args) => {
+      errors.push(args.map(String).join(' '));
+    });
+    const web = await startWeb();
+    try {
+      const response = await web.get('/pass-rate/');
+      expect(response.status).toBe(503);
+      expect(response.headers.get('retry-after')).toBe('60');
+
+      const observation = errors.find((line) =>
+        line.includes('/pass-rate/ unusable upstream'),
+      );
+      expect(observation).toBeDefined();
+      expect(observation).toContain(
+        `1 of ${launchQualifications.length} qualifications`,
+      );
+      expect(observation).toContain('failed: it-passport');
+      expect(observation).toContain('served: ');
+      expect(observation).toContain('answering 503');
+    } finally {
+      spy.mockRestore();
+      await web.close();
+    }
+  });
+
+  it('serves /pass-rate/ as 200 when every qualification is healthy', async () => {
+    // The other half: the observation must not fire on the healthy path, and
+    // the page must still render.
+    bodyMode = 'ok';
+    const errors: string[] = [];
+    const spy = vi.spyOn(console, 'error').mockImplementation((...args) => {
+      errors.push(args.map(String).join(' '));
+    });
+    const web = await startWeb();
+    try {
+      const response = await web.get('/pass-rate/');
+      expect(response.status).toBe(200);
+      expect(await response.text()).toContain('合格率');
+      expect(
+        errors.filter((line) => line.includes('/pass-rate/ unusable upstream')),
+      ).toEqual([]);
+    } finally {
+      spy.mockRestore();
       await web.close();
     }
   });
