@@ -310,6 +310,68 @@ node scripts/check-readiness.mjs --url=http://api:4100/ready --timeout=3000 --js
 
 **刻意不接 compose healthcheck，也不在 Caddy 暴露。** 依赖链是 `db → api(/health) → web(depends_on api healthy) → caddy`，把 readiness 接进去意味着数据库一抖动就让 api unhealthy → web 不启动 → 整站下线；而 `/ready` 会对外泄露「数据库连不上」这类内部状态。所以它是**主动探针**（人/脚本按需调用），不是**被动 healthcheck**（编排器轮询）。
 
+## 定时探针与 syslog 告警（VPS root crontab）
+
+探针回答了「现在什么状态」，但没人看指针时它不会自己说话。这一节让数据面故障在 5 分钟内出现在 syslog 里，而不是等用户报障。**这是唯一一处打破「不装定时任务」惯例的地方**（2026-11-11 拍板的那条针对日检；探针告警由所有者另行批准）。
+
+### 为什么需要包装脚本
+
+直接把探针写进 crontab 有三个问题：每 5 分钟一条日志会把「故障开始」和「恢复」两个真正重要的时刻淹没（两小时故障 = 24 条重复行）；日志里只有 `status`，看不出坏了多久；cron 命令有输出时会尝试发邮件。
+
+`scripts/readiness-cron.sh` 因此只在**状态变化**时写 syslog，故障持续时按小时留一条心跳：
+
+| 情况                    | 行为                                        |
+| ----------------------- | ------------------------------------------- |
+| 首次运行，正常          | 不写（避免部署当天误报「恢复」）            |
+| 首次运行，异常          | 立刻写 `daemon.err`                         |
+| 正常 → 异常             | 立刻写 `daemon.err`                         |
+| 异常 → 异常（未到间隔） | 不写                                        |
+| 异常 → 异常（满间隔）   | 写 `daemon.warning` 心跳，带已持续次数      |
+| 异常 → 正常             | 写 `daemon.notice`，带故障持续了多少次      |
+| 容器没起／探针跑不起来  | 立刻写 `daemon.err`，状态记为 `unreachable` |
+
+syslog 用固定 tag `jpqm-readiness`，便于过滤。脚本**永远 `exit 0`**：cron 的退出码只会触发没人读的邮件，通知渠道是 syslog。
+
+### 安装
+
+```bash
+# VPS root
+(crontab -l 2>/dev/null; echo '*/5 * * * * cd /opt/jpqm && sh scripts/readiness-cron.sh') | crontab -
+```
+
+`docker compose exec -T` 里的 `-T` 是必须的——cron 没有 TTY。脚本会自己调用 `docker compose exec -T api node scripts/check-readiness.mjs`，所以宿主机不需要 node，也不需要 `DATABASE_URL`。
+
+### 判据
+
+```bash
+crontab -l | grep readiness-cron           # 该行存在
+journalctl -t jpqm-readiness -n 20         # 有记录（故障发生/恢复时）
+```
+
+健康稳态下 `journalctl` **是空的**——这是设计，不是故障。想确认脚本在跑，看状态文件：
+
+```bash
+cat /opt/jpqm/var/readiness/last-status    # 第一行 ready，第二行 0
+```
+
+### 查询与调优
+
+```bash
+journalctl -t jpqm-readiness --since "1 hour ago"
+journalctl -t jpqm-readiness -p err        # 只看故障开始
+journalctl -t jpqm-readiness -p warning    # 只看心跳
+```
+
+环境变量可覆盖默认值（写进 crontab 行首即可）：`HEARTBEAT_EVERY`（默认 12 次 = 1 小时）、`READINESS_TIMEOUT_MS`（默认 5000）、`READINESS_STATE_FILE`、`COMPOSE_FILE`、`COMPOSE_PROJECT`、`READINESS_TAG`。
+
+### 卸载
+
+```bash
+crontab -l | grep -v readiness-cron | crontab -
+```
+
+**不要**顺手把 `/ready` 接进 compose healthcheck 或 Caddy——理由见上一节。
+
 ## 官方数据更新流程（SOP）
 
 触发：日报 `changed`/`blocked`/critical、`data:staleness` 到期、官方公告。采集、候选入库、审核批准仍是三次独立授权，逐段需所有者明示；巡检抓取与巡检落库也各算一次授权。
