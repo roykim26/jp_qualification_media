@@ -62,10 +62,10 @@ webhook and secret never printed    stderr 不含 token / secret
 
 | commit    | subject                                    | 内容                                       |
 | --------- | ------------------------------------------ | ------------------------------------------ |
-| `c41a7dd` | `feat: deliver readiness alerts to Feishu` | 8 files，代码 + 测试 + 文档 + 两份 3F 文档 |
+| `9af0642` | `feat: deliver readiness alerts to Feishu` | 8 files，代码 + 测试 + 文档 + 两份 3F 文档 |
 | `4d0c8a5` | `docs: 落账 Sprint 3F 执行报告`            | 1 file，只改本报告的 hash 与基线链         |
 
-基线链：`a319d46 → 9a42cb4 → 4796f8b → 013e680 → 864535e → f09e438 → 9bc946f → 9fc9c72 → f99e475 → 3142605 → 2afa33d → 031e9af → 525098e → ef975a8 → 74db96b → cd514ed → b458e0b → c41a7dd → 4d0c8a5`
+基线链：`a319d46 → 9a42cb4 → 4796f8b → 013e680 → 864535e → f09e438 → 9bc946f → 9fc9c72 → f99e475 → 3142605 → 2afa33d → 031e9af → 525098e → ef975a8 → 74db96b → cd514ed → b458e0b → 9af0642 → 4d0c8a5`
 
 链只列到收口 commit；此后纯文档 commit 不再回填——回填本身会再产生 commit，是不收敛的自引用。要确认当前 HEAD 用 `git log`。
 
