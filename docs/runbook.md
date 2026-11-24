@@ -261,9 +261,54 @@ DATABASE_URL="postgresql://postgres@127.0.0.1:55432/qualification_media" PATROL_
 DATABASE_URL="postgresql://postgres@127.0.0.1:55432/qualification_media" pnpm ops:daily
 ```
 
-判据＝`status: ok`；报告落 `var/ops-reports/<JST日期>.json` 与 `.md`，markdown 置顶「今日需处理」（critical → 待审 → 到期事实）。有 critical 时 EXIT=1，否则 0；未设 `DATABASE_URL` 输出 `not_run`、EXIT=0。全程 `BEGIN READ ONLY`，不写库、不抓取、不发外部请求。不装定时任务、不装外部通知（2026-11-11 所有者拍板）；每日手动跑。
+判据＝`status: ok`；报告落 `var/ops-reports/<JST日期>.json` 与 `.md`，markdown 置顶「今日需处理」（critical → 待审 → 到期事实）。有 critical 时 EXIT=1，否则 0；未设 `DATABASE_URL` 输出 `not_run`、EXIT=0。全程 `BEGIN READ ONLY`，不写库、不抓取、不发外部请求。
+
+**注意退出码不足以判断成败**：`1` 同时代表「有 critical」和「报告自己跑挂了」。要区分，看 stdout 是否是一份 `"status": "ok"` 的报告——包装脚本就是这么做的（见下一节）。
 
 日检流程（约 5 分钟）：跑 `ops:daily` → 读「今日需处理」→ critical/blocked 来源决定是否进入下面的数据更新流程；warning 与到期事实排入复查；待审候选走审核批准授权。
+
+### 定时日检（cron）
+
+2026-11-25 所有者决定把日检接进 cron，**取代** 2026-11-11 那条「日检不装定时任务、每日手动跑」。理由：日检回答的是「今天先处理什么」，这个问题的时效性正好是一天；靠人记得跑，等于在故障发生时才发现上次跑是两周前。
+
+```bash
+# VPS root
+(crontab -l 2>/dev/null; echo '17 9 * * * cd /opt/jpqm && sh scripts/ops-daily-cron.sh') | crontab -
+```
+
+`scripts/ops-daily-cron.sh` 解决三个只在服务器上才暴露的问题：
+
+1. **宿主机没有 node**（与 `access-report` 同一个约束），所以日检在容器里跑。
+2. **容器内写出的报告会随容器消失**，所以用 `docker compose run --rm -T -v "$(pwd)/var:/app/var"` 把宿主机 `var/` 挂进去——报告落回 `var/ops-reports/`，`up -d --build` 不会带走历史。
+3. **投递记录在宿主机上**（`var/notifications/feishu.log`，宿主机脚本写的），不挂载的话容器里读到的永远是「从未投递过」，日检的通知渠道判定在生产上等于空转。
+
+用 `run --rm -T` 而不是 `exec`：日检不该因为 api 服务挂了就跑不了；cron 也没有 TTY。
+
+判据与人工跑同一套，只是**健康时完全沉默**（报告文件本身就是留档）：
+
+| 报告结果                  | 行为                                            |
+| ------------------------- | ----------------------------------------------- |
+| `status: ok`、无 critical | 沉默                                            |
+| `status: ok`、有 critical | `daemon.err` + 飞书，正文是「今日需处理」的条目 |
+| `status` 不是 `ok`        | `daemon.err` + 飞书，正文带 stderr 尾部         |
+
+```bash
+crontab -l | grep ops-daily-cron                      # 该行存在
+journalctl -t jpqm-ops --since "3 days ago"           # 只在需要动手时有记录
+ls -l /opt/jpqm/var/ops-reports/                      # 每天一份 .json + .md
+```
+
+报告缺失或 `journalctl` 出现 `report did not run` 时，看 `var/ops-reports/cron.err`（容器的 stderr 原文）——没有它，失败无从排查。
+
+环境变量可写进 crontab 行首：`OPS_TAG`（默认 `jpqm-ops`）、`OPS_NOTIFY=0`（只写 syslog 不发飞书）、`OPS_VAR_DIR`、`OPS_REPORT_DIR`、`OPS_MAX_ACTIONS`、`COMPOSE_FILE`、`COMPOSE_PROJECT`。
+
+卸载：
+
+```bash
+crontab -l | grep -v ops-daily-cron | crontab -
+```
+
+**日检仍然只读**：定时化只改了「谁来按这个按钮」，不改按钮里做的事——`BEGIN READ ONLY`、不发外部请求两条契约不变。
 
 ## 访问日志统计（access-report，只读）
 
@@ -277,7 +322,7 @@ cd /opt/jpqm && docker compose -f deploy/docker-compose.prod.yml exec -T web nod
 cd /opt/jpqm && docker compose -f deploy/docker-compose.prod.yml exec -T web node scripts/access-report.mjs /dev/stdin --since=2026-11-14 --until=2026-11-20 --json < deploy/caddy-logs/access.log
 ```
 
-判据＝`status: ok`（JSON 模式）或文本报告正常打印；不写库、不发外部请求、不装定时任务（与日检同口径，全手动）。首次启用需 `docker compose -f deploy/docker-compose.prod.yml up -d caddy` 重建一次 caddy 容器以挂上日志卷（此后改 Caddyfile 只需 reload）。安全响应头（HSTS/nosniff/X-Frame/Referrer-Policy/Permissions-Policy）由同一 Caddyfile 的 `header` 块下发；CSP 因站内内联样式/脚本暂未启用。
+判据＝`status: ok`（JSON 模式）或文本报告正常打印；不写库、不发外部请求、不装定时任务（仍为手动，日检已在 2026-11-25 接进 cron，访问统计没有）。首次启用需 `docker compose -f deploy/docker-compose.prod.yml up -d caddy` 重建一次 caddy 容器以挂上日志卷（此后改 Caddyfile 只需 reload）。安全响应头（HSTS/nosniff/X-Frame/Referrer-Policy/Permissions-Policy）由同一 Caddyfile 的 `header` 块下发；CSP 因站内内联样式/脚本暂未启用。
 
 ## 数据面就绪探针（ready:check，只读）
 
@@ -312,7 +357,7 @@ node scripts/check-readiness.mjs --url=http://api:4100/ready --timeout=3000 --js
 
 ## 定时探针与 syslog 告警（VPS root crontab）
 
-探针回答了「现在什么状态」，但没人看指针时它不会自己说话。这一节让数据面故障在 5 分钟内出现在 syslog 里，而不是等用户报障。**这是唯一一处打破「不装定时任务」惯例的地方**（2026-11-11 拍板的那条针对日检；探针告警由所有者另行批准）。
+探针回答了「现在什么状态」，但没人看指针时它不会自己说话。这一节让数据面故障在 5 分钟内出现在 syslog 里，而不是等用户报障。2026-11-11 那条「不装定时任务」的决定针对的是日检，已由上一节的定时日检取代；探针告警这一处由所有者另行批准。
 
 ### 为什么需要包装脚本
 
