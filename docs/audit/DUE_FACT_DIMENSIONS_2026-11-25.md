@@ -11,12 +11,13 @@
 | 分支            | `chore/phase1-baseline`        |
 | 执行前 HEAD     | `bf37922`                      |
 | 本轮内容 commit | `35168b1`                      |
-| 门禁补充 commit | `<CONTENT_SHA>`                |
+| 门禁补充 commit | `9cc759f`                      |
 | 部署后生产 HEAD | `b9b5228`（2026-11-25 07:38Z） |
 
 报告无法在自己那个 commit 里引用自己的 hash，所以内容 commit 先落，再由一个
 `docs: 落账…` 收口 commit 把上面的 `<CONTENT_SHA>` 换成真实值 —— 现在表里填的
-就是收口 commit 回填后的结果。
+就是收口 commit 回填后的结果。`门禁补充 commit` 那一行是同一条规则的第二次应用：
+它记的是补上 §5.6 那道连库门禁的那个 commit。
 
 ---
 
