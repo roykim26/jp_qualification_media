@@ -83,13 +83,13 @@ docs/audit/DEEPSEEK_HARNESS_SPRINT_3B_TASK.md
 
 | 项                 | 值                                                                  |
 | ------------------ | ------------------------------------------------------------------- |
-| commit             | **`141aebd8ef15d5d540816fe1e5b7f23b2e6262d8`**（short `141aebd`）   |
+| commit             | **`864535eab87c1595f0e1a03ee8494c45ccd882d9`**（short `864535e`）   |
 | parent             | `013e680`                                                           |
 | subject            | `feat: separate missing database config from legitimate empty data` |
-| 变更量             | 11 files changed, 1437 insertions(+), 16 deletions(-)               |
+| 变更量             | 11 files changed, 1439 insertions(+), 16 deletions(-)               |
 | subject 首字节校验 | `66 65 61 74 3A 20 73 65` = `feat: se`，**无 BOM**                  |
 
-> 首次 commit 为 `0d4e8cd`；随后为补全本报告 §2.4 与 §12 两节执行了 `git commit --amend`，最终 hash 为 `141aebd`。差异仅限本报告文档本身，代码内容未变。
+> 该 commit 含 5 个修改 + 4 个新增代码/测试 + 3B 任务文档 + 本报告。hash 在报告内引用存在天然的循环依赖（改报告就会改 hash），故与 Sprint 3A 一样，最终 hash 由本报告落账后的 docs commit 收口，不在此处反复 amend。
 
 ### 2.5 基线链
 
@@ -98,7 +98,7 @@ a319d46  Phase 0 审计与 Sprint 1 文档基线
 9a42cb4  Sprint 1 + Sprint 2 合并 baseline
 4796f8b  Sprint 3A（upstream deadline + sitemap XML 错误体）
 013e680  Sprint 3A 文档落账
-141aebd  Sprint 3B（配置缺失分离 + /ready）   ← 本轮
+864535e  Sprint 3B（配置缺失分离 + /ready）   ← 本轮
 ```
 
 ### 2.6 工作树
