@@ -27,6 +27,7 @@
     "patrol:sources": "python -m collector.patrol_sources",
     "patrol:record": "python -m collector.patrol_record",
     "ops:daily": "node scripts/ops-daily-report.mjs",
+    "ready:check": "node scripts/check-readiness.mjs",
     "baseline:update": "node scripts/update-release-baseline.mjs",
     "release:check": "pnpm run format:check && pnpm run lint && pnpm run typecheck && pnpm test && pnpm test:python && pnpm run build && pnpm test:verify-gate && pnpm verify:all",
     "ci:fixture:export": "node scripts/export-ci-db-fixture.mjs",

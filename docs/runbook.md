@@ -279,6 +279,37 @@ cd /opt/jpqm && docker compose -f deploy/docker-compose.prod.yml exec -T web nod
 
 判据＝`status: ok`（JSON 模式）或文本报告正常打印；不写库、不发外部请求、不装定时任务（与日检同口径，全手动）。首次启用需 `docker compose -f deploy/docker-compose.prod.yml up -d caddy` 重建一次 caddy 容器以挂上日志卷（此后改 Caddyfile 只需 reload）。安全响应头（HSTS/nosniff/X-Frame/Referrer-Policy/Permissions-Policy）由同一 Caddyfile 的 `header` 块下发；CSP 因站内内联样式/脚本暂未启用。
 
+## 数据面就绪探针（ready:check，只读）
+
+用途：一条命令回答「数据面**现在**能不能服务查询」，输出机器可读结论。与日检的分工是——`ops:daily` 看**数据内容**（来源健康、到期事实、待审队列），`ready:check` 看**数据面可用性**；两者互不替代。日检完全不发网络请求，探针只发一次 HTTP GET。
+
+`/ready` 端点由 API 提供（`services/api/src/server.ts`，实现见 `services/api/src/database-ready.ts`），三态契约见 `docs/api-contract.md`。本探针是它的消费方。
+
+```bash
+# 宿主机（API 在 4100 上，默认目标 http://127.0.0.1:4100/ready）
+pnpm ready:check
+
+# 容器内（宿主机没有 node 时，与 access-report 同一手法）
+cd /opt/jpqm && docker compose -f deploy/docker-compose.prod.yml exec -T api node scripts/check-readiness.mjs --url=http://127.0.0.1:4100/ready
+
+# 指定目标与超时，要机器可读输出
+node scripts/check-readiness.mjs --url=http://api:4100/ready --timeout=3000 --json
+```
+
+目标地址优先级：`--url` > `READY_URL` > `API_BASE_URL` + `/ready` > `http://127.0.0.1:4100/ready`。超时默认 5000ms，与 `connectionTimeoutMillis` 对齐——探针不该比它探测的对象更有耐心。
+
+退出码只有两种：**`ready` → 0，其余一律 1**。原因由 JSON 的 `status` 承担（告警只需要「是否可用」这一个比特）：
+
+| `status`       | 含义                                                   | 下一步                 |
+| -------------- | ------------------------------------------------------ | ---------------------- |
+| `ready`        | 数据面可用                                             | 无                     |
+| `error`        | 数据库不可达（瞬态），`message` 带驱动码               | 查 db 容器与网络       |
+| `unconfigured` | 进程没拿到 `DATABASE_URL`／`API_DATABASE_URL`          | 查部署配置，属永久错误 |
+| `unreachable`  | 探针自己连不上 API，`reason` 区分 `timeout`／`connect` | 查 api 容器是否在跑    |
+| `unexpected`   | 端点行为与契约不符，`rawBody` 留了片段                 | 端点被改坏了，看契约   |
+
+**刻意不接 compose healthcheck，也不在 Caddy 暴露。** 依赖链是 `db → api(/health) → web(depends_on api healthy) → caddy`，把 readiness 接进去意味着数据库一抖动就让 api unhealthy → web 不启动 → 整站下线；而 `/ready` 会对外泄露「数据库连不上」这类内部状态。所以它是**主动探针**（人/脚本按需调用），不是**被动 healthcheck**（编排器轮询）。
+
 ## 官方数据更新流程（SOP）
 
 触发：日报 `changed`/`blocked`/critical、`data:staleness` 到期、官方公告。采集、候选入库、审核批准仍是三次独立授权，逐段需所有者明示；巡检抓取与巡检落库也各算一次授权。
@@ -375,7 +406,7 @@ curl -s "https://shikakucheck.com/shikaku/bookkeeping/pass-rate/?year=2010" | gr
 #### liveness 与 readiness 是两件事（别混用）
 
 - **`/health` = liveness**：只证明 API 进程活着，**不访问数据库**，数据面全挂时仍返回 200。compose 的 `depends_on: api: service_healthy` 与 web 的启动都挂在这个信号上。**不要拿它判断数据面是否正常。**
-- **`/ready` = readiness**：真实对数据库执行 `SELECT 1`，回答「现在能不能服务查询」。手工排查数据面时用它：
+- **`/ready` = readiness**：真实对数据库执行 `SELECT 1`，回答「现在能不能服务查询」。手工排查数据面时用它。直接跑 `pnpm ready:check`（容器内 `node scripts/check-readiness.mjs`）即可，它会打一条结论并给出退出码——见「数据面就绪探针（ready:check，只读）」节。要手工看原始响应：
 
 ```bash
 # 容器内

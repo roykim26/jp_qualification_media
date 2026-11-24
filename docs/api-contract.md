@@ -3,7 +3,7 @@
 ## Public
 
 - `GET /health` → `{ status: "ok", stage: 0 }`；**liveness only**，不访问数据库，数据面不可用时仍返回 200。
-- `GET /ready` → 就绪探针。数据面可用时 `200 { status: "ready", database: "ok" }`；数据库不可达时 `503 { status: "unavailable", database: "error", message }`；未配置数据库时 `503 { status: "unavailable", database: "unconfigured" }`。只执行 `SELECT 1`，不读业务表、不写、不缓存结果。**与 `/health` 的区别是 liveness vs readiness**：`/health` 回答「进程活着吗」，`/ready` 回答「现在能服务查询吗」。`/ready` 未接入 compose healthcheck（有意为之，见 `docs/runbook.md`）。
+- `GET /ready` → 就绪探针。数据面可用时 `200 { status: "ready", database: "ok" }`；数据库不可达时 `503 { status: "unavailable", database: "error", message }`；未配置数据库时 `503 { status: "unavailable", database: "unconfigured" }`。只执行 `SELECT 1`，不读业务表、不写、不缓存结果。**与 `/health` 的区别是 liveness vs readiness**：`/health` 回答「进程活着吗」，`/ready` 回答「现在能服务查询吗」。`/ready` 未接入 compose healthcheck（有意为之，见 `docs/runbook.md`）。消费方是运维探针 `scripts/check-readiness.mjs`（`pnpm ready:check`，只读、退出码 0/1、`--json` 输出机器可读结论）。
 - `GET /api/v1/qualifications` → `{ data: Qualification[] }`，只返回稳定主数据。
 - `GET /api/v1/search/qualifications?q={query}` → `{ data: QualificationSearchResult[], query }`，按正式名称、简称、别名和 slug 搜索稳定资格主数据。
 - `GET /api/v1/facts` → `{ data: PublicFact[] }`，实现必须只查询 `status=approved`、存在 `source_snapshot_id` 且当前修订的正式事实；候选事实、审核任务、冲突和未验证事实禁止返回。
