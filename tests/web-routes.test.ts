@@ -1,0 +1,541 @@
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import {
+  createServer,
+  type IncomingMessage,
+  type ServerResponse,
+} from 'node:http';
+import type { AddressInfo } from 'node:net';
+import { launchQualifications } from '../packages/schema/src/qualifications.js';
+import {
+  editorialAboutSlugs,
+  editorialComparisonSlugs,
+  editorialGuideSlugs,
+} from '../apps/web/src/editorial.js';
+import { siteCssPath } from '../apps/web/src/assets.js';
+
+/**
+ * Sprint 3J / G-15: the route layer of `apps/web/src/server.ts` had no
+ * process-level test for its *normal* paths.
+ *
+ * `tests/web-server.test.ts` already pins the failure semantics (200/503,
+ * timeout, sitemap error body, static routes surviving an outage).  What was
+ * untested is everything a healthy deployment does on every request: which
+ * status and content-type each route answers, whether the rendered document
+ * carries the canonical/noindex pair the SEO contract depends on, and whether
+ * the 404s stay 404s.
+ *
+ * These assertions deliberately check *markers* — the status, the content
+ * type, the canonical link, the noindex meta, one heading — not whole pages.
+ * Whole-page snapshots belong to `web-render.test.ts`; asserting them here
+ * would make every styling change fail a routing test and teach people to
+ * update the snapshot without reading it.
+ *
+ * The stub API serves in-memory JSON, so no database is involved.
+ */
+
+type StubMode = 'ok' | 'empty';
+
+let stubMode: StubMode = 'ok';
+let stubServer: ReturnType<typeof createServer>;
+let stubBaseUrl = '';
+
+const itPassport = launchQualifications.find(
+  (qualification) => qualification.slug === 'it-passport',
+)!;
+
+function stubFact(slug: string) {
+  return {
+    qualificationSlug: slug,
+    examLevelId: null,
+    examYear: 2025,
+    factKey: 'fee',
+    valueType: 'text',
+    normalizedValue: '7,500円',
+    displayValue: '7,500円（税込）',
+    status: 'approved',
+    riskLevel: 'medium',
+    sourceId: `source:${slug}:ipa-fee`,
+    sourceSnapshotId: 'snapshot:official',
+    synthetic: false,
+    verifiedAt: '2026-08-11T00:00:00.000Z',
+    officialVerifiedAt: '2026-08-11T00:00:00.000Z',
+  };
+}
+
+function stubView(slug: string) {
+  const qualification =
+    launchQualifications.find((entry) => entry.slug === slug) ?? itPassport;
+  const facts = stubMode === 'empty' ? [] : [stubFact(slug)];
+  return {
+    qualification,
+    status: facts.length === 0 ? 'awaiting_official' : 'verified',
+    facts,
+    officialVerifiedAt: '2026-08-11T00:00:00.000Z',
+    missingReasons: {},
+  };
+}
+
+beforeAll(async () => {
+  stubServer = createServer((req, res) => {
+    const url = req.url ?? '/';
+    const qualificationMatch = url.match(
+      /^\/api\/v1\/qualifications\/([^/?]+)/,
+    );
+    if (qualificationMatch) {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify(stubView(qualificationMatch[1])));
+      return;
+    }
+    if (url.startsWith('/api/v1/calendar')) {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ data: [] }));
+      return;
+    }
+    if (url.startsWith('/api/v1/compare')) {
+      // `renderComparePage` walks `rows` directly, so the stub has to answer
+      // with the real envelope shape (`{ data: { qualifications, rows } }`).
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ data: { qualifications: [], rows: [] } }));
+      return;
+    }
+    if (url.startsWith('/api/v1/updates')) {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ data: [], pagination: { hasMore: false } }));
+      return;
+    }
+    // The ICS proxy is the one route that forwards a body verbatim.
+    if (url.startsWith('/api/v1/ics/')) {
+      // The content type carries a marker that the route's own fallback
+      // (`text/calendar; charset=utf-8`) does not, so "forwarded upstream"
+      // and "fell back to the default" cannot be confused for each other.
+      res.writeHead(200, {
+        'content-type': 'text/calendar; charset=utf-8; method=PUBLISH',
+        'content-disposition': 'attachment; filename="exam.ics"',
+      });
+      res.end(
+        'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//ShikakuCheck//test//EN\r\nEND:VCALENDAR\r\n',
+      );
+      return;
+    }
+    res.writeHead(404, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ error: 'not found' }));
+  });
+  await new Promise<void>((resolve) =>
+    stubServer.listen(0, '127.0.0.1', resolve),
+  );
+  stubBaseUrl = `http://127.0.0.1:${(stubServer.address() as AddressInfo).port}`;
+});
+
+afterAll(async () => {
+  stubServer.closeAllConnections?.();
+  await new Promise<void>((resolve) => stubServer.close(() => resolve()));
+});
+
+/**
+ * `apiBaseUrl` is read once at module load, but `siteOrigin()` and
+ * `layout.ts` both re-read `SITE_ORIGIN` on every render, so the environment
+ * has to stay in place for the whole scenario — and has to be put back on
+ * `close()`.  Without the restore, whichever file vitest runs next inherits
+ * `SITE_ORIGIN=https://example.test` and starts asserting absolute canonicals
+ * it never asked for.
+ */
+async function startWeb(options: { siteOrigin?: string } = {}) {
+  const previous = {
+    NODE_ENV: process.env.NODE_ENV,
+    API_BASE_URL: process.env.API_BASE_URL,
+    SITE_ORIGIN: process.env.SITE_ORIGIN,
+  };
+  process.env.NODE_ENV = 'test';
+  process.env.API_BASE_URL = stubBaseUrl;
+  if (options.siteOrigin === undefined) delete process.env.SITE_ORIGIN;
+  else process.env.SITE_ORIGIN = options.siteOrigin;
+  vi.resetModules();
+  const { handleRequest } = (await import('../apps/web/src/server.js')) as {
+    handleRequest: (
+      req: IncomingMessage,
+      res: ServerResponse,
+    ) => Promise<unknown>;
+  };
+  const server = createServer((req, res) => {
+    void handleRequest(req, res);
+  });
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  return {
+    get: (path: string) => fetch(`${baseUrl}${path}`),
+    close: () =>
+      new Promise<void>((resolve) =>
+        server.close(() => {
+          for (const [key, value] of Object.entries(previous)) {
+            if (value === undefined) delete process.env[key];
+            else process.env[key] = value;
+          }
+          resolve();
+        }),
+      ),
+  };
+}
+
+describe('static assets', () => {
+  it('serves a whitelisted image with its declared type and a long cache', async () => {
+    const web = await startWeb();
+    try {
+      const response = await web.get('/images/favicon-32.png');
+      expect(response.status).toBe(200);
+      expect(response.headers.get('content-type')).toBe('image/png');
+      expect(response.headers.get('cache-control')).toContain('max-age=');
+      expect((await response.arrayBuffer()).byteLength).toBeGreaterThan(0);
+    } finally {
+      await web.close();
+    }
+  });
+
+  it('answers 404 for an image name outside the whitelist', async () => {
+    // The whitelist is the only thing standing between a URL segment and
+    // `readFile('../public/images/<segment>')`.  Two distinct rejections:
+    // a name that does not even match the pattern, and a name that matches
+    // the pattern but is not on the list — the second is the one the
+    // whitelist itself is responsible for.
+    const web = await startWeb();
+    try {
+      expect((await web.get('/images/../../package.json')).status).toBe(404);
+      const unlisted = await web.get('/images/not-in-the-whitelist.png');
+      expect(unlisted.status).toBe(404);
+    } finally {
+      await web.close();
+    }
+  });
+
+  it('serves the built stylesheet only at its hashed path', async () => {
+    const web = await startWeb();
+    try {
+      const ok = await web.get(siteCssPath);
+      expect(ok.status).toBe(200);
+      expect(ok.headers.get('content-type')).toContain('text/css');
+      expect(ok.headers.get('cache-control')).toContain('immutable');
+
+      const stale = await web.get('/assets/site.deadbeef0000.css');
+      expect(stale.status).toBe(404);
+      expect(stale.headers.get('content-type')).toContain('text/plain');
+    } finally {
+      await web.close();
+    }
+  });
+});
+
+describe('crawler routes', () => {
+  it('points robots.txt at the configured origin', async () => {
+    const web = await startWeb({ siteOrigin: 'https://example.test' });
+    try {
+      const response = await web.get('/robots.txt');
+      expect(response.status).toBe(200);
+      expect(response.headers.get('content-type')).toContain('text/plain');
+      const body = await response.text();
+      expect(body).toContain('Sitemap: https://example.test/sitemap.xml');
+      expect(body).toContain('Allow: /');
+    } finally {
+      await web.close();
+    }
+  });
+
+  it('lists the stable routes and every launched qualification in the sitemap', async () => {
+    const web = await startWeb({ siteOrigin: 'https://example.test' });
+    try {
+      const response = await web.get('/sitemap.xml');
+      expect(response.status).toBe(200);
+      expect(response.headers.get('content-type')).toContain('application/xml');
+      const xml = await response.text();
+      for (const path of [
+        '/shikaku/',
+        '/schedule/',
+        '/compare/',
+        '/pass-rate/',
+        '/updates/',
+        '/guide/',
+      ])
+        expect(xml).toContain(`<loc>https://example.test${path}</loc>`);
+      // Every launched qualification contributes at least its overview page.
+      for (const qualification of launchQualifications)
+        expect(xml).toContain(
+          `<loc>https://example.test/shikaku/${qualification.slug}/</loc>`,
+        );
+    } finally {
+      await web.close();
+    }
+  });
+});
+
+describe('qualification routes', () => {
+  it('serves the directory with a canonical and without noindex', async () => {
+    const web = await startWeb({ siteOrigin: 'https://example.test' });
+    try {
+      const response = await web.get('/shikaku/');
+      expect(response.status).toBe(200);
+      expect(response.headers.get('content-type')).toContain('text/html');
+      const html = await response.text();
+      expect(html).toContain('資格を探す');
+      expect(html).toContain('rel="canonical"');
+      expect(html).not.toContain('<meta name="robots" content="noindex');
+    } finally {
+      await web.close();
+    }
+  });
+
+  it('marks a search result noindex but keeps the directory canonical', async () => {
+    // A `?q=` variant is a duplicate view of the same set, so it must stay out
+    // of the index while still canonicalising to /shikaku/.
+    const web = await startWeb({ siteOrigin: 'https://example.test' });
+    try {
+      const response = await web.get('/shikaku/?q=%E7%B0%BF%E8%A8%98');
+      expect(response.status).toBe(200);
+      const html = await response.text();
+      expect(html).toContain('検索結果');
+      expect(html).toContain('<meta name="robots" content="noindex,follow">');
+    } finally {
+      await web.close();
+    }
+  });
+
+  it('serves every qualification section at 200', async () => {
+    const web = await startWeb({ siteOrigin: 'https://example.test' });
+    try {
+      for (const path of [
+        '/shikaku/it-passport/',
+        '/shikaku/it-passport/application/',
+        '/shikaku/it-passport/exam-content/',
+        '/shikaku/it-passport/pass-rate/',
+        '/shikaku/it-passport/2025/',
+      ]) {
+        const response = await web.get(path);
+        expect(response.status, path).toBe(200);
+        expect(response.headers.get('content-type'), path).toContain(
+          'text/html',
+        );
+        expect(await response.text(), path).toContain('ITパスポート');
+      }
+    } finally {
+      await web.close();
+    }
+  });
+
+  it('answers 404 for a slug outside the launch list', async () => {
+    // The slug whitelist is a hand-written array inside the route branch; a
+    // regression there would publish an empty page for any URL segment.
+    const web = await startWeb({ siteOrigin: 'https://example.test' });
+    try {
+      const response = await web.get('/shikaku/not-a-qualification/');
+      expect(response.status).toBe(404);
+      expect(await response.text()).toContain('ページが見つかりません');
+    } finally {
+      await web.close();
+    }
+  });
+});
+
+describe('index routes', () => {
+  it('serves the schedule page with a canonical', async () => {
+    const web = await startWeb({ siteOrigin: 'https://example.test' });
+    try {
+      const response = await web.get('/schedule/');
+      expect(response.status).toBe(200);
+      expect(response.headers.get('content-type')).toContain('text/html');
+      const html = await response.text();
+      expect(html).toContain('rel="canonical"');
+      expect(html).toContain('https://example.test/schedule/');
+    } finally {
+      await web.close();
+    }
+  });
+
+  it('serves the comparison page', async () => {
+    const web = await startWeb({ siteOrigin: 'https://example.test' });
+    try {
+      const response = await web.get('/compare/');
+      expect(response.status).toBe(200);
+      expect(await response.text()).toContain('https://example.test/compare/');
+    } finally {
+      await web.close();
+    }
+  });
+
+  it('serves the guide index', async () => {
+    const web = await startWeb({ siteOrigin: 'https://example.test' });
+    try {
+      const response = await web.get('/guide/');
+      expect(response.status).toBe(200);
+      expect(await response.text()).toContain('https://example.test/guide/');
+    } finally {
+      await web.close();
+    }
+  });
+
+  it('serves the updates page', async () => {
+    const web = await startWeb({ siteOrigin: 'https://example.test' });
+    try {
+      const response = await web.get('/updates/');
+      expect(response.status).toBe(200);
+      expect(await response.text()).toContain('https://example.test/updates/');
+    } finally {
+      await web.close();
+    }
+  });
+
+  it('serves the home page with a canonical', async () => {
+    const web = await startWeb({ siteOrigin: 'https://example.test' });
+    try {
+      const response = await web.get('/');
+      expect(response.status).toBe(200);
+      const html = await response.text();
+      expect(html).toContain('rel="canonical"');
+      expect(html).toContain('https://example.test/');
+    } finally {
+      await web.close();
+    }
+  });
+});
+
+describe('/pass-rate/ index policy (G-02 / ADR 0002)', () => {
+  it('keeps the base table indexable', async () => {
+    const web = await startWeb({ siteOrigin: 'https://example.test' });
+    try {
+      const response = await web.get('/pass-rate/');
+      expect(response.status).toBe(200);
+      const html = await response.text();
+      expect(html).toContain('https://example.test/pass-rate/');
+      expect(html).not.toContain('<meta name="robots" content="noindex');
+    } finally {
+      await web.close();
+    }
+  });
+
+  it('marks every sort/order variant noindex but canonical to the base', async () => {
+    const web = await startWeb({ siteOrigin: 'https://example.test' });
+    try {
+      for (const path of [
+        '/pass-rate/?sort=rate',
+        '/pass-rate/?order=desc',
+        '/pass-rate/?sort=rate&order=desc',
+      ]) {
+        const response = await web.get(path);
+        expect(response.status, path).toBe(200);
+        const html = await response.text();
+        expect(html, path).toContain(
+          '<meta name="robots" content="noindex,follow">',
+        );
+        expect(html, path).toContain(
+          '<link rel="canonical" href="https://example.test/pass-rate/"',
+        );
+      }
+    } finally {
+      await web.close();
+    }
+  });
+});
+
+describe('editorial routes', () => {
+  it('serves every about page', async () => {
+    const web = await startWeb({ siteOrigin: 'https://example.test' });
+    try {
+      for (const slug of editorialAboutSlugs) {
+        const response = await web.get(`/about/${slug}/`);
+        expect(response.status, slug).toBe(200);
+        expect(await response.text(), slug).toContain(
+          `https://example.test/about/${slug}/`,
+        );
+      }
+    } finally {
+      await web.close();
+    }
+  });
+
+  it('serves every comparison guide', async () => {
+    const web = await startWeb({ siteOrigin: 'https://example.test' });
+    try {
+      for (const slug of editorialComparisonSlugs) {
+        const response = await web.get(`/compare/${slug}/`);
+        expect(response.status, slug).toBe(200);
+        expect(await response.text(), slug).toContain(
+          `https://example.test/compare/${slug}/`,
+        );
+      }
+    } finally {
+      await web.close();
+    }
+  });
+
+  it('serves every editorial guide', async () => {
+    const web = await startWeb({ siteOrigin: 'https://example.test' });
+    try {
+      for (const slug of editorialGuideSlugs) {
+        const response = await web.get(`/guide/${slug}/`);
+        expect(response.status, slug).toBe(200);
+        expect(await response.text(), slug).toContain(
+          `https://example.test/guide/${slug}/`,
+        );
+      }
+    } finally {
+      await web.close();
+    }
+  });
+
+  it('answers 404 for an editorial slug that does not exist', async () => {
+    const web = await startWeb({ siteOrigin: 'https://example.test' });
+    try {
+      for (const path of [
+        '/about/no-such-page/',
+        '/compare/no-such-page/',
+        '/guide/no-such-page/',
+      ]) {
+        const response = await web.get(path);
+        expect(response.status, path).toBe(404);
+        expect(await response.text(), path).toContain('ページが見つかりません');
+      }
+    } finally {
+      await web.close();
+    }
+  });
+});
+
+describe('ICS proxy', () => {
+  it('forwards a successful calendar download with its content type', async () => {
+    const web = await startWeb({ siteOrigin: 'https://example.test' });
+    try {
+      const response = await web.get('/ics/it-passport/2025.ics');
+      expect(response.status).toBe(200);
+      // The upstream's own content type must survive the proxy: falling back
+      // to the local default would hide a changed or dropped header.
+      expect(response.headers.get('content-type')).toContain('method=PUBLISH');
+      expect(response.headers.get('content-disposition')).toContain(
+        'attachment',
+      );
+      expect(await response.text()).toContain('BEGIN:VCALENDAR');
+    } finally {
+      await web.close();
+    }
+  });
+
+  it('forwards a month feed too', async () => {
+    const web = await startWeb({ siteOrigin: 'https://example.test' });
+    try {
+      const response = await web.get('/ics/month/2026-11.ics');
+      expect(response.status).toBe(200);
+      expect(await response.text()).toContain('BEGIN:VCALENDAR');
+    } finally {
+      await web.close();
+    }
+  });
+});
+
+describe('fallthrough', () => {
+  it('answers 404 with the not-found page for an unknown path', async () => {
+    const web = await startWeb({ siteOrigin: 'https://example.test' });
+    try {
+      const response = await web.get('/definitely-not-a-route/');
+      expect(response.status).toBe(404);
+      expect(response.headers.get('content-type')).toContain('text/html');
+      expect(await response.text()).toContain('ページが見つかりません');
+    } finally {
+      await web.close();
+    }
+  });
+});
