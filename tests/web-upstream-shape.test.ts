@@ -33,7 +33,8 @@ type BodyMode =
   | 'html-200'
   | 'compare-flat'
   | 'calendar-no-data'
-  | 'fact-missing-fields';
+  | 'fact-missing-fields'
+  | 'missing-status';
 
 let bodyMode: BodyMode = 'ok';
 let stubServer: ReturnType<typeof createServer>;
@@ -105,6 +106,15 @@ function bodyFor(url: string): string {
         qualification: itPassport,
         status: 'verified',
         facts: [null],
+      });
+    case 'missing-status':
+      // No `status`. `sitemapQualificationPaths()` treats an unrecognised
+      // status as "not indexable", so without the check this dropped the whole
+      // qualification from `/sitemap.xml` while the sitemap still answered
+      // `200 <urlset>` -- a sitemap that quietly under-reports the site.
+      return JSON.stringify({
+        qualification: itPassport,
+        facts: [qualificationView().facts[0]],
       });
     default:
       break;
@@ -201,6 +211,11 @@ describe('web server rejects unusable upstream bodies', () => {
       label: 'a view whose facts are not renderable',
       path: '/shikaku/it-passport/',
     },
+    {
+      mode: 'missing-status',
+      label: 'a view with no status',
+      path: '/shikaku/it-passport/',
+    },
   ];
 
   for (const { mode, label, path } of malformed) {
@@ -222,6 +237,23 @@ describe('web server rejects unusable upstream bodies', () => {
       }
     });
   }
+
+  it('drops nothing from the sitemap when a status is missing', async () => {
+    // The regression this case exists for: an unvalidated `status` made
+    // `sitemapQualificationPaths()` return `[]` for that qualification, so the
+    // sitemap answered 200 with a *shorter* `<urlset>` -- quietly claiming
+    // those pages do not exist. Now it is an unusable upstream instead.
+    bodyMode = 'missing-status';
+    const web = await startWeb();
+    try {
+      const response = await web.get('/sitemap.xml');
+      expect(response.status).toBe(503);
+      expect(response.headers.get('content-type')).toContain('application/xml');
+      expect(await response.text()).not.toContain('<urlset');
+    } finally {
+      await web.close();
+    }
+  });
 
   it('still serves the healthy shape as 200', async () => {
     bodyMode = 'ok';

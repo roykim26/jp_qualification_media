@@ -217,21 +217,30 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 /**
- * `{ qualification: {...}, facts: [...] }` -- what the section pages render.
+ * `{ qualification: {...}, status: '...', facts: [...] }` -- the section pages.
  *
- * The element check is not cosmetic: the renderer sorts by `fact.factKey` and
- * prints `fact.displayValue`, so a single `null` in `facts` throws mid-render.
- * By then the route has already written `200`, and the response is lost (see
- * the `headersSent` guard at the bottom of `handleRequest`). Checking the two
- * fields the renderer dereferences unconditionally is enough to route the
- * failure to the 503 lane instead.
+ * Two field checks that look cosmetic but are not:
+ *
+ * - `facts` elements: the renderer sorts by `fact.factKey` and prints
+ *   `fact.displayValue`, so a single `null` throws mid-render. By then the
+ *   route has already written `200` and the response is lost (see the
+ *   `headersSent` guard at the bottom of `handleRequest`).
+ * - `status`: `sitemapQualificationPaths()` treats an unrecognised status as
+ *   "not indexable" and returns no paths, so a missing status drops a whole
+ *   qualification out of `/sitemap.xml` while the sitemap still answers
+ *   `200 <urlset>` -- the same "an empty urlset claims the site has no pages"
+ *   failure 3A fixed at the error level, one level down. Requiring a non-empty
+ *   string catches the broken shape without pinning the enum, so a status the
+ *   API adds later degrades to "not in the sitemap" rather than to a 503.
  */
 function isQualificationView(value: unknown): boolean {
   if (!isRecord(value)) return false;
-  const { qualification, facts } = value;
+  const { qualification, facts, status } = value;
   return (
     isRecord(qualification) &&
     typeof qualification.slug === 'string' &&
+    typeof status === 'string' &&
+    status.length > 0 &&
     Array.isArray(facts) &&
     facts.every(
       (fact) =>
