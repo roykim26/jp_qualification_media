@@ -408,6 +408,11 @@ async function main() {
         !sitemap.body.includes('?year='),
         'sitemap must not list ?year= filter pages',
       );
+      // ADR 0002 §1: sorting parameters are parameter variants too (G-02).
+      expect(
+        !sitemap.body.includes('?sort='),
+        'sitemap must not list ?sort= filter pages',
+      );
     },
   );
 
@@ -419,6 +424,41 @@ async function main() {
     expect(
       page.body.includes('content="noindex,follow"'),
       'year filter page is missing noindex,follow',
+    );
+  });
+
+  // G-02 / ADR 0002 §2: only the sort variants are noindex; the base table stays
+  // indexable because sitemap.xml lists it (indexable ⇔ listed).
+  await runChecked('the pass-rate sort variants stay noindex', async () => {
+    // canonicalHref() prefixes SITE_ORIGIN in this container, so match on the
+    // path suffix instead of the whole attribute value.
+    const canonicalPassRate =
+      /<link rel="canonical" href="[^"]*\/pass-rate\/">/;
+
+    const base = await get(`${webBase}/pass-rate/`);
+    expect(base.status === 200, `expected 200, got ${base.status}`);
+    expect(
+      !base.body.includes('content="noindex,follow"'),
+      'the /pass-rate/ base page must stay indexable',
+    );
+    expect(
+      canonicalPassRate.test(base.body),
+      'the /pass-rate/ base page canonical is not /pass-rate/',
+    );
+    expect(
+      !(base.body.includes('/shikaku/') && base.body.includes('?year=')),
+      'the /pass-rate/ table must not link a noindex ?year= variant (G-18)',
+    );
+
+    const sorted = await get(`${webBase}/pass-rate/?sort=pass_rate&order=desc`);
+    expect(sorted.status === 200, `expected 200, got ${sorted.status}`);
+    expect(
+      sorted.body.includes('content="noindex,follow"'),
+      'sort filter page is missing noindex,follow',
+    );
+    expect(
+      canonicalPassRate.test(sorted.body),
+      'sort filter page canonical is not /pass-rate/',
     );
   });
 

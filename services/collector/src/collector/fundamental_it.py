@@ -36,10 +36,11 @@ FUNDAMENTAL_IT_SOURCES = {
     },
     # Work package J (owner decisions D1=A, D2=fiscal start year, D3=令和7年度,
     # D5=methodology same batch): the 推移表 xlsx attachment behind the
-    # statistics index.  The file name rolls monthly (202609_… at registration);
-    # a rolled name is a URL-drift event, handled like 0026 for bookkeeping.
+    # statistics index.  The file name rolls monthly; a rolled name is a
+    # URL-drift event, handled like 0026 for bookkeeping.  Rolled 202609 → 202610
+    # in Sprint 2A (migration 0030); the 202609 file now returns 404.
     "source:fundamental-it:statistics-fe-suiihyo": {
-        "canonical_url": "https://www.ipa.go.jp/shiken/reports/ps6vr70000016ew6-att/202609_fe_01_suiihyo.xlsx",
+        "canonical_url": "https://www.ipa.go.jp/shiken/reports/ps6vr70000016ew6-att/202610_fe_01_suiihyo.xlsx",
         "allowed_domain": "www.ipa.go.jp",
     },
     # Shared 情報処理技術者試験 fee page; the 7,500円 statement is category-level.

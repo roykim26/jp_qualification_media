@@ -102,6 +102,7 @@
 - **影响**：索引策略自相矛盾（同一站两套口径）；非法 `sort` 值会进入渲染路径，属未校验输入。
 - **改动文件范围**：`apps/web/src/server.ts:279-298`（参数白名单 + 传入 `noindex`）、`apps/web/src/render.ts`（`renderPassRateIndex` 增加 `noindex` 入参，`:2283-2353`）、`tests/web-render.test.ts`。
 - **风险**：**低**。注意 `scripts/verify-lib.mjs` 的 `evaluateSitemapRoutes` 要求「indexable ↔ listed 等价」，`/pass-rate/` 主页面仍必须可索引且仍在 sitemap 内；只要只对**带参变体**加 noindex 即不触发该断言。
+- **状态**：✅ **已修复（2026-11-24 Sprint 1）**。`render.ts` 新增 `parsePassRateIndexQuery()`（`sort` 走 `passRateSortKeys` 白名单、`order` 只认 `desc`、任一参数出现即 `noindex`），`PassRateIndexOptions` 增 `noindex` 入参；`server.ts` 的 `/pass-rate/` 路由改走该解析函数，canonical 仍为 `/pass-rate/`。门禁：`scripts/verify-lib.mjs` 的 sitemap 参数检查扩到 `sort|order`，`verifyQualification` 增 `/pass-rate/`（可索引）＋`?sort=`（noindex）成对探针；`scripts/docker-smoke.mjs` 同步；单测 `tests/web-render.test.ts` 2 例＋`scripts/verify-lib.test.mjs` 2 例。实测 `verify:all` 6/6、vitest 191、`test:verify-gate` 40/40。**遗留**：`/pass-rate/` 空表仍可索引（属 G-06 范畴，需单独拍板）。
 
 ### G-03 年度空壳页 200 + 自指 canonical（P0）
 
@@ -159,6 +160,7 @@
 - **影响**：API 抖动会放大成整站 502；`/sitemap.xml` 502 会直接影响抓取。
 - **改动文件范围**：`apps/web/src/server.ts`（各路由的降级/局部失败）、`apps/web/src/render.ts`（`renderErrorPage` 增加出口）、`tests/web-render.test.ts`、`tests/public-api.test.ts`。
 - **风险**：**中–高**。降级策略会改变「页面是否可索引」的判定——若某页在 API 失败时返回 200 空态，`verify-lib.mjs:117-145` 的 `evaluatePublicPage` 与 `verify:all` 的第 ⑤ 项断言会受影响。**必须先定义「降级后的页面是 200 空态还是 503」**，这是产品/SEO 决策 → 建议先出决策再改代码。
+- **部分修复（2026-11-24 Sprint 2B）**：决策已由号主在 Sprint 2 给出（`docs/audit/DEEPSEEK_HARNESS_SPRINT_2_TASK.md` §0/§6）。实测前提被修正——上游失败时**当前并非 200 空态而是 502**，且 catch 不接收 error、不区分失败类型。已实施：`fetchUpstream()` 在连接失败/非 2xx 时抛 `UpstreamUnavailableError`，顶层 catch 对它回 **503 + `retry-after: 60` + `renderErrorPage()`（noindex）**，其余错误仍 502；`proxyIcs` 的非 404 分支同步改 503；`/sitemap.xml` 走同一 helper，故障时 503 而非吐 HTML 冒充 XML。**`/` 保持 200**（`Promise.allSettled` 降级为空模块）——这是 healthcheck 依赖项，改成 503 会让容器 unhealthy、Caddy 不启动、全站不可用。静态路由不 fetch，不受影响 ⇒ 非全站 503。回归：`tests/web-server.test.ts`（8 例，桩 API 驱动真实 `handleRequest`）。**未做**：`renderErrorPage` 补搜索框与更多出口（G-10 原文的 UX 部分仍未做）；`/pass-rate/` 单资格失败导致整表 503 的粒度问题仍待拍板。
 
 ### G-11 生产 HTML 无 Cache-Control/ETag、Brotli 未启用、单页最大 518KB（P1，性能）
 
@@ -227,6 +229,7 @@
 - **影响**：①`/pass-rate/` 表格是「合格率比较」的落地页，但每行出口都指向 noindex 页 → 内链把权重导向不可索引目标；②`/about/` 无索引页属信息架构缺口，但**新增路由需先证明现有页面无法满足**（修订版 V2 §4）。
 - **改动文件范围**：`apps/web/src/render.ts`（`renderPassRateIndex` 的行链接改指可索引的 `/shikaku/{slug}/pass-rate/`）、`tests/web-render.test.ts`。`/about/` 索引页**建议不做**（政策页已由页脚全站链接覆盖，51 入链）。
 - **风险**：**低**（只改链接目标）。
+- **状态**：🟡 **部分修复（2026-11-24 Sprint 1，仅前半）**。`/pass-rate/` 表格数据行已从 `?year=` 变体改指可索引的 `/shikaku/{slug}/pass-rate/`（`render.ts` 的 `renderPassRateIndex`），门禁在 `verifyQualification` 的 `/pass-rate/` 探针里断言表格不含 `?year=`，`docker-smoke.mjs` 同款。**未做**：`/about/` 索引页、搜索页、feed（属新增路由，需先证明现有页面无法满足，见修订版 V2 §4）。
 
 ---
 

@@ -1,7 +1,10 @@
-"""Work package J stage 2: real-byte offline lock for the FE 推移表 extractor.
+"""Work package J stage 2 + Sprint 2A: real-byte offline lock for the FE 推移表 extractor.
 
-The fixture is the byte-for-byte 202609 attachment captured on 2026-11-12
-(sha256 2063cd07c857678bae6a55def10446de57828c33191d3e2e6a853370e698cf9f).
+FIXTURE is the byte-for-byte 202610 attachment captured on 2026-11-24
+(sha256 08add2120f62780993619a8b51a97bef8b2153c54a7af7308938609b8fc66082), the
+monthly roll of the 202609 file registered in work package J
+(sha256 2063cd07c857678bae6a55def10446de57828c33191d3e2e6a853370e698cf9f, kept as
+PREVIOUS_FIXTURE so the roll itself stays under test).
 Owner decisions locked here: D1=A, D2 exam_year=fiscal start year, D3 first
 batch 令和7年度 (2025), official printed pass rate only.
 """
@@ -20,8 +23,14 @@ from collector.fe_statistics_xlsx import (
 )
 
 
-FIXTURE = Path(__file__).parent / "fixtures" / "fe" / "202609_fe_01_suiihyo.xlsx"
-FIXTURE_SHA256 = "2063cd07c857678bae6a55def10446de57828c33191d3e2e6a853370e698cf9f"
+FIXTURE = Path(__file__).parent / "fixtures" / "fe" / "202610_fe_01_suiihyo.xlsx"
+FIXTURE_SHA256 = "08add2120f62780993619a8b51a97bef8b2153c54a7af7308938609b8fc66082"
+PREVIOUS_FIXTURE = (
+    Path(__file__).parent / "fixtures" / "fe" / "202609_fe_01_suiihyo.xlsx"
+)
+PREVIOUS_FIXTURE_SHA256 = (
+    "2063cd07c857678bae6a55def10446de57828c33191d3e2e6a853370e698cf9f"
+)
 
 
 def _real_bytes() -> bytes:
@@ -84,7 +93,43 @@ def test_real_bytes_extract_printed_annual_totals_for_complete_years():
         assert candidate.source_id == SOURCE_ID
         assert candidate.source_snapshot_id == FIXTURE_SHA256
         assert "合格率（合格者数／受験者数：％）" in candidate.evidence_text
-        assert "(令和8年10月21日現在)" in candidate.evidence_text
+        assert "(令和8年11月20日現在)" in candidate.evidence_text
+
+
+def test_monthly_roll_keeps_every_complete_year_unchanged():
+    """Sprint 2A: the 202609 → 202610 roll moved only the in-progress year.
+
+    令和8年度 gained one month (6/12 → 7/12) and 累計 grew, but neither emits
+    facts; the three complete fiscal years must be byte-identical, which is why
+    the roll changes snapshots and registration only — no approved fact moves.
+    """
+
+    def values(raw: bytes) -> list[tuple]:
+        candidates, issues = extract_candidates(
+            snapshot_from_xlsx(SOURCE_ID, raw, synthetic=False)
+        )
+        assert not issues
+        return [
+            (
+                c.exam_year,
+                c.fact_key,
+                c.value_type,
+                c.normalized_value,
+                c.display_value,
+            )
+            for c in sorted(candidates, key=lambda c: (c.exam_year, c.fact_key))
+        ]
+
+    assert values(PREVIOUS_FIXTURE.read_bytes()) == values(_real_bytes())
+
+
+def test_previous_month_fixture_is_the_registered_202609_bytes():
+    assert sha256(PREVIOUS_FIXTURE.read_bytes()).hexdigest() == PREVIOUS_FIXTURE_SHA256
+    previous = snapshot_from_xlsx(
+        SOURCE_ID, PREVIOUS_FIXTURE.read_bytes(), synthetic=False
+    )
+    candidates, _ = extract_candidates(previous)
+    assert "(令和8年10月21日現在)" in candidates[0].evidence_text
 
 
 def test_pass_rate_evidence_pins_the_printed_cell():

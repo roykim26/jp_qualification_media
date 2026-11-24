@@ -2247,7 +2247,34 @@ const passRateSortKeys: readonly PassRateSortKey[] = [
 export type PassRateIndexOptions = {
   sort?: string | null;
   order?: string | null;
+  noindex?: boolean;
 };
+
+export type PassRateIndexQuery = {
+  sort: PassRateSortKey;
+  order: 'asc' | 'desc';
+  noindex: boolean;
+};
+
+/**
+ * Normalises the `/pass-rate/` query string (G-02).  Only whitelisted sort
+ * keys and orders reach the renderer, and any `sort`/`order` variant is a
+ * duplicate of the base table, so it is always non-indexable (ADR 0002 §2)
+ * while keeping the canonical on `/pass-rate/`.
+ */
+export function parsePassRateIndexQuery(
+  params: Pick<URLSearchParams, 'get'>,
+): PassRateIndexQuery {
+  const sort = params.get('sort');
+  const order = params.get('order');
+  return {
+    sort: passRateSortKeys.includes(sort as PassRateSortKey)
+      ? (sort as PassRateSortKey)
+      : 'qualification',
+    order: order === 'desc' ? 'desc' : 'asc',
+    noindex: sort !== null || order !== null,
+  };
+}
 
 type PassRateIndexRow = {
   href: string;
@@ -2299,7 +2326,10 @@ export function renderPassRateIndex(
       const latest = latestHistoryRow(groupRows);
       if (!latest) continue;
       rows.push({
-        href: `/shikaku/${qualification.slug}/pass-rate/?year=${latest.year}`,
+        // Link the indexable section page, never the noindex ?year= variant
+        // (G-18 / ADR 0002 §2): internal links must not point at a URL the
+        // site itself asks search engines to drop.
+        href: `/shikaku/${qualification.slug}/pass-rate/`,
         name: qualification.officialNameJa,
         dimension: historyGroupDimensionLabel(groupKey),
         year: latest.year,
@@ -2347,6 +2377,10 @@ export function renderPassRateIndex(
       '資格ごとの合格率、申込者数、受験者数、合格者数を年度別に比較できます。過去の実績であり、個人の合格可能性を示すものではありません。',
     currentNav: 'data',
     canonicalPath: '/pass-rate/',
+    // G-02 / ADR 0002 §2: only the parameter variants are noindex. The base
+    // /pass-rate/ table stays indexable because it is listed in sitemap.xml
+    // and evaluateSitemapRoutes requires indexable ⇔ listed.
+    noindex: Boolean(options.noindex),
     breadcrumbs: [{ label: 'ホーム', href: '/' }, { label: '合格率データ' }],
     body,
   });

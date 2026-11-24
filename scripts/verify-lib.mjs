@@ -146,7 +146,9 @@ export function evaluatePublicPage({
 
 export function evaluateSitemapRoutes({ routes, sitemapXml }) {
   const errors = [];
-  if (sitemapXml.includes('?year='))
+  // ADR 0002 §1: parameter variants are never indexable, so no parameterised
+  // URL may appear in sitemap.xml (?year= filters, ?sort=/?order= sorting).
+  if (/\?(?:year|sort|order)=/.test(sitemapXml))
     errors.push('Sitemap lists a parameter-filtered page');
   const locs = new Set(
     [...sitemapXml.matchAll(/<loc>([^<]+)<\/loc>/g)].map((match) => {
@@ -384,6 +386,42 @@ export async function verifyQualification(
     webPages.push({
       path: `/shikaku/bookkeeping/pass-rate/?year=${probeYear}`,
       status: yearResponse.status,
+    });
+  }
+  // G-02 / ADR 0002 §2: the /pass-rate/ table is indexable, but every
+  // ?sort=/?order= variant is a parameter duplicate and must be noindex while
+  // keeping the canonical on /pass-rate/.  These routes are qualification
+  // independent, so probe them once instead of once per gate.
+  if (gate.slug === launchGate[0].slug) {
+    const passRateResponse = await waitFor(
+      `http://127.0.0.1:${runtime.webPort}/pass-rate/`,
+    );
+    const passRateHtml = await passRateResponse.text();
+    const noindexMeta = '<meta name="robots" content="noindex,follow">';
+    // canonicalHref() prefixes SITE_ORIGIN when it is configured, so match the
+    // path suffix rather than the whole attribute value.
+    const canonicalPassRate =
+      /<link rel="canonical" href="[^"]*\/pass-rate\/">/;
+    if (passRateHtml.includes(noindexMeta))
+      errors.push('Web /pass-rate/ base page must stay indexable');
+    if (!canonicalPassRate.test(passRateHtml))
+      errors.push('Web /pass-rate/ base page canonical is not /pass-rate/');
+    if (passRateHtml.includes('/shikaku/') && passRateHtml.includes('?year='))
+      errors.push('Web /pass-rate/ table links a noindex ?year= variant');
+    webPages.push({ path: '/pass-rate/', status: passRateResponse.status });
+    sitemapRoutes.push({ path: '/pass-rate/', indexable: true });
+
+    const sortedResponse = await waitFor(
+      `http://127.0.0.1:${runtime.webPort}/pass-rate/?sort=pass_rate&order=desc`,
+    );
+    const sortedHtml = await sortedResponse.text();
+    if (!sortedHtml.includes(noindexMeta))
+      errors.push('Web /pass-rate/?sort= parameter page not marked noindex');
+    if (!canonicalPassRate.test(sortedHtml))
+      errors.push('Web /pass-rate/?sort= canonical is not /pass-rate/');
+    webPages.push({
+      path: '/pass-rate/?sort=pass_rate&order=desc',
+      status: sortedResponse.status,
     });
   }
   // The filtered year page keeps its canonical on /pass-rate/, so sitemap.xml

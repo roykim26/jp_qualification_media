@@ -366,7 +366,7 @@ def test_ingest_routes_xlsx_to_the_suiihyo_extractor_before_any_database_write(m
     snapshot.write_bytes(b"PK\x03\x04corrupt zip body")
     _seed_capture_report(
         tmp_path, "source:fundamental-it:statistics-fe-suiihyo", snapshot,
-        "https://www.ipa.go.jp/shiken/reports/ps6vr70000016ew6-att/202609_fe_01_suiihyo.xlsx",
+        "https://www.ipa.go.jp/shiken/reports/ps6vr70000016ew6-att/202610_fe_01_suiihyo.xlsx",
     )
     monkeypatch.setattr(ingest_module, "SNAPSHOT_ROOT", tmp_path)
     try:

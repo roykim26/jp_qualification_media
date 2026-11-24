@@ -1,4 +1,8 @@
-import { createServer, type ServerResponse } from 'node:http';
+import {
+  createServer,
+  type IncomingMessage,
+  type ServerResponse,
+} from 'node:http';
 import { readFile } from 'node:fs/promises';
 import {
   launchSlugs,
@@ -8,6 +12,7 @@ import {
   renderGuideIndex,
   renderHomePage,
   renderNotFoundPage,
+  parsePassRateIndexQuery,
   renderPassRateIndex,
   renderQualificationDirectory,
   renderQualificationSectionPage,
@@ -64,9 +69,49 @@ function renderSitemap(urls: readonly string[]): string {
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls.map((url) => `<url><loc>${escapeXml(url)}</loc></url>`).join('')}</urlset>`;
 }
 
+/**
+ * Raised when the upstream official-information API cannot be used: either the
+ * request itself failed (connection refused, DNS, reset) or it answered with a
+ * non-2xx status.  Both mean "we do not know the truth right now", which is
+ * different from a successful response that legitimately carries no data.
+ *
+ * The distinction matters for HTTP status: a 2xx with `facts: []` is a real
+ * page (200, indexable, listed in sitemap.xml); an unusable upstream is a
+ * temporary outage (503, noindex, never listed).  Rendering an empty page with
+ * 200 for the latter would publish a page that claims a qualification has no
+ * official data when in fact we simply could not reach the source.
+ */
+export class UpstreamUnavailableError extends Error {
+  constructor(
+    message: string,
+    readonly status?: number,
+  ) {
+    super(message);
+    this.name = 'UpstreamUnavailableError';
+  }
+}
+
+async function fetchUpstream(input: string): Promise<Response> {
+  let response: Response;
+  try {
+    response = await fetch(input);
+  } catch (error) {
+    throw new UpstreamUnavailableError(
+      `API request failed: ${(error as Error).message}`,
+    );
+  }
+  if (!response.ok)
+    throw new UpstreamUnavailableError(
+      `API returned ${response.status}`,
+      response.status,
+    );
+  return response;
+}
+
 async function readQualification(slug: string) {
-  const response = await fetch(`${apiBaseUrl}/api/v1/qualifications/${slug}`);
-  if (!response.ok) throw new Error(`API returned ${response.status}`);
+  const response = await fetchUpstream(
+    `${apiBaseUrl}/api/v1/qualifications/${slug}`,
+  );
   return response.json();
 }
 
@@ -77,8 +122,9 @@ async function readCalendar(query: URLSearchParams) {
   if (year) params.set('year', year);
   if (qualification) params.set('qualification', qualification);
   const suffix = params.size ? `?${params.toString()}` : '';
-  const response = await fetch(`${apiBaseUrl}/api/v1/calendar${suffix}`);
-  if (!response.ok) throw new Error(`API returned ${response.status}`);
+  const response = await fetchUpstream(
+    `${apiBaseUrl}/api/v1/calendar${suffix}`,
+  );
   return response.json();
 }
 
@@ -88,8 +134,7 @@ async function readComparison(query: URLSearchParams) {
     query.get('qualifications') ?? query.getAll('qualification').join(',');
   if (qualifications) params.set('qualifications', qualifications);
   const suffix = params.size ? `?${params.toString()}` : '';
-  const response = await fetch(`${apiBaseUrl}/api/v1/compare${suffix}`);
-  if (!response.ok) throw new Error(`API returned ${response.status}`);
+  const response = await fetchUpstream(`${apiBaseUrl}/api/v1/compare${suffix}`);
   return response.json();
 }
 
@@ -99,8 +144,9 @@ async function readUpdates(query: URLSearchParams, page: number) {
   if (qualification) params.set('qualification', qualification);
   params.set('limit', String(updatesPageSize));
   params.set('offset', String((page - 1) * updatesPageSize));
-  const response = await fetch(`${apiBaseUrl}/api/v1/updates?${params}`);
-  if (!response.ok) throw new Error(`API returned ${response.status}`);
+  const response = await fetchUpstream(
+    `${apiBaseUrl}/api/v1/updates?${params}`,
+  );
   return response.json();
 }
 
@@ -112,11 +158,24 @@ function parseUpdatesPage(value: string | null): number {
 }
 
 async function proxyIcs(apiPath: string, res: ServerResponse) {
-  const response = await fetch(`${apiBaseUrl}${apiPath}`);
+  let response: Response;
+  try {
+    response = await fetch(`${apiBaseUrl}${apiPath}`);
+  } catch {
+    // Same rule as the HTML routes: an unreachable upstream is a temporary
+    // outage (503), not a missing calendar.
+    res.writeHead(503, {
+      'content-type': 'text/html; charset=utf-8',
+      'retry-after': '60',
+    });
+    res.end(renderErrorPage());
+    return;
+  }
   if (!response.ok) {
     const notFound = response.status === 404;
-    res.writeHead(notFound ? 404 : 502, {
+    res.writeHead(notFound ? 404 : 503, {
       'content-type': 'text/html; charset=utf-8',
+      ...(notFound ? {} : { 'retry-after': '60' }),
     });
     res.end(notFound ? renderNotFoundPage() : renderErrorPage());
     return;
@@ -149,7 +208,10 @@ const STATIC_IMAGES: Record<string, string> = {
   'twelve-tools-badge0-white.svg': 'image/svg+xml',
 };
 
-const server = createServer(async (req, res) => {
+export async function handleRequest(
+  req: IncomingMessage,
+  res: ServerResponse,
+): Promise<void | ServerResponse> {
   try {
     const url = new URL(req.url ?? '/', 'http://127.0.0.1');
     const pathname = url.pathname;
@@ -284,16 +346,16 @@ const server = createServer(async (req, res) => {
           view: await readQualification(qualification.slug),
         })),
       );
+      // G-02 / ADR 0002 §2: whitelist the sort parameters and mark every
+      // parameter variant noindex; the canonical stays on /pass-rate/.
+      const query = parsePassRateIndexQuery(url.searchParams);
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
       return res.end(
         renderPassRateIndex(
           views.filter(({ view }) =>
             qualificationSectionHasContent(view, 'pass-rate'),
           ),
-          {
-            sort: url.searchParams.get('sort'),
-            order: url.searchParams.get('order'),
-          },
+          { sort: query.sort, order: query.order, noindex: query.noindex },
         ),
       );
     }
@@ -421,14 +483,32 @@ const server = createServer(async (req, res) => {
     }
     res.writeHead(404, { 'content-type': 'text/html; charset=utf-8' });
     return res.end(renderNotFoundPage());
-  } catch {
+  } catch (error) {
+    // An unusable upstream is a temporary outage, not "this qualification has
+    // no official data": answer 503 so crawlers and clients retry instead of
+    // indexing a page that understates what the source actually publishes.
+    // Every route that reaches this catch has already tried to fetch; the
+    // static routes (images, CSS, robots.txt, editorial pages, 404) never
+    // fetch and therefore never land here.
+    if (error instanceof UpstreamUnavailableError) {
+      res.writeHead(503, {
+        'content-type': 'text/html; charset=utf-8',
+        'retry-after': '60',
+      });
+      return res.end(renderErrorPage());
+    }
     res.writeHead(502, { 'content-type': 'text/html; charset=utf-8' });
     return res.end(renderErrorPage());
   }
-});
+}
+
+const server = createServer(handleRequest);
 
 const webHost = process.env.WEB_HOST ?? '127.0.0.1';
 
-server.listen(port, webHost, () =>
-  console.log(`web server on http://${webHost}:${port}`),
-);
+// Tests import handleRequest directly; only a real process binds the port.
+if (process.env.NODE_ENV !== 'test') {
+  server.listen(port, webHost, () =>
+    console.log(`web server on http://${webHost}:${port}`),
+  );
+}

@@ -9,6 +9,7 @@ import {
   renderEditorialPage,
   renderGuideIndex,
   renderHomePage,
+  parsePassRateIndexQuery,
   renderPassRateIndex,
   renderSchedulePage,
   renderUpdatesPage,
@@ -1840,13 +1841,65 @@ describe('section content gating and discovery', () => {
     expect(html).toContain('data-label="受験者数">100,000人');
     expect(html).toContain('data-label="合格者数">30,700人');
     expect(html).toContain('data-label="合格率">30.7%');
-    expect(html).toContain('/shikaku/it-passport/pass-rate/?year=2025');
+    // G-18: rows must link the indexable section page, not the noindex
+    // ?year= variant, so the table never funnels link equity into a URL the
+    // site asks search engines to drop.
+    expect(html).toContain('href="/shikaku/it-passport/pass-rate/"');
+    expect(html).not.toContain('/shikaku/it-passport/pass-rate/?year=');
     expect(html).toContain('href="/pass-rate/?sort=pass_rate');
     expect(html).toContain('aria-sort="ascending"');
     expect(html).not.toContain('/shikaku/bookkeeping/pass-rate/');
     expect(renderPassRateIndex([])).toContain(
       '公開できる合格率データはまだありません',
     );
+  });
+
+  it('keeps the plain pass-rate index indexable and its sorted variants noindex', () => {
+    const entries = [
+      {
+        qualification: itPassport,
+        view: view([fact('pass_rate', 2025, '30.7%')]),
+      },
+    ];
+    const plain = renderPassRateIndex(entries);
+    expect(plain).not.toContain('<meta name="robots"');
+    expect(plain).toContain('<link rel="canonical" href="/pass-rate/">');
+
+    // G-02 / ADR 0002 §2: every ?sort=/?order= variant is a parameter
+    // duplicate of the same table, so it is noindex,follow but keeps the
+    // canonical pointing at the base page.
+    const sorted = renderPassRateIndex(entries, {
+      sort: 'pass_rate',
+      order: 'desc',
+      noindex: true,
+    });
+    expect(sorted).toContain('<meta name="robots" content="noindex,follow">');
+    expect(sorted).toContain('<link rel="canonical" href="/pass-rate/">');
+    // The noindex variant must not carry structured data either.
+    expect(sorted).not.toContain('application/ld+json');
+  });
+
+  it('whitelists the pass-rate sort parameters and marks any variant noindex', () => {
+    expect(parsePassRateIndexQuery(new URLSearchParams(''))).toEqual({
+      sort: 'qualification',
+      order: 'asc',
+      noindex: false,
+    });
+    expect(
+      parsePassRateIndexQuery(new URLSearchParams('sort=pass_rate&order=desc')),
+    ).toEqual({ sort: 'pass_rate', order: 'desc', noindex: true });
+    // An unknown sort key never reaches the renderer as-is.
+    expect(
+      parsePassRateIndexQuery(new URLSearchParams('sort=drop_table')),
+    ).toEqual({ sort: 'qualification', order: 'asc', noindex: true });
+    expect(
+      parsePassRateIndexQuery(new URLSearchParams('order=sideways')),
+    ).toEqual({ sort: 'qualification', order: 'asc', noindex: true });
+    expect(parsePassRateIndexQuery(new URLSearchParams('sort=year'))).toEqual({
+      sort: 'year',
+      order: 'asc',
+      noindex: true,
+    });
   });
 
   it('sorts the pass-rate table by the requested column', () => {
