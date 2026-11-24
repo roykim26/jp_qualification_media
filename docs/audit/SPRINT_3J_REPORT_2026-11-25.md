@@ -25,7 +25,9 @@
 
 执行前 HEAD：`a15ccb5` `docs: 落账 Sprint 3I 执行报告`，工作树干净。
 
-本轮内容 commit：**`<CONTENT_SHA>`**
+本轮内容 commit：**`5ff986a`** `test(web): 补齐 G-15 路由层测试缺口（Sprint 3J）`
+
+报告里引用自己的 commit hash 有天然循环依赖，所以照 3A 起的惯例拆两段：先提内容，再回填本行做一次 `docs: 落账` 收口 commit。
 
 工作树变化（全部为新增，无修改）：
 
