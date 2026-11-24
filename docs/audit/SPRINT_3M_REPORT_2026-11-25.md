@@ -26,7 +26,9 @@ HEAD：c8d631c  docs: 落账 Sprint 3L 执行报告
 工作树：干净
 ```
 
-本轮内容 commit：`<CONTENT_SHA>`
+本轮内容 commit：`90564c1`（`fix(web): 兄弟路由的上游形状校验（Sprint 3M）`）
+
+报告无法在自己那个 commit 里引用自己的 hash（写了 hash 就会改变 hash），所以固定拆两个 commit：本文件先随内容一起提交，再由一个 `docs: 落账…` 的收口 commit 回填这一行。基线链只列到内容 commit，HEAD 以 `git log` 为准。
 
 ## 3. 修改文件
 
