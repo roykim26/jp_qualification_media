@@ -20,6 +20,7 @@ import {
   renderUpdatesPage,
   qualificationSectionHasContent,
   qualificationSitemapContent,
+  type PublicQualificationView,
   type QualificationSection,
 } from './render.js';
 import { siteCss, siteCssPath } from './assets.js';
@@ -39,6 +40,9 @@ import {
 import { sitemapQualificationPaths } from './sitemap.js';
 import { loadWebConfig, parseSiteOrigin, type WebConfig } from './config.js';
 import type { PublicFact } from '../../../packages/schema/src/index.js';
+import type { PublicCalendarEvent } from '../../../packages/schema/src/calendar.js';
+import type { PublicQualificationComparison } from '../../../packages/schema/src/compare.js';
+import type { PublicUpdateEvent } from '../../../packages/schema/src/updates.js';
 
 const launchSlugSet = new Set<string>(launchSlugs);
 
@@ -177,11 +181,89 @@ async function fetchUpstream(input: string): Promise<Response> {
   return response;
 }
 
+/**
+ * Sprint 3K: an upstream that answers 200 with something we cannot render is
+ * an unusable upstream, not data. Classifying it here keeps the failure in the
+ * 503 lane; letting it through means the route writes `200` and *then* the
+ * renderer throws, which used to take the whole process down (see the catch at
+ * the bottom of `handleRequest`).
+ *
+ * The checks stay deliberately shallow -- "is it an object, is the field I am
+ * about to iterate an array". Anything deeper belongs to the API's own schema
+ * tests, and a stricter web would just break whenever the API grows a field.
+ */
+async function readJson<T>(
+  response: Response,
+  label: string,
+  isUsable: (value: unknown) => boolean,
+): Promise<T> {
+  let parsed: unknown;
+  try {
+    parsed = await response.json();
+  } catch (error) {
+    throw new UpstreamUnavailableError(
+      `${label}: response body was not JSON (${(error as Error).message})`,
+    );
+  }
+  if (!isUsable(parsed))
+    throw new UpstreamUnavailableError(
+      `${label}: response body did not have the expected shape`,
+    );
+  return parsed as T;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/**
+ * `{ qualification: {...}, facts: [...] }` -- what the section pages render.
+ *
+ * The element check is not cosmetic: the renderer sorts by `fact.factKey` and
+ * prints `fact.displayValue`, so a single `null` in `facts` throws mid-render.
+ * By then the route has already written `200`, and the response is lost (see
+ * the `headersSent` guard at the bottom of `handleRequest`). Checking the two
+ * fields the renderer dereferences unconditionally is enough to route the
+ * failure to the 503 lane instead.
+ */
+function isQualificationView(value: unknown): boolean {
+  if (!isRecord(value)) return false;
+  const { qualification, facts } = value;
+  return (
+    isRecord(qualification) &&
+    typeof qualification.slug === 'string' &&
+    Array.isArray(facts) &&
+    facts.every(
+      (fact) =>
+        isRecord(fact) &&
+        typeof fact.factKey === 'string' &&
+        typeof fact.displayValue === 'string',
+    )
+  );
+}
+
+/** `{ data: [...] }` -- the envelope shared by calendar and updates. */
+function hasArrayData(value: unknown): boolean {
+  return isRecord(value) && Array.isArray(value.data);
+}
+
+/** `{ data: { qualifications: [...], rows: [...] } }` -- the compare page. */
+function isComparisonEnvelope(value: unknown): boolean {
+  if (!isRecord(value) || !isRecord(value.data)) return false;
+  return (
+    Array.isArray(value.data.qualifications) && Array.isArray(value.data.rows)
+  );
+}
+
 async function readQualification(slug: string) {
   const response = await fetchUpstream(
     `${apiBaseUrl}/api/v1/qualifications/${slug}`,
   );
-  return response.json();
+  return readJson<PublicQualificationView>(
+    response,
+    `qualifications/${slug}`,
+    isQualificationView,
+  );
 }
 
 async function readCalendar(query: URLSearchParams) {
@@ -194,7 +276,11 @@ async function readCalendar(query: URLSearchParams) {
   const response = await fetchUpstream(
     `${apiBaseUrl}/api/v1/calendar${suffix}`,
   );
-  return response.json();
+  return readJson<{ data: PublicCalendarEvent[] }>(
+    response,
+    'calendar',
+    hasArrayData,
+  );
 }
 
 async function readComparison(query: URLSearchParams) {
@@ -204,7 +290,11 @@ async function readComparison(query: URLSearchParams) {
   if (qualifications) params.set('qualifications', qualifications);
   const suffix = params.size ? `?${params.toString()}` : '';
   const response = await fetchUpstream(`${apiBaseUrl}/api/v1/compare${suffix}`);
-  return response.json();
+  return readJson<{ data: PublicQualificationComparison }>(
+    response,
+    'compare',
+    isComparisonEnvelope,
+  );
 }
 
 async function readUpdates(query: URLSearchParams, page: number) {
@@ -216,7 +306,10 @@ async function readUpdates(query: URLSearchParams, page: number) {
   const response = await fetchUpstream(
     `${apiBaseUrl}/api/v1/updates?${params}`,
   );
-  return response.json();
+  return readJson<{
+    data: PublicUpdateEvent[];
+    pagination?: { hasMore?: boolean };
+  }>(response, 'updates', hasArrayData);
 }
 
 function parseUpdatesPage(value: string | null): number {
@@ -281,6 +374,27 @@ const STATIC_IMAGES: Record<string, string> = {
   'og-brand.png': 'image/png',
   'twelve-tools-badge0-white.svg': 'image/svg+xml',
 };
+
+/**
+ * The response is already underway, so no status can be written any more:
+ * writing one throws `ERR_HTTP_HEADERS_SENT`, that rejection is unhandled, and
+ * Node exits the process. End the response and let the (truncated) body stand;
+ * the alternative is a container restart loop.
+ *
+ * Exported so a test can drive it directly: reaching it through HTTP needs an
+ * upstream body that passes every shape check and *still* breaks a renderer,
+ * which is a moving target as the checks tighten.
+ */
+export function closeAfterResponseStarted(
+  req: { method?: string; url?: string },
+  res: ServerResponse,
+  error: unknown,
+): void {
+  console.error(
+    `web: ${req.method} ${req.url} failed after the response started: ${(error as Error).message}`,
+  );
+  if (!res.writableEnded) res.end();
+}
 
 export async function handleRequest(
   req: IncomingMessage,
@@ -576,6 +690,16 @@ export async function handleRequest(
     res.writeHead(404, { 'content-type': 'text/html; charset=utf-8' });
     return res.end(renderNotFoundPage());
   } catch (error) {
+    // The response may already be underway: every route writes its status
+    // *before* rendering, so a render that throws (an upstream 200 whose body
+    // is not a renderable view) lands here with the headers already sent.
+    // Writing a second status throws ERR_HTTP_HEADERS_SENT, that rejection is
+    // unhandled, and Node exits the process -- one malformed upstream response
+    // would turn into a container restart loop. Close the response instead.
+    if (res.headersSent) {
+      closeAfterResponseStarted(req, res, error);
+      return;
+    }
     // An unusable upstream is a temporary outage, not "this qualification has
     // no official data": answer 503 so crawlers and clients retry instead of
     // indexing a page that understates what the source actually publishes.
