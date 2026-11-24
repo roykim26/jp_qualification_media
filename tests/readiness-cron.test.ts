@@ -399,3 +399,134 @@ describe('readiness cron notification wiring', () => {
     expect(state).toBe('error\n1\n');
   });
 });
+
+/**
+ * Sprint 3L: the probe could only see db and api. These cases pin the wiring
+ * that lets an operator extend it to web and caddy, and — just as important —
+ * pin that leaving it unset changes nothing.
+ */
+describe('readiness cron public entry passthrough', () => {
+  let dockerArgs: string;
+
+  function writeRecordingDocker(report: string, exitCode: number): void {
+    // Record argv verbatim, then answer like the probe would. `"$@"` inside the
+    // single-quoted printf format is expanded by the fake script at run time.
+    writeFakeDocker(
+      `printf '%s\\n' "$*" >> "$DOCKER_ARGS"\nprintf '%s\\n' ${quote(report)}\nexit ${exitCode}`,
+    );
+    dockerArgs = join(workDir, 'docker-args.log');
+  }
+
+  function args(): string {
+    return existsSync(dockerArgs)
+      ? readFileSync(dockerArgs, 'utf8').trim()
+      : '';
+  }
+
+  it('passes nothing extra when PUBLIC_READY_URL is unset', () => {
+    // The default has to be byte-for-byte the pre-3L invocation: an operator
+    // who never sets the variable must see no change at all.
+    writeRecordingDocker(readyJson(), 0);
+
+    const { status } = runScript({ DOCKER_ARGS: toPosixPath(dockerArgs) });
+
+    expect(status).toBe(0);
+    expect(args()).toContain('exec -T api node scripts/check-readiness.mjs');
+    expect(args()).not.toContain('PUBLIC_READY_URL');
+    expect(args()).not.toContain('-e ');
+  });
+
+  it('forwards the URL to the probe as an environment variable', () => {
+    writeRecordingDocker(readyJson(), 0);
+
+    runScript({
+      DOCKER_ARGS: toPosixPath(dockerArgs),
+      PUBLIC_READY_URL: 'https://shikakucheck.com/',
+    });
+
+    const recorded = args();
+    expect(recorded).toContain('-e PUBLIC_READY_URL=https://shikakucheck.com/');
+    // The URL travels as an env var, not as an argument: `ps` on a shared host
+    // shows argv to every local user, and the public hostname is not a secret
+    // worth broadcasting that way.
+    expect(recorded).not.toContain('--public-url');
+  });
+
+  it('keeps -T and the timeout when the URL is set', () => {
+    writeRecordingDocker(readyJson(), 0);
+
+    runScript({
+      DOCKER_ARGS: toPosixPath(dockerArgs),
+      PUBLIC_READY_URL: 'https://shikakucheck.com/',
+      READINESS_TIMEOUT_MS: '7000',
+    });
+
+    const recorded = args();
+    // `-T` matters: cron has no TTY, and without it compose allocates one and
+    // the probe hangs until the wrapper is killed.
+    expect(recorded).toContain('exec -T');
+    expect(recorded).toContain('--timeout=7000');
+    expect(recorded).toContain('--json');
+  });
+
+  it('reports a public-entry failure through the same syslog path', () => {
+    // The probe folds a bad public entry into its own status, so the wrapper
+    // needs no special case — but the message must survive into syslog intact.
+    writeRecordingDocker(
+      JSON.stringify({
+        status: 'unexpected',
+        reason: 'public-entry',
+        message: 'public entry https://shikakucheck.com/ returned 502',
+        dataPlane: { status: 'ready', database: 'ok', message: null },
+        public: { state: 'server-error', httpStatus: 502 },
+        durationMs: 40,
+      }),
+      1,
+    );
+
+    const { status, logs, state } = runScript({
+      DOCKER_ARGS: toPosixPath(dockerArgs),
+      PUBLIC_READY_URL: 'https://shikakucheck.com/',
+    });
+
+    expect(status).toBe(0);
+    expect(logs).toHaveLength(1);
+    expect(logs[0]).toContain('daemon.err');
+    expect(logs[0]).toContain('status=unexpected');
+    expect(logs[0]).toContain(
+      'public entry https://shikakucheck.com/ returned 502',
+    );
+    expect(state).toBe('unexpected\n1\n');
+  });
+
+  it('treats the public entry going down as a transition, not a new state word', () => {
+    // `unexpected` is an existing word in this state machine. If Sprint 3L had
+    // introduced `web-down`, the machine would still have worked by accident
+    // (anything not "ready" is failing) — which is exactly the kind of luck
+    // that breaks silently later.
+    seedState('ready', 0);
+    writeRecordingDocker(
+      JSON.stringify({
+        status: 'unreachable',
+        reason: 'tls',
+        message:
+          'public entry https://shikakucheck.com/ certificate has expired',
+        dataPlane: { status: 'ready', database: 'ok', message: null },
+        durationMs: 40,
+      }),
+      1,
+    );
+
+    const { status, logs, notifications, state } = runScript({
+      DOCKER_ARGS: toPosixPath(dockerArgs),
+      PUBLIC_READY_URL: 'https://shikakucheck.com/',
+    });
+
+    expect(status).toBe(0);
+    expect(logs).toHaveLength(1);
+    expect(logs[0]).toContain('daemon.err');
+    expect(logs[0]).toContain('reason=tls');
+    expect(notifications).toHaveLength(1);
+    expect(state).toBe('unreachable\n1\n');
+  });
+});

@@ -13,10 +13,17 @@
 // database blip take the whole site offline. `/ready` also reveals internal
 // state, so it stays on the private network.
 //
+// The probe covers only the data plane: it asks the API whether it can reach the
+// database. It cannot see web or caddy, so a web container stuck in a restart
+// loop still reports "ready". `--public-url` closes that gap by also requesting
+// the public entry and requiring a complete HTML document back. It is optional
+// and off by default: without it this script behaves exactly as it did before.
+//
 // Usage (from the repository root):
 //   node scripts/check-readiness.mjs
 //   node scripts/check-readiness.mjs --url=http://api:4100/ready
 //   node scripts/check-readiness.mjs --timeout=3000 --json
+//   node scripts/check-readiness.mjs --public-url=https://shikakucheck.com/
 //
 // Exit code: 0 when ready, 1 for everything else. The JSON `status` carries the
 // reason; the exit code only carries "is it usable", because that is the single
@@ -72,10 +79,25 @@ export function resolveReadyUrl(env = process.env, overrideUrl) {
   return `${parsed.origin}${path}/ready`;
 }
 
-/** Parse `--url`, `--timeout`, `--json`. Unknown options and bad numbers throw. */
+/**
+ * Which public URL to check, or `undefined` when the check is off.
+ *
+ * There is deliberately no default: the public check needs an origin only the
+ * operator knows, and a wrong guess would alert on somebody else's site. Off by
+ * default also means `node scripts/check-readiness.mjs` keeps its old meaning.
+ */
+export function resolvePublicUrl(env = process.env, overrideUrl) {
+  const explicit = overrideUrl?.trim() || env.PUBLIC_READY_URL?.trim();
+  if (!explicit) return undefined;
+  parseHttpUrl(explicit, 'PUBLIC_READY_URL');
+  return explicit;
+}
+
+/** Parse `--url`, `--public-url`, `--timeout`, `--json`. Bad input throws. */
 export function parseProbeArgs(argv = []) {
   const options = {
     url: undefined,
+    publicUrl: undefined,
     timeoutMs: DEFAULT_TIMEOUT_MS,
     json: false,
   };
@@ -84,6 +106,10 @@ export function parseProbeArgs(argv = []) {
       const value = arg.slice('--url='.length).trim();
       if (!value) throw new Error('--url requires a value');
       options.url = value;
+    } else if (arg.startsWith('--public-url=')) {
+      const value = arg.slice('--public-url='.length).trim();
+      if (!value) throw new Error('--public-url requires a value');
+      options.publicUrl = value;
     } else if (arg.startsWith('--timeout=')) {
       const raw = arg.slice('--timeout='.length).trim();
       const value = Number(raw);
@@ -200,6 +226,15 @@ export function formatReport(report) {
   if (report.reason) parts.push(`reason=${report.reason}`);
   if (report.message) parts.push(`message=${report.message}`);
   parts.push(`${report.durationMs}ms`);
+  if (report.public) {
+    const detail = [`public=${report.public.state}`];
+    if (report.public.httpStatus != null) {
+      detail.push(`HTTP ${report.public.httpStatus}`);
+    }
+    if (report.public.reason) detail.push(`reason=${report.public.reason}`);
+    if (report.public.message) detail.push(`message=${report.public.message}`);
+    parts.push(detail.join(' '));
+  }
   return parts.join(' | ');
 }
 
@@ -251,15 +286,172 @@ export async function probeReadiness({ url, timeoutMs = DEFAULT_TIMEOUT_MS }) {
   }
 }
 
+/**
+ * Classify the public entry check.
+ *
+ * This is a *separate* vocabulary from `classifyReadiness` on purpose. The API's
+ * five states describe the data plane; the public entry only needs to answer
+ * "did a real page come back". Merging them would make `readiness-cron.sh`'s
+ * state machine report a data-plane word for a web/caddy failure.
+ *
+ * A 200 alone is not enough. caddy serves a directory of static files and a
+ * reverse proxy; a misrouted request, an empty body or a truncated response all
+ * produce 200s that no user can read. So the body must look like a finished
+ * document: it must close its `</html>` tag. That is the cheapest signal that
+ * separates "the whole chain rendered a page" from "something answered".
+ */
+export function classifyPublicEntry(httpStatus, rawBody) {
+  const body = typeof rawBody === 'string' ? rawBody : '';
+  if (httpStatus >= 200 && httpStatus < 300) {
+    if (!/<html[\s>]/i.test(body)) {
+      return {
+        state: 'not-html',
+        httpStatus,
+        message: '2xx response without an <html> element',
+        rawBody: truncate(body),
+      };
+    }
+    if (!/<\/html\s*>/i.test(body)) {
+      return {
+        state: 'truncated',
+        httpStatus,
+        message: '2xx response with an <html> element that never closed',
+        rawBody: truncate(body),
+      };
+    }
+    return { state: 'ok', httpStatus, message: null };
+  }
+  if (httpStatus >= 300 && httpStatus < 400) {
+    // A redirect here means the operator pointed at the wrong origin (the www
+    // host 301s to the apex) or a proxy rule changed. Following it silently
+    // would hide exactly the misconfiguration we are trying to catch.
+    return {
+      state: 'redirect',
+      httpStatus,
+      message: `public entry redirected with HTTP ${httpStatus}`,
+      rawBody: truncate(body),
+    };
+  }
+  if (httpStatus >= 500) {
+    return {
+      state: 'server-error',
+      httpStatus,
+      message: `public entry answered HTTP ${httpStatus}`,
+      rawBody: truncate(body),
+    };
+  }
+  return {
+    state: 'client-error',
+    httpStatus,
+    message: `public entry answered HTTP ${httpStatus}`,
+    rawBody: truncate(body),
+  };
+}
+
+/**
+ * Check the public entry once.
+ *
+ * `redirect: 'manual'` is deliberate: a redirect is a finding, not a detour.
+ *
+ * Failure reasons are split because they route to different people:
+ *   connect -> DNS or the host is down
+ *   tls     -> certificate expired, wrong hostname, or the chain broke
+ *   timeout -> the process is up but not answering (web hung, caddy waiting)
+ */
+export async function probePublicEntry({
+  url,
+  timeoutMs = DEFAULT_TIMEOUT_MS,
+}) {
+  const startedAt = performance.now();
+  try {
+    const response = await fetch(url, {
+      redirect: 'manual',
+      signal: AbortSignal.timeout(timeoutMs),
+      headers: { accept: 'text/html,application/xhtml+xml' },
+    });
+    const rawBody = await response.text();
+    const classification = classifyPublicEntry(response.status, rawBody);
+    return {
+      ...classification,
+      url,
+      durationMs: Math.round(performance.now() - startedAt),
+    };
+  } catch (error) {
+    const name = error instanceof Error ? error.name : '';
+    const code =
+      error && typeof error === 'object' && 'cause' in error
+        ? (error.cause?.code ?? null)
+        : null;
+    const timedOut = name === 'TimeoutError' || name === 'AbortError';
+    const tls =
+      typeof code === 'string' &&
+      (code.startsWith('CERT_') ||
+        code.startsWith('ERR_TLS') ||
+        code === 'UNABLE_TO_VERIFY_LEAF_SIGNATURE' ||
+        code === 'DEPTH_ZERO_SELF_SIGNED_CERT' ||
+        code === 'ERR_TLS_CERT_ALTNAME_INVALID');
+    return {
+      state: 'unreachable',
+      reason: timedOut ? 'timeout' : tls ? 'tls' : 'connect',
+      url,
+      httpStatus: null,
+      code,
+      message: timedOut
+        ? `no answer within ${timeoutMs}ms`
+        : error instanceof Error
+          ? error.message
+          : String(error),
+      durationMs: Math.round(performance.now() - startedAt),
+    };
+  }
+}
+
 function usage() {
   return [
-    'usage: node scripts/check-readiness.mjs [--url=URL] [--timeout=MS] [--json]',
+    'usage: node scripts/check-readiness.mjs [--url=URL] [--public-url=URL] [--timeout=MS] [--json]',
     '',
-    '  --url      probe this URL (default: $READY_URL, else $API_BASE_URL/ready,',
-    `             else ${DEFAULT_API_BASE_URL}/ready)`,
-    `  --timeout  deadline in milliseconds (default ${DEFAULT_TIMEOUT_MS})`,
-    '  --json     print the machine-readable report',
+    '  --url         probe this readiness URL (default: $READY_URL, else',
+    '                $API_BASE_URL/ready, else ' +
+      DEFAULT_API_BASE_URL +
+      '/ready)',
+    '  --public-url  also require this public URL to return a complete page',
+    '                (default: $PUBLIC_READY_URL; off when neither is set)',
+    `  --timeout     deadline in milliseconds (default ${DEFAULT_TIMEOUT_MS})`,
+    '  --json        print the machine-readable report',
   ].join('\n');
+}
+
+/**
+ * Fold the public entry result into the data-plane report.
+ *
+ * The vocabulary is the existing one on purpose. `readiness-cron.sh` reads
+ * `"status"` out of this JSON and feeds it to a state machine that only knows
+ * "ready" versus "not ready"; inventing `web-down` here would make that machine
+ * treat a broken site as healthy. So a public failure is reported with the two
+ * words that already mean "we could not get an answer" (`unreachable`) and "we
+ * got an answer we cannot use" (`unexpected`).
+ *
+ * The data-plane verdict is preserved under `dataPlane` when it is overridden,
+ * because "the API is fine but nobody can reach the site" is the single most
+ * useful thing an operator can learn from this report.
+ */
+export function mergePublicEntry(dataPlane, publicEntry) {
+  if (!publicEntry || publicEntry.state === 'ok') {
+    return publicEntry ? { ...dataPlane, public: publicEntry } : dataPlane;
+  }
+  const unreachable = publicEntry.state === 'unreachable';
+  return {
+    ...dataPlane,
+    status: unreachable ? 'unreachable' : 'unexpected',
+    reason: unreachable ? publicEntry.reason : 'public-entry',
+    message: `public entry ${publicEntry.url} ${publicEntry.message ?? publicEntry.state}`,
+    dataPlane: {
+      status: dataPlane.status,
+      database: dataPlane.database ?? null,
+      message: dataPlane.message ?? null,
+    },
+    public: publicEntry,
+  };
 }
 
 async function main() {
@@ -269,7 +461,8 @@ async function main() {
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error));
     console.error(usage());
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
 
   let url;
@@ -277,7 +470,8 @@ async function main() {
     url = resolveReadyUrl(process.env, options.url);
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error));
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
 
   const report = await probeReadiness({
@@ -285,12 +479,40 @@ async function main() {
     timeoutMs: options.timeoutMs,
   });
 
-  if (options.json) {
-    console.log(JSON.stringify(report, null, 2));
-  } else {
-    console.log(formatReport(report));
+  let publicUrl;
+  try {
+    publicUrl = resolvePublicUrl(process.env, options.publicUrl);
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = 1;
+    return;
   }
-  process.exit(report.status === 'ready' ? 0 : 1);
+
+  const finalReport = publicUrl
+    ? mergePublicEntry(
+        report,
+        await probePublicEntry({
+          url: publicUrl,
+          timeoutMs: options.timeoutMs,
+        }),
+      )
+    : report;
+
+  if (options.json) {
+    console.log(JSON.stringify(finalReport, null, 2));
+  } else {
+    console.log(formatReport(finalReport));
+  }
+  // Set the code and let the process end on its own.
+  //
+  // `process.exit()` here aborts on Windows whenever two or more `fetch` calls
+  // have completed: libuv trips `Assertion failed: !(handle->flags &
+  // UV_HANDLE_CLOSING), file src\win\async.c, line 76` and the process dies
+  // with 0xC0000409 instead of the code we asked for. That was invisible while
+  // the probe made a single request; the public-entry check makes it two. The
+  // exit code is what the cron wrapper reads, so a crash here would look like a
+  // probe that never ran.
+  process.exitCode = finalReport.status === 'ready' ? 0 : 1;
 }
 
 // Only run the CLI when executed directly (not when imported by tests).

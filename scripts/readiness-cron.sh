@@ -18,6 +18,13 @@
 # healthcheck: readiness there would let a brief database blip take the whole
 # site offline (db -> api(/health) -> web -> caddy). See docs/runbook.md.
 #
+# Sprint 3L: the probe only ever asked the api container about its own `/ready`,
+# so it covered db and api but not web or caddy. A web container stuck in a
+# restart loop, an expired certificate or a wrong SITE_ORIGIN all left this
+# script reporting "ready" and staying silent. Set PUBLIC_READY_URL to have the
+# probe also fetch a page through the public entry; leave it empty and nothing
+# changes. See "公网入口检查" in docs/runbook.md for what to point it at.
+#
 # Always exits 0. cron's exit status only feeds an MTA, and the notification
 # channel here is syslog; a non-zero exit would just produce mail nobody reads.
 #
@@ -26,6 +33,8 @@
 #                          (default: var/readiness/last-status)
 #   HEARTBEAT_EVERY        checks between heartbeats while failing (default 12)
 #   READINESS_TIMEOUT_MS   passed through to the probe (default 5000)
+#   PUBLIC_READY_URL       also require this URL to serve a complete page
+#                          (default: unset = data plane only)
 #   COMPOSE_FILE           compose file used for `docker compose exec`
 #   COMPOSE_PROJECT        project name, if the file's directory does not imply it
 #   READINESS_TAG          syslog tag (default jpqm-readiness)
@@ -38,6 +47,7 @@ TAG="${READINESS_TAG:-jpqm-readiness}"
 STATE_FILE="${READINESS_STATE_FILE:-var/readiness/last-status}"
 HEARTBEAT_EVERY="${HEARTBEAT_EVERY:-12}"
 TIMEOUT_MS="${READINESS_TIMEOUT_MS:-5000}"
+PUBLIC_URL="${PUBLIC_READY_URL:-}"
 NOTIFY="${READINESS_NOTIFY:-1}"
 NOTIFY_SCRIPT="${NOTIFY_SCRIPT:-$(dirname "$0")/notify-feishu.sh}"
 
@@ -67,19 +77,70 @@ if [ -f "$STATE_FILE" ]; then
 fi
 
 # Ask the container. `-T` is required: cron has no TTY.
+#
+# The public URL goes in as an environment variable rather than a flag because
+# the value comes from the deployment's own env file; passing it as an argument
+# would put the hostname in `ps` output on a shared box for no benefit.
+probe_args="--timeout=$TIMEOUT_MS --json"
+if [ -n "$PUBLIC_URL" ]; then
+  probe_env="PUBLIC_READY_URL=$PUBLIC_URL"
+else
+  probe_env=""
+fi
+
 # shellcheck disable=SC2086
 probe_output=$(
-  docker compose $COMPOSE_ARGS exec -T api \
-    node scripts/check-readiness.mjs --timeout="$TIMEOUT_MS" --json 2>&1
+  if [ -n "$probe_env" ]; then
+    docker compose $COMPOSE_ARGS exec -T -e "$probe_env" api \
+      node scripts/check-readiness.mjs $probe_args 2>&1
+  else
+    docker compose $COMPOSE_ARGS exec -T api \
+      node scripts/check-readiness.mjs $probe_args 2>&1
+  fi
 ) && probe_ran=1 || probe_ran=0
 
 # The probe exits 1 for every non-ready state, so a non-zero status alone does
 # not mean it failed to run. Distinguish "probe ran and reported a problem"
 # from "we could not even start it" by whether we got parseable JSON back.
-status=$(printf '%s\n' "$probe_output" | sed -n 's/.*"status": *"\([a-z]*\)".*/\1/p' | head -n 1)
+#
+# Read the FIRST occurrence of each key, not "whatever a greedy pattern lands
+# on". Since Sprint 3L the report carries a nested `dataPlane.status` that can
+# say `ready` while the top-level verdict says `unexpected` — a greedy match
+# takes the last one on the line, which would report the public entry as
+# healthy precisely when it is not. `grep -o` yields occurrences in document
+# order, so the top-level key wins whether the probe pretty-prints (it does)
+# or ever emits compact JSON.
+status=$(
+  printf '%s\n' "$probe_output" |
+    grep -o '"status": *"[a-z_]*"' |
+    head -n 1 |
+    sed 's/.*"\([a-z_]*\)"$/\1/'
+)
 # `[^"]*` rather than `.*`: POSIX sed has no lazy quantifier, and a greedy
 # capture would swallow the rest of the JSON into the syslog line.
-message=$(printf '%s\n' "$probe_output" | sed -n 's/.*"message": *"\([^"]*\)".*/\1/p' | head -n 1)
+message=$(
+  printf '%s\n' "$probe_output" |
+    grep -o '"message": *"[^"]*"' |
+    head -n 1 |
+    sed 's/^"message": *"//; s/"$//'
+)
+# `reason` and `code` are what make a public-entry failure actionable. A failed
+# fetch reports `message=fetch failed` no matter why it failed; the difference
+# between an expired certificate, a DNS mistake and a hung web container lives
+# only in these two fields. They are absent on data-plane reports, so the extra
+# detail disappears on its own when the public check is off.
+reason=$(
+  printf '%s\n' "$probe_output" |
+    grep -o '"reason": *"[a-z_]*"' |
+    head -n 1 |
+    sed 's/.*"\([a-z_]*\)"$/\1/'
+)
+code=$(
+  printf '%s\n' "$probe_output" |
+    grep -o '"code": *"[^"]*"' |
+    head -n 1 |
+    sed 's/^"code": *"//; s/"$//'
+)
 
 if [ -z "$status" ]; then
   # No verdict at all: the container is down, compose failed, or node is
@@ -109,6 +170,12 @@ emit() {
 detail="status=$status"
 if [ -n "$message" ]; then
   detail="$detail message=$message"
+fi
+if [ -n "$reason" ]; then
+  detail="$detail reason=$reason"
+fi
+if [ -n "$code" ]; then
+  detail="$detail code=$code"
 fi
 
 if [ "$status" = "$prev_status" ]; then

@@ -447,7 +447,49 @@ journalctl -t jpqm-readiness -p err        # 只看故障开始
 journalctl -t jpqm-readiness -p warning    # 只看心跳
 ```
 
-环境变量可覆盖默认值（写进 crontab 行首即可）：`HEARTBEAT_EVERY`（默认 12 次 = 1 小时）、`READINESS_TIMEOUT_MS`（默认 5000）、`READINESS_STATE_FILE`、`COMPOSE_FILE`、`COMPOSE_PROJECT`、`READINESS_TAG`。
+环境变量可覆盖默认值（写进 crontab 行首即可）：`HEARTBEAT_EVERY`（默认 12 次 = 1 小时）、`READINESS_TIMEOUT_MS`（默认 5000）、`READINESS_STATE_FILE`、`COMPOSE_FILE`、`COMPOSE_PROJECT`、`READINESS_TAG`、`PUBLIC_READY_URL`（见下）。
+
+### 公网入口检查（web 与 caddy）
+
+**默认不查公网。** 上面的探针是在 api 容器里问 api 自己的 `/ready`，所以它只覆盖 `db` 与 `api` 两环：
+
+| 坏在哪                    | 探针说什么        | 用户看到什么                  |
+| ------------------------- | ----------------- | ----------------------------- |
+| db 连不上                 | `error`           | 503                           |
+| api 挂了                  | `unreachable`     | 502                           |
+| **web 起不来 / 重启循环** | **`ready`，沉默** | **502/503**                   |
+| **caddy 挂了或证书过期**  | **`ready`，沉默** | **连不上 / 证书警告**         |
+| **`SITE_ORIGIN` 配错**    | **`ready`，沉默** | **页面能开但 canonical 全错** |
+
+后三行就是 3C 修过的同一类问题——用户拿到错误页，运维那边一切「健康」——只是换了一层。compose 的 healthcheck 补不上这个缺口：它只看进程活没活（web 挂了会被 `restart: unless-stopped` 拉起，但拉起前那段时间没人知道），caddy **根本没有 healthcheck**，而证书过期和配置错误都不影响进程存活。
+
+要补上，就让探针顺带抓一次公网首页：
+
+```bash
+# 手动验一次（宿主机）
+node scripts/check-readiness.mjs \
+  --public-url=https://shikakucheck.com/ --json
+
+# 让定时探针也带上（写进 crontab 行首）
+PUBLIC_READY_URL=https://shikakucheck.com/
+```
+
+判据是「2xx **且** 返回一个完整的 HTML 文档」（有 `<html`，也有 `</html>`）。抓到的不是 HTML（比如网关的 JSON 错误体）算 `not-html`，HTML 被截断算 `truncated`——两者都说明中间某一环在返回半成品，而这正是用户会遇到的。
+
+失败时报告里的 `status` 仍是既有词汇，不新增状态词（否则 `readiness-cron.sh` 的状态机会把整站故障当成健康）：
+
+| `status`      | `reason`       | 通常是                                             |
+| ------------- | -------------- | -------------------------------------------------- |
+| `unreachable` | `connect`      | DNS 或主机不可达                                   |
+| `unreachable` | `tls`          | 证书过期、域名不符、链不完整（`code` 带 `CERT_*`） |
+| `unreachable` | `timeout`      | 进程活着但不应答：web 卡死、caddy 等上游           |
+| `unexpected`  | `public-entry` | 拿到了应答但不可用：5xx、3xx、非 HTML、截断        |
+
+同时报告会把数据面原判据留在 `dataPlane` 里——「API 好好的但外面进不来」是这份报告最有价值的一条信息，别被顶层 `status` 盖掉。
+
+`reason` 与 `code` 会一起进 syslog（`status=unreachable reason=tls code=CERT_HAS_EXPIRED ...`），因为 `message` 对连接失败一律是 `fetch failed`，区分不了「证书过期」和「DNS 写错」——这两件事该找的人不一样。
+
+**仍然不暴露 `/ready`。** 这里查的是公网首页（本来就公开），不是内部端点；把 `/ready` 放到 Caddy 后面才会泄露「数据库连不上」这类内部状态。上一节末尾那条警告继续有效。
 
 ### 卸载
 
