@@ -86,11 +86,13 @@ a319d46 → 9a42cb4 → 4796f8b → 013e680 → 864535e → f09e438 → 9bc946f 
 ### 2.5 基线链（含本轮）
 
 ```text
-a319d46 → 9a42cb4 → 4796f8b → 013e680 → 864535e → f09e438 → 9bc946f → 9fc9c72 → f99e475
-  基线      S1+S2       S3A代码     S3A文档     S3B代码     S3B文档     S3C代码     S3C文档     S3D
+a319d46 → 9a42cb4 → 4796f8b → 013e680 → 864535e → f09e438 → 9bc946f → 9fc9c72 → f99e475 → 3142605 → 2afa33d
+  基线      S1+S2       S3A代码     S3A文档     S3B代码     S3B文档     S3C代码     S3C文档     S3D代码     S3D文档     3A文档格式
 ```
 
 报告内引用自身 commit hash 存在天然的循环依赖（写 hash → 改报告 → hash 变）。沿用 3A/3B/3C 的做法：代码与报告同一个 commit 入库，随后用 `docs: 落账 Sprint 3D 执行报告` 一个 commit 把 hash 与基线链改成最终值，不反复 `--amend`。
+
+`2afa33d` 是本轮顺带闭合的既有欠账：`DEEPSEEK_HARNESS_SPRINT_3A_TASK.md` 自 `013e680` 入库起就没格式化，让 `format:check` 连续四轮 EXIT 1。单独 commit 处理，不混进代码 commit。
 
 ### 2.6 工作树
 
@@ -262,7 +264,9 @@ EXIT 0
 
 本轮自己写的所有文件（`scripts/check-readiness.mjs`、`.d.mts`、`tests/check-readiness.test.ts`、`docs/runbook.md`、`docs/api-contract.md`、`package.json`、两份 3D 文档）均已 `prettier --write` 通过。
 
-**没有擅自格式化 Owner 的输入件**——那会让历史文档的 diff 混进本轮 commit，破坏归因。列为待授权项（§9 第 1 条）。
+**没有擅自格式化 Owner 的输入件**——那会让历史文档的 diff 混进本轮 commit，破坏归因。改为单独一个 commit 处理（见下）。
+
+**后续（`2afa33d`）**：该文件已由独立 commit `docs: format the sprint 3A task document` 格式化，`format:check` 自此**全绿 EXIT 0**。diff 只有两处——标题后补一个空行、代码块里补一个分号（后者反而让引文与 `public-facts.ts` 的真实源码 `if (!databaseUrl) return [];` 一致），措辞一字未改。
 
 ### 7.2 `smoke:docker` 执行观察
 
@@ -296,7 +300,7 @@ EXIT 0
 
 ## §9 未处理问题
 
-1. **`format:check` 仍 EXIT 1**（`DEEPSEEK_HARNESS_SPRINT_3A_TASK.md`）。修它要改 Owner 下发的历史输入件，需授权。修法一行：`prettier --write` 该文件。
+1. ~~**`format:check` 仍 EXIT 1**（`DEEPSEEK_HARNESS_SPRINT_3A_TASK.md`）~~ —— **已闭合**（commit `2afa33d`）。`format:check` 现为 EXIT 0「All matched files use Prettier code style!」，是自 3A 入库（`013e680`）以来的第一次全绿。
 2. **探针尚未接定时调度**。本轮只交付「可调用的探针」，没装 cron / systemd timer / CI 定时任务——runbook 的既定口径是「不装定时任务、不装通知，全手动」。要自动化需 Owner 决定调度位置（VPS cron？外部监控？）。
 3. **探针未接告警**。exit 1 之后谁收到通知，本轮没有答案。这与第 2 条是同一个决策。
 4. **`/ready` 未在 Caddy 暴露**（有意）。如果将来要从公网监控，需要单独评估——它泄露内部状态。
@@ -322,9 +326,9 @@ EXIT 0
 
 **P1 — 决定探针的调度与告警归属。** 本轮交付了「能调用的探针」，但没人调用它仍然是同一个洞。三个选项：(a) VPS cron 每 5 分钟跑一次，失败写 syslog；(b) 接入外部监控（UptimeRobot 等）直接打 `/ready`——但这要把端点暴露出去，与当前设计冲突；(c) 只在发布流程里手工跑。**推荐 (a)**：不暴露端点、不需要新依赖、失败日志与现有 runbook 的排查路径一致。需 Owner 拍板。
 
-**P2 — 修 `format:check` 的 3A 文档格式**，让门禁回到全绿。一行命令，但改的是历史输入件，需授权。
+**P2 — G-15 测试缺口**：`apps/web/src/server.ts` 的 19 条路由无进程级测试。这是三轮报告反复出现的遗留项，也是当前测试覆盖最薄的地方。
 
-**P3 — G-15 测试缺口**：`apps/web/src/server.ts` 的 19 条路由无进程级测试。这是三轮报告反复出现的遗留项，也是当前测试覆盖最薄的地方。
+**P3 — 探针接告警**：与 P1 是同一个决策的下半段（谁来收 exit 1）。
 
 ---
 
@@ -344,7 +348,7 @@ EXIT 0
 | 10  | 未改 `deploy/**`         | ✅                                                           |
 | 11  | 未接 compose healthcheck | ✅ 且文档写明理由                                            |
 | 12  | 无新增依赖               | ✅                                                           |
-| 13  | 全量测试绿               | ✅ 9 项（`format:check` 见 §7.1）                            |
+| 13  | 全量测试绿               | ✅ 9 项全部 EXIT 0（含 `format:check`，由 `2afa33d` 闭合）   |
 | 14  | 工作树干净               | ✅ commit 后 `git status --short` 无输出                     |
 | 15  | 未进入 Sprint 3E / 4     | ✅                                                           |
 
