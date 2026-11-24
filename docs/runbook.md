@@ -6,6 +6,22 @@
 
 `SITE_ORIGIN` 用于 canonical、`robots.txt` 和 `sitemap.xml` 的绝对 URL；本地可使用 `http://127.0.0.1:3000`。已确认的生产值为 `https://shikakucheck.com`；应只在部署平台的生产环境变量中设置，不能提交真实生产凭据。生产环境缺少该变量时公开站拒绝生成 SEO 文件。
 
+### web 进程的启动门禁（Sprint 3C）
+
+`NODE_ENV=production` 时，web 进程要求 `API_BASE_URL` 与 `SITE_ORIGIN` **都显式设置**，缺任一项直接拒绝启动（退出码非 0，stderr 打印 `API_BASE_URL is required in production` 或 `SITE_ORIGIN is required in production`）。
+
+之所以在启动期硬失败，而不是运行期降级：web 原先对 `API_BASE_URL` 的缺省值是 `http://127.0.0.1:4100`。在容器里这个地址指向**自己**，于是所有数据页都连不上 API 而返回 503，而 `/` 因为走 `Promise.allSettled` 降级仍然返回 200 —— 而 compose 的 web healthcheck 恰好探 `/`。结果就是「用户看到整站故障，运维看到服务健康」。启动期失败把这种状态提前到部署时刻。
+
+容器内自检：
+
+```bash
+docker compose -f deploy/docker-compose.prod.yml exec -T web node -e "fetch('http://127.0.0.1:3000/robots.txt').then(r=>r.text()).then(t=>console.log(t.split('\n').filter(l=>l.startsWith('Sitemap:')).join('\n')))"
+```
+
+输出应为 `Sitemap: https://shikakucheck.com/sitemap.xml`；若显示的是 `http://127.0.0.1:3000/...`，说明 `SITE_ORIGIN` 没进到容器。
+
+`WEB_HOST` 有意**不在**门禁范围内：它缺失时 web 绑 `127.0.0.1`，Caddy 连不上，web 容器 healthcheck 随即失败，Caddy 因此不启动 —— 这是响亮的失败，不是静默的错误成功。
+
 1. `pnpm install`
 2. `docker compose up -d`（只在需要本地 PostgreSQL/MinIO 时）
 3. `pnpm db:migrate`

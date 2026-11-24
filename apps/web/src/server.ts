@@ -37,12 +37,21 @@ import {
   searchQualifications,
 } from '../../../packages/schema/src/qualifications.js';
 import { sitemapQualificationPaths } from './sitemap.js';
+import { loadWebConfig, parseSiteOrigin, type WebConfig } from './config.js';
 import type { PublicFact } from '../../../packages/schema/src/index.js';
 
 const launchSlugSet = new Set<string>(launchSlugs);
 
-const port = Number(process.env.WEB_PORT ?? 3000);
-const apiBaseUrl = process.env.API_BASE_URL ?? 'http://127.0.0.1:4100';
+/**
+ * Sprint 3C: resolve and validate the web process configuration once, at
+ * module load, so a wrong deployment fails at startup instead of degrading
+ * into "users see 503 while `/` still answers 200 for the healthcheck".
+ * `NODE_ENV=test` and an unset `NODE_ENV` keep today's behaviour.
+ */
+const webConfig: WebConfig = loadWebConfig();
+
+const port = webConfig.port;
+const apiBaseUrl = webConfig.apiBaseUrl;
 const updatesPageSize = 20;
 
 /**
@@ -71,14 +80,7 @@ const updatesPageSize = 20;
  * without sleeping for the production value; it is not a tuning knob for
  * production, which keeps the default.
  */
-const upstreamTimeoutMs = parseUpstreamTimeoutMs();
-
-function parseUpstreamTimeoutMs(): number {
-  const parsed = Number(process.env.UPSTREAM_TIMEOUT_MS);
-  if (!Number.isInteger(parsed) || parsed < 100 || parsed > 60_000)
-    return 5_000;
-  return parsed;
-}
+const upstreamTimeoutMs = webConfig.upstreamTimeoutMs;
 
 /**
  * `AbortSignal.timeout()` rejects with a `TimeoutError` DOMException; an
@@ -91,14 +93,14 @@ function isAbortOrTimeout(error: unknown): boolean {
 }
 
 function siteOrigin(): string {
-  const fallback = `http://127.0.0.1:${port}`;
-  const configured = process.env.SITE_ORIGIN?.trim() || fallback;
-  const origin = new URL(configured);
-  if (!['http:', 'https:'].includes(origin.protocol))
-    throw new Error('SITE_ORIGIN must use http or https');
-  if (process.env.NODE_ENV === 'production' && !process.env.SITE_ORIGIN)
+  // Sprint 3C: shared parser with layout.ts so both paths agree on what a
+  // valid SITE_ORIGIN is.  The production throw is a second line of defence:
+  // loadWebConfig() above already refuses to start without the variable.
+  const origin = parseSiteOrigin(process.env.SITE_ORIGIN);
+  if (origin) return origin;
+  if (process.env.NODE_ENV === 'production')
     throw new Error('SITE_ORIGIN is required in production');
-  return origin.origin;
+  return `http://127.0.0.1:${port}`;
 }
 
 function escapeXml(value: string): string {

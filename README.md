@@ -20,7 +20,7 @@ pnpm build
 
 入口：`pnpm dev:api`（API）、`pnpm dev:web`（公开站，六资格全部页面）、`pnpm dev:admin`（后台骨架）。后台写操作（批准、拒绝、延期、撤销）只接受 `x-reviewer-id` 请求头，`?reviewer=` 查询参数仅用于打开队列页（只读），不提供匿名生产写入。
 
-公开页默认从 `http://127.0.0.1:4100` 读取 API，可用 `API_BASE_URL` 覆盖。公开页入口为 `/`、`/shikaku/`（六资格总览）、`/shikaku/{slug}/` 及各自的 `/application/`、`/exam-content/`、`/pass-rate/`、`/{year}/` 年度页，另有 `/schedule/`、`/compare/`、`/pass-rate/`、`/guide/`、`/updates/`、`/about/*` 等。完整路由清单与索引策略见 [docs/adr/0002-index-policy.md](docs/adr/0002-index-policy.md)。
+公开页默认从 `http://127.0.0.1:4100` 读取 API，可用 `API_BASE_URL` 覆盖。**`NODE_ENV=production` 时 `API_BASE_URL` 与 `SITE_ORIGIN` 必须显式设置，否则 web 进程拒绝启动**（缺 `API_BASE_URL` 会在容器内静默连自己，用户看到 503 而 healthcheck 仍报健康；详见 [docs/runbook.md](docs/runbook.md) 的「web 进程的启动门禁」）。公开页入口为 `/`、`/shikaku/`（六资格总览）、`/shikaku/{slug}/` 及各自的 `/application/`、`/exam-content/`、`/pass-rate/`、`/{year}/` 年度页，另有 `/schedule/`、`/compare/`、`/pass-rate/`、`/guide/`、`/updates/`、`/about/*` 等。完整路由清单与索引策略见 [docs/adr/0002-index-policy.md](docs/adr/0002-index-policy.md)。
 
 实时读取工具仅在完成授权清单后运行，且只保存本地快照，不写数据库：
 

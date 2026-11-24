@@ -1,5 +1,6 @@
 import { escapeHtml, renderIcon } from '../../../packages/ui/src/index.js';
 import { criticalCss, siteCssPath } from './assets.js';
+import { parseSiteOrigin } from './config.js';
 import { unofficialNotice } from './editorial.js';
 import { heroImagePreload } from './hero-image.js';
 
@@ -31,12 +32,13 @@ export type DocumentInput = {
 };
 
 function canonicalHref(path: string): string {
-  const configured = process.env.SITE_ORIGIN?.trim();
-  if (!configured) return path;
+  // Sprint 3C: same validation rules as server.ts (one parser, one notion of
+  // "valid SITE_ORIGIN"), but a render function must never turn a bad
+  // environment variable into a 500 — it degrades to a relative canonical and
+  // the startup gate in server.ts is what actually reports the mistake.
   try {
-    const origin = new URL(configured);
-    if (!['http:', 'https:'].includes(origin.protocol)) return path;
-    return `${origin.origin}${path}`;
+    const origin = parseSiteOrigin(process.env.SITE_ORIGIN);
+    return origin ? `${origin}${path}` : path;
   } catch {
     return path;
   }
