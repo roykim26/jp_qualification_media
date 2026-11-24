@@ -22,7 +22,9 @@ $ git log --oneline -1        # 7a45b0f docs: 落账 Sprint 3F 执行报告
 $ git branch --show-current   # chore/phase1-baseline
 ```
 
-本轮内容 commit：**`<CONTENT_SHA>`**（见 §13 落账说明）。
+本轮内容 commit：**`79cebe2`** `feat(ops): 告警通道诊断与体检（Sprint 3G）`。
+
+报告的落账方式沿用 3A–3F 的两段式：内容 commit 在前，本报告自身的 hash 回填（以及这份回填产生的改动）放在 `docs: 落账 Sprint 3G 执行报告` 收口 commit 里。原因见 3A 报告 §2：报告要写自己的 commit hash，存在天然的循环依赖，只能拆成两个。
 
 ## 3. 修改文件
 
