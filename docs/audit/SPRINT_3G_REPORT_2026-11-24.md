@@ -28,16 +28,16 @@ $ git branch --show-current   # chore/phase1-baseline
 
 ## 3. 修改文件
 
-| 文件 | 改动 | 性质 |
-| --- | --- | --- |
-| `scripts/notify-feishu.sh` | +200 −19 | Task A 主体 |
-| `scripts/ops-daily-lib.mjs` | +145 | Task B 纯函数 |
-| `scripts/ops-daily-report.mjs` | +29 | Task B 接线 |
-| `config/source-ops.json` | +2 | 两个阈值 |
-| `scripts/ops-daily-lib.test.mjs` | +170 | 11 条新用例 |
-| `tests/notify-feishu.test.ts` | +240 −8 | 14 → 28 条用例 |
-| `docs/runbook.md` | +53 | 失败模式表 + 投递记录 |
-| `docs/audit/DEEPSEEK_HARNESS_SPRINT_3G_TASK.md` | 新建 | 任务文档 |
+| 文件                                            | 改动     | 性质                  |
+| ----------------------------------------------- | -------- | --------------------- |
+| `scripts/notify-feishu.sh`                      | +200 −19 | Task A 主体           |
+| `scripts/ops-daily-lib.mjs`                     | +145     | Task B 纯函数         |
+| `scripts/ops-daily-report.mjs`                  | +29      | Task B 接线           |
+| `config/source-ops.json`                        | +2       | 两个阈值              |
+| `scripts/ops-daily-lib.test.mjs`                | +170     | 11 条新用例           |
+| `tests/notify-feishu.test.ts`                   | +240 −8  | 14 → 28 条用例        |
+| `docs/runbook.md`                               | +53      | 失败模式表 + 投递记录 |
+| `docs/audit/DEEPSEEK_HARNESS_SPRINT_3G_TASK.md` | 新建     | 任务文档              |
 
 合计 7 个文件改动、1 个新建，+822 −19。
 
@@ -100,11 +100,11 @@ CR 单独处理而不是拒绝：webhook token 不可能含 `\r`，只有一种�
 
 ### 4.4 值的展示边界
 
-| 允许 | 禁止 |
-| --- | --- |
-| `len=`、`scheme=`、`host=`、`quoted=` | 完整 URL |
-| 绝对路径、文件大小、mtime | token / secret |
-| reason 码与修复提示 | host 之后的任何字符 |
+| 允许                                  | 禁止                |
+| ------------------------------------- | ------------------- |
+| `len=`、`scheme=`、`host=`、`quoted=` | 完整 URL            |
+| 绝对路径、文件大小、mtime             | token / secret      |
+| reason 码与修复提示                   | host 之后的任何字符 |
 
 既有断言 `never prints the webhook or the secret`（stderr 不含 `test-token` / `super-secret-value`）继续通过；新增的 `value-has-space` 用例也断言了同样的边界。
 
@@ -113,7 +113,14 @@ CR 单独处理而不是拒绝：webhook token 不可能含 `\r`，只有一种�
 每次投递结束（成功或失败）向 `var/notifications/feishu.log` 追加一行：
 
 ```json
-{"at":"2026-11-24T16:34:17Z","ok":false,"http":null,"curl":7,"attempts":3,"reason":"unreachable"}
+{
+  "at": "2026-11-24T16:34:17Z",
+  "ok": false,
+  "http": null,
+  "curl": 7,
+  "attempts": 3,
+  "reason": "unreachable"
+}
 ```
 
 两个实现细节：
@@ -125,13 +132,13 @@ CR 单独处理而不是拒绝：webhook token 不可能含 `\r`，只有一种�
 
 ### 5.1 判定表
 
-| 情况 | 级别 | reason |
-| --- | --- | --- |
-| 从未投递过 | info | `not_run` |
-| 最近一次成功且在 14 天内 | info | `healthy` |
-| 最近一次失败，连续失败 < 3 | warning | `recent_failure` |
-| 连续失败 ≥ 3 | **critical** | `consecutive_failures` |
-| 最近一次成功，但已超过 14 天 | warning | `channel_stale` |
+| 情况                         | 级别         | reason                 |
+| ---------------------------- | ------------ | ---------------------- |
+| 从未投递过                   | info         | `not_run`              |
+| 最近一次成功且在 14 天内     | info         | `healthy`              |
+| 最近一次失败，连续失败 < 3   | warning      | `recent_failure`       |
+| 连续失败 ≥ 3                 | **critical** | `consecutive_failures` |
+| 最近一次成功，但已超过 14 天 | warning      | `channel_stale`        |
 
 阈值进 `config/source-ops.json`（`notificationFailureThreshold: 3`、`notificationStaleDays: 14`）。
 
@@ -166,27 +173,27 @@ EXIT=1
 
 ## 6. 安全复核
 
-| 检查 | 结果 |
-| --- | --- |
-| `git diff` 内是否含真实 webhook token / DB 密码 / GA ID | 无 |
-| 新建任务文档内是否含凭据 | 无 |
-| 投递记录内是否含凭据 | 无（专门用例守着） |
-| 诊断输出内是否含凭据 | 无（只到 host 为止） |
-| 测试用的假 token | `test-token` / `super-secret-value`，非真实凭据 |
+| 检查                                                    | 结果                                            |
+| ------------------------------------------------------- | ----------------------------------------------- |
+| `git diff` 内是否含真实 webhook token / DB 密码 / GA ID | 无                                              |
+| 新建任务文档内是否含凭据                                | 无                                              |
+| 投递记录内是否含凭据                                    | 无（专门用例守着）                              |
+| 诊断输出内是否含凭据                                    | 无（只到 host 为止）                            |
+| 测试用的假 token                                        | `test-token` / `super-secret-value`，非真实凭据 |
 
 ## 7. 完整测试结果
 
-| 检查 | 命令 | 结果 | 退出码 |
-| --- | --- | --- | --- |
-| 类型 | `pnpm typecheck` | 无输出 | 0 |
-| 格式 | `pnpm format:check` | All matched files use Prettier code style | 0 |
-| Lint | `pnpm exec eslint . --ignore-pattern "Python/**"` | 无输出 | 0 |
-| 单测 | `pnpm test` | **24 files, 312 tests passed** | 0 |
-| 门禁 | `pnpm test:verify-gate` | 51 tests passed | 0 |
-| 构建 | `pnpm build` | 无输出 | 0 |
-| Python | `pnpm test:python` | 239 passed | 0 |
-| 端到端 | `pnpm verify:all` | 6 资格全过，`errors: []` | 0 |
-| 日检 | `node scripts/ops-daily-report.mjs` | 正常产出，含新章节 | 1（既有 critical 来源，非本轮引入） |
+| 检查   | 命令                                              | 结果                                      | 退出码                              |
+| ------ | ------------------------------------------------- | ----------------------------------------- | ----------------------------------- |
+| 类型   | `pnpm typecheck`                                  | 无输出                                    | 0                                   |
+| 格式   | `pnpm format:check`                               | All matched files use Prettier code style | 0                                   |
+| Lint   | `pnpm exec eslint . --ignore-pattern "Python/**"` | 无输出                                    | 0                                   |
+| 单测   | `pnpm test`                                       | **24 files, 312 tests passed**            | 0                                   |
+| 门禁   | `pnpm test:verify-gate`                           | 51 tests passed                           | 0                                   |
+| 构建   | `pnpm build`                                      | 无输出                                    | 0                                   |
+| Python | `pnpm test:python`                                | 239 passed                                | 0                                   |
+| 端到端 | `pnpm verify:all`                                 | 6 资格全过，`errors: []`                  | 0                                   |
+| 日检   | `node scripts/ops-daily-report.mjs`               | 正常产出，含新章节                        | 1（既有 critical 来源，非本轮引入） |
 
 用例数从 3F 的 298 增至 **312**（+14：`notify-feishu` 14→28 条，`ops-daily-lib` 11→22 条，其中既有 11 条不变）。
 
@@ -201,12 +208,12 @@ EXIT=1
 
 ## 9. 风险
 
-| 风险 | 影响 | 缓解 |
-| --- | --- | --- |
-| `notify-feishu.sh` 变长（242 → 约 420 行） | 维护成本上升 | 每个新函数都有注释说明「为什么存在」；28 条用例覆盖 |
-| 报错文案改变影响外部脚本 grep | 若有外部监控 grep `is not configured`，会失配 | 仓库内无此类消费方（已 grep 确认）；runbook 已更新 |
-| 新增 `var/notifications/feishu.log` 写盘 | 磁盘占用 | 每行约 110 字节，可忽略 |
-| `hasCritical` 语义扩大 | 通道故障会让日检退出码变 1 | 这是**有意**的；日检的退出码本来就表示「今天需要有人看」 |
+| 风险                                       | 影响                                          | 缓解                                                     |
+| ------------------------------------------ | --------------------------------------------- | -------------------------------------------------------- |
+| `notify-feishu.sh` 变长（242 → 约 420 行） | 维护成本上升                                  | 每个新函数都有注释说明「为什么存在」；28 条用例覆盖      |
+| 报错文案改变影响外部脚本 grep              | 若有外部监控 grep `is not configured`，会失配 | 仓库内无此类消费方（已 grep 确认）；runbook 已更新       |
+| 新增 `var/notifications/feishu.log` 写盘   | 磁盘占用                                      | 每行约 110 字节，可忽略                                  |
+| `hasCritical` 语义扩大                     | 通道故障会让日检退出码变 1                    | 这是**有意**的；日检的退出码本来就表示「今天需要有人看」 |
 
 ## 10. 下一步建议
 
