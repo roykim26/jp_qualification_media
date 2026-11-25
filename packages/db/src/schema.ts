@@ -330,6 +330,8 @@ export const changeEvents = pgTable('change_events', {
   previousRevisionId: text('previous_revision_id'),
   newRevisionId: text('new_revision_id').notNull(),
   affectedPages: jsonb('affected_pages').$type<string[]>().notNull(),
+  operatorId: text('operator_id'),
+  reason: text('reason'),
   createdAt: timestamp('created_at', { withTimezone: true })
     .notNull()
     .defaultNow(),
