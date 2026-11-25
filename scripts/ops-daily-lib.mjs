@@ -279,6 +279,22 @@ export function buildDailyReport({
       detail: `告警通道连续失败 ${channel.consecutiveFailures} 次（最近 ${channel.lastAt ?? '未知'}）；修好之前所有告警都发不出去`,
     });
   }
+  // A registry older than the database is not a data problem, it is a problem
+  // with the coverage check itself: every source added since the last patrol is
+  // invisible to the "is everything being watched?" question. It is an action
+  // but not a critical one — the same treatment as a review backlog — so it
+  // never pages; paging daily until someone runs patrol would only teach people
+  // to ignore the channel.
+  if (
+    coverageGap.status === 'ok' &&
+    coverageGap.missingFromRegistry.length > 0
+  ) {
+    todayActions.push({
+      kind: 'patrol_registry_stale',
+      target: 'var/patrol/registry.json',
+      detail: `巡检清单比数据库旧，缺 ${coverageGap.missingFromRegistry.length} 个来源（${coverageGap.missingFromRegistry.join(', ')}）；重跑一次巡检即可补齐`,
+    });
+  }
   for (const item of pendingReview) {
     if (item.pending > 0) {
       todayActions.push({
@@ -375,7 +391,7 @@ export function renderMarkdown(report) {
   lines.push(`- 待审候选 ${summary.pendingReview}`);
   lines.push(`- 低于基线的资格 ${summary.factsBelowBaseline}`);
   lines.push(
-    `- 巡检覆盖缺口 ${summary.coverageGap === null ? '未检查（先跑一次巡检）' : summary.coverageGap}`,
+    `- 巡检覆盖缺口 ${summary.coverageGap === null ? '未检查（先跑一次巡检）' : summary.coverageGap === 0 ? '0' : `${summary.coverageGap}（巡检清单过期，见上）`}`,
   );
   lines.push(`- 告警通道 ${summary.notificationLevel ?? 'info'}`);
   lines.push('');
@@ -450,6 +466,11 @@ export function renderMarkdown(report) {
     lines.push(
       `库有登记但巡检清单缺失：${report.coverageGap.missingFromRegistry.length ? report.coverageGap.missingFromRegistry.join(', ') : '无'}`,
     );
+    if (report.coverageGap.missingFromRegistry.length > 0) {
+      lines.push(
+        '这一行不是数据缺口，是巡检清单比数据库旧：上面这些来源是在上一次巡检之后才入库的，重跑一次巡检即可补齐。',
+      );
+    }
     lines.push(
       `巡检清单有但库未登记：${report.coverageGap.missingFromDatabase.length ? report.coverageGap.missingFromDatabase.join(', ') : '无'}`,
     );

@@ -338,6 +338,103 @@ test('markdown omits the capture-only line when there are none', () => {
   assert.ok(!markdown.includes('capture-only 来源按设计不入库'));
 });
 
+function reportWithCoverageGap(coverageGap, pendingReview = []) {
+  return buildDailyReport({
+    now,
+    config,
+    sourceHealth: [],
+    staleness: {
+      referenceYear: 2026,
+      summary: {
+        approvedFacts: 0,
+        historicalSkipped: 0,
+        checked: 0,
+        dueFacts: 0,
+        sourcesBehindOnSnapshot: 0,
+      },
+      dueFacts: [],
+      dueSources: [],
+    },
+    pendingReview,
+    factsVsBaseline: [],
+    coverageGap,
+  });
+}
+
+// A registry older than the database means the coverage question cannot be
+// answered for the sources added since the last patrol. It has to reach the
+// action list, otherwise the daily report answers "is everything watched?" with
+// a number nobody acts on.
+test('a stale patrol registry becomes an action before the review backlog', () => {
+  const report = reportWithCoverageGap(
+    {
+      status: 'ok',
+      missingFromRegistry: ['source:fundamental-it:statistics-fe-suiihyo'],
+      missingFromDatabase: [],
+      captureOnly: 0,
+    },
+    [{ slug: 'it-passport', pending: 2 }],
+  );
+  assert.deepEqual(
+    report.todayActions.map((action) => action.kind),
+    ['patrol_registry_stale', 'pending_review'],
+  );
+  const [action] = report.todayActions;
+  assert.equal(action.target, 'var/patrol/registry.json');
+  assert.ok(
+    action.detail.includes('source:fundamental-it:statistics-fe-suiihyo'),
+  );
+});
+
+test('a fresh patrol registry adds no patrol action', () => {
+  const report = reportWithCoverageGap({
+    status: 'ok',
+    missingFromRegistry: [],
+    missingFromDatabase: [],
+    captureOnly: 0,
+  });
+  assert.deepEqual(report.todayActions, []);
+});
+
+// `not_run` means no registry was read at all. Inventing a stale-registry action
+// there would tell the reader to re-run patrol when the real problem is that the
+// first run never happened — a different instruction.
+test('an unchecked coverage gap adds no patrol action', () => {
+  const report = reportWithCoverageGap({
+    status: 'not_run',
+    reason: 'var/patrol/registry.json missing; run patrol once first',
+  });
+  assert.deepEqual(report.todayActions, []);
+});
+
+test('the summary line says the registry is stale instead of printing a bare number', () => {
+  const report = reportWithCoverageGap({
+    status: 'ok',
+    missingFromRegistry: ['source:a', 'source:b'],
+    missingFromDatabase: [],
+    captureOnly: 0,
+  });
+  const markdown = renderMarkdown(report);
+  assert.ok(markdown.includes('- 巡检覆盖缺口 2（巡检清单过期，见上）'));
+  // The gap section has to say the rows are an old registry, not missing data,
+  // or a reader takes "库有登记但巡检清单缺失" for a monitoring hole.
+  assert.ok(markdown.includes('这一行不是数据缺口，是巡检清单比数据库旧'));
+});
+
+test('the summary line keeps printing a plain number when the registry is fresh', () => {
+  const markdown = renderMarkdown(
+    reportWithCoverageGap({
+      status: 'ok',
+      missingFromRegistry: [],
+      missingFromDatabase: [],
+      captureOnly: 0,
+    }),
+  );
+  assert.ok(markdown.includes('- 巡检覆盖缺口 0'));
+  assert.ok(!markdown.includes('巡检清单过期'));
+  assert.ok(!markdown.includes('这一行不是数据缺口'));
+});
+
 // `status` is what the cron wrapper parses to tell a broken run from a working
 // one, so it stays `ok` even when the report is full of critical findings. That
 // used to be the only status in the document and read as "everything is fine".
