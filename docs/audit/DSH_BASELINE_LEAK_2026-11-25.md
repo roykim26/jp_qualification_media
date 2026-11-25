@@ -11,7 +11,7 @@
 | 改写前 tip      | `main` = `be43cc2`、`chore/phase1-baseline` = `a4d38db`                                                                                              |
 | 改写后 tip      | `main` = `bc5abaa`、`chore/phase1-baseline` = `8a577a4`                                                                                              |
 | 本轮内容 commit | `8a5f6c6`（删掉悬空的 `audit:latency`，两分支同指此处）                                                                                              |
-| 本轮报告 commit | `<REPORT_SHA>`（第二段回填这一行）                                                                                                                   |
+| 本轮报告 commit | `c9441d0`（本文档）                                                                                                                                  |
 | 回滚点          | `var/pre-rewrite.bundle`（4573056 B，`--all` 全量）、分支 `backup/pre-leak-main` = `be43cc2`、`backup/pre-leak-chore` = `a4d38db`、`refs/original/*` |
 
 ## 1. 执行摘要
