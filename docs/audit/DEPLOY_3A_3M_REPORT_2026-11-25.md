@@ -502,7 +502,7 @@ Caddy access log（7605 行，2026-11-14 11:29Z – 2026-11-24 23:19Z）：
 3. ~~**`status` 字段语义误导**（§10.1）。~~ **已处理**：`0890d48` 新增 `reportStatus` / `overallStatus`，已上生产 `9d793c9`，见 `docs/audit/OPS_REPORT_STATUS_2026-11-25.md`。
 4. ~~**`due_fact` target 粒度不足**（§10.2）。~~ **已处理**：`35168b1`，已上生产 `b9b5228`，见 `docs/audit/DUE_FACT_DIMENSIONS_2026-11-25.md`。
 5. **生产从未跑过 patrol**，`coverageGap` 恒为 `not_run`（§10.3）。
-6. **Caddyfile 的本地改动仍未提交**。`blog.waystoneai.online` 的反代块只存在于 VPS 磁盘上，不在仓库里。下次有人 `git checkout` 就会丢。5 个 `??` 备份/验证文件同理。
+6. ~~**Caddyfile 的本地改动仍未提交**~~。**已处理**：`2a21622` 把 `blog.waystoneai.online` 反代块连同来历注释写进仓库，`693a9ec` 落账并 FF 部署到生产（线上 SHA 与仓库逐字节一致），6 条回归测试 + 7 个变异全抓。5 个 `??` 备份/验证文件仍未跟踪，去留待定。详见 `docs/audit/CADDYFILE_BLOG_VHOST_2026-11-25.md`。
 7. **`/pass-rate/` 观测数据只有约 20 分钟**。见 §13。
 8. **access log 的轮转配置正确，但尚未触发**。初稿这里写的是「无轮转配置、宿主机未见轮转产物」，实测后归因是错的，修正如下：
    - `deploy/caddy/Caddyfile:8-11` 有 `output file /var/log/caddy/access.log { roll_size 10mb` + `roll_keep 5`。
@@ -547,7 +547,7 @@ docker logs deploy-web-1 2>&1 | grep 'plan A: one failure fails the page'
 | -------------------------------------- | --------------------------------------- | ----------------------------------------------------------------------------------------- |
 | 3K/3M 的校验器在生产遇到没测过的坏形状 | 503（可接受）或再次进程崩溃（不可接受） | `closeAfterResponseStarted` 守卫已上线，`restart: unless-stopped` 仍在；需观察 48h 的 5xx |
 | `main` 与生产不一致                    | 新人 clone 到旧代码；回滚点混乱         | §12 第 1 条                                                                               |
-| Caddyfile 改动只存在于 VPS 磁盘        | 一次误操作让博客下线                    | 已备份到 `/root/jpqm-manual-backup/`；建议尽快提交进仓库                                  |
+| ~~Caddyfile 改动只存在于 VPS 磁盘~~    | ~~一次误操作让博客下线~~                | **已处理**：`2a21622` 提交进仓库，`693a9ec` 上生产，见 §12 第 6 条                        |
 | 就绪探针的假告警被学会忽略             | 真故障也忽略                            | 已修 `cac5a7e`；需观察是否还有别的「永远红」项                                            |
 | access log 无轮转                      | 磁盘写满 → caddy 挂                     | **已复核：配置正确、目录级挂载、9.196 MiB 未达 10 MiB 阈值。风险不成立**                  |
 | 迁移 0030 不可回滚                     | 回滚代码后数据仍是新的                  | 0030 只动统计数据不动 schema，旧代码兼容                                                  |
@@ -561,7 +561,7 @@ docker logs deploy-web-1 2>&1 | grep 'plan A: one failure fails the page'
 1. **P1 — 把生产代码落到 `main`**：`git push origin chore/phase1-baseline:main`（或开 PR 合并），让 `origin/main` 与生产一致。这是治理问题，不是技术问题，但拖得越久越容易出事。
 2. **P1 — 等 24–48 小时收 `/pass-rate/` 观测数据**，再决定方案 A 是否切换。当前 0 个 5xx 是好消息，但样本只有 20 分钟。
 3. ~~**P2 — 修 `due_fact` 的 target 粒度**（§10.2）。~~ **已完成**：`35168b1`（`docs/audit/DUE_FACT_DIMENSIONS_2026-11-25.md`），已上生产 `b9b5228`。
-4. **P2 — 把 Caddyfile 的博客 vhost 提交进仓库**，消除「线上配置不在版本控制里」这个隐患。
+4. ~~**P2 — 把 Caddyfile 的博客 vhost 提交进仓库**~~ **已完成**：`2a21622`（`docs/audit/CADDYFILE_BLOG_VHOST_2026-11-25.md`），已上生产 `693a9ec`，线上 SHA 与仓库逐字节一致。
 5. ~~**P3 — `status` 字段改名**（§10.1），或加独立的 `overallStatus`。~~ **已完成**：`0890d48` 走「加 `overallStatus`」这条路（`docs/audit/OPS_REPORT_STATUS_2026-11-25.md`），已上生产 `9d793c9`。
 6. **P3 — 生产跑一次 patrol**，让 `coverageGap` 有真值。
 7. **P4 — 404 噪声过滤**（§10.4）。access log 的轮转经复核已确认配置正确、只是未到阈值，不再是待办；剩下的只有 36.8% 的扫描器 404 噪声。
