@@ -103,3 +103,12 @@
 ## 6. 附：本轮未落库
 
 本轮**只做了采集与比对**，没有执行 `ingest_bookkeeping`、没有写 `candidate_facts`、没有批准任何 revision；生产的公开页面与 DB 业务数据均未改动。
+
+## 7. 后续进展（2026-11-25 15:2x 已执行）
+
+第 5 节四项待拍板已由所有者逐项决定并执行，详见 `docs/audit/REVERIFICATION_2026-11-25.md`：
+
+1. 783 条历史候选：**不落库**（维持建议）。
+2. class3-exam 5 条：已入库并全部批准（`facts` 1007→1012）。
+3. 缺口一、缺口二：已实现（admin「确认无变化」动作 + `dueSources` 改看 `source_checks.checked_at`），并已把 24 条 `same` + 2 条 `same_text` 共 26 条复核落账。
+4. takken 2 条 `payment_deadline_rule` + it-passport 1 条 `application_change_deadline_rule`：仍待人工确认，当前 `dueFacts` 只剩这 3 条。
