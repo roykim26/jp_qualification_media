@@ -268,8 +268,16 @@ export function buildDailyReport({
       detail: `已 ${fact.ageDays} 天未复核（窗口 ${fact.windowDays} 天）`,
     });
   }
+  const hasCritical = critical.length > 0 || channel.level === 'critical';
   return {
+    // `status` answers one question only: did the report get produced? The cron
+    // wrapper parses this field to tell a broken run from a working one, so a
+    // run that found critical problems still says `ok` here. That is easy to
+    // misread as "everything is fine", so the health verdict lives in
+    // `overallStatus` and the boolean lives in `hasCritical`.
     status: 'ok',
+    reportStatus: 'ok',
+    overallStatus: hasCritical ? 'action_needed' : 'ok',
     checkedAt: now.toISOString(),
     referenceYear: staleness.referenceYear,
     config: {
@@ -294,7 +302,7 @@ export function buildDailyReport({
           : null,
       notificationLevel: channel.level ?? 'info',
     },
-    hasCritical: critical.length > 0 || channel.level === 'critical',
+    hasCritical,
     todayActions,
     sourceHealth,
     notificationChannel: channel,
@@ -326,6 +334,11 @@ export function renderMarkdown(report) {
   lines.push('## 摘要');
   lines.push('');
   const summary = report.summary;
+  // First line on purpose: a reader who stops after the 摘要 block must not
+  // come away thinking a report full of critical findings is a healthy one.
+  lines.push(
+    `- 整体状态：${report.overallStatus === 'action_needed' ? '需要处理（见上）' : '正常'}`,
+  );
   lines.push(
     `- 来源 ${summary.sources}：critical ${summary.critical}／warning ${summary.warning}`,
   );

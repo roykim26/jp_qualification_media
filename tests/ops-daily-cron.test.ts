@@ -227,6 +227,25 @@ describe('ops daily cron wrapper', () => {
     expect(notifications[0]).toContain('来源 fp 连续失败 3 次');
   });
 
+  // The report gained `overallStatus` so a human reading the JSON stops mistaking
+  // "the run worked" for "the site is fine". The wrapper must keep deciding on
+  // `status` and `hasCritical` alone; otherwise a field added for readers would
+  // silently start paging people.
+  it('ignores overallStatus when deciding whether to speak', () => {
+    // Deliberately contradictory: a health verdict the wrapper must not read.
+    // If this ever starts paging, someone wired the new field into the wrapper.
+    stageReport(
+      { status: 'ok', hasCritical: false, overallStatus: 'action_needed' },
+      0,
+    );
+
+    const { status, logs, notifications } = runScript();
+
+    expect(status).toBe(0);
+    expect(logs).toEqual([]);
+    expect(notifications).toEqual([]);
+  });
+
   it('reports a run that produced no report at all', () => {
     // The container never started: no stdout, and docker itself failed.
     writeFileSync(payloadFile, '', 'utf8');

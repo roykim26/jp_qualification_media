@@ -265,6 +265,16 @@ DATABASE_URL="postgresql://postgres@127.0.0.1:55432/qualification_media" pnpm op
 
 **注意退出码不足以判断成败**：`1` 同时代表「有 critical」和「报告自己跑挂了」。要区分，看 stdout 是否是一份 `"status": "ok"` 的报告——包装脚本就是这么做的（见下一节）。
 
+报告里有三个容易混淆的字段，2026-11-25 起如此：
+
+| 字段            | 回答的问题           | 取值                            | 谁在读                              |
+| --------------- | -------------------- | ------------------------------- | ----------------------------------- |
+| `status`        | 报告跑起来了吗       | 恒 `ok`（跑挂了就根本没有报告） | `ops-daily-cron.sh` 的字段提取      |
+| `reportStatus`  | 同上，名字说得更清楚 | 恒 `ok`                         | 人；与 `status` 永远一致            |
+| `overallStatus` | 今天需要动手吗       | `ok` / `action_needed`          | 人；`action_needed` ⟺ `hasCritical` |
+
+`status` 保留是为了不打破已在跑的 cron 行与本文档的判据，**它不代表健康度**——有 critical 时它仍然是 `ok`。要判断「今天要不要干活」看 `overallStatus`（或等价的布尔 `hasCritical`），markdown 的「摘要」段第一行也会直接写「整体状态：需要处理（见上）／正常」。
+
 日检流程（约 5 分钟）：跑 `ops:daily` → 读「今日需处理」→ critical/blocked 来源决定是否进入下面的数据更新流程；warning 与到期事实排入复查；待审候选走审核批准授权。
 
 ### 定时日检（cron）

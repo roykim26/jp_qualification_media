@@ -250,6 +250,48 @@ test('markdown renders the action list and source table', () => {
   assert.ok(markdown.includes('facts 对基线'));
 });
 
+// `status` is what the cron wrapper parses to tell a broken run from a working
+// one, so it stays `ok` even when the report is full of critical findings. That
+// used to be the only status in the document and read as "everything is fine".
+test('a report with critical findings still reports itself as produced', () => {
+  const report = reportFixture();
+  assert.equal(report.hasCritical, true);
+  assert.equal(report.status, 'ok');
+  assert.equal(report.reportStatus, 'ok');
+  // The health verdict is the separate field, and it must not disagree.
+  assert.equal(report.overallStatus, 'action_needed');
+});
+
+test('a quiet report is ok in both senses', () => {
+  const report = buildDailyReport({
+    now: new Date('2026-11-25T00:00:00Z'),
+    config,
+    sourceHealth: [],
+    staleness: {
+      referenceYear: 2026,
+      summary: {
+        approvedFacts: 0,
+        historicalSkipped: 0,
+        checked: 0,
+        dueFacts: 0,
+        sourcesBehindOnSnapshot: 0,
+      },
+      dueFacts: [],
+      dueSources: [],
+    },
+    pendingReview: [],
+    factsVsBaseline: [],
+    coverageGap: {
+      status: 'ok',
+      missingFromRegistry: [],
+      missingFromDatabase: [],
+    },
+  });
+  assert.equal(report.hasCritical, false);
+  assert.equal(report.overallStatus, 'ok');
+  assert.ok(renderMarkdown(report).includes('- 整体状态：正常'));
+});
+
 // The report used to print `qualification/examYear/factKey` and nothing else, so
 // the seven 日商簿記 2026 fee facts (one per exam level × delivery mode) came out
 // as seven identical lines and a reviewer could not tell them apart. Each line
