@@ -240,6 +240,13 @@ describe('IT Passport public page rendering', () => {
     expect(annual).not.toContain('2025年度の試験日');
     expect(annual).not.toContain('公式合格基準');
     expect(annual).toContain('2026年試験日程');
+    // G-01: the annual page drops the overview's KPI cards and full source
+    // boilerplate, keeping only the slim block with the #official-sources anchor.
+    expect(annual).not.toContain('要点サマリー');
+    expect(annual).not.toContain('<summary>情報ステータスの見方</summary>');
+    expect(annual).not.toContain('class="source-list"');
+    expect(annual).toContain('id="official-sources"');
+    expect(annual).toContain('/shikaku/it-passport/#official-sources');
 
     const application = renderQualificationSectionPage(view, 'application');
     expect(application).toContain('2026年度の申込情報');

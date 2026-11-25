@@ -95,6 +95,7 @@
 - **改动文件范围**：`apps/web/src/render.ts`（`renderQualificationSectionPage` 的 `annual` 分支内容构成，约 `:1374-1564`）、`tests/web-render.test.ts`。
 - **风险**：**中**。年度页若删内容过多会削弱「2026 年专属信息」；必须保留「本年度申込/試験日/合格発表」等年度独有事实。改动会牵动 `test:verify-gate` 的 `pageContains` 断言（`config/release-gate-baseline.json` 每资格一条日文串），需同步核对。
 - **不做什么**：**不新增路由**、不改 URL（修订版 V2 要求 URL 变更需重定向 + 单独审批）。
+- **状态**：🟡 **试点已落地（2026-11-25 chore/phase1-baseline，力度=中，按决策#1 保留年度独有事实）**。`render.ts` 的 `renderQualificationSectionPage` annual 分支：①不再渲染 `renderDetailSummary` 要点サマリー 3 卡（与概要页及其下方年度事实组三重重复）；②`renderSourceModule` 全量块（≈974 字最长公共片段主因）替换为 `renderAnnualSourceModule` 紧凑块——保留 `#official-sources` 锚点（空态动作链接仍可用），公式ソース一覧/情報ステータスの見方/更新訂正手順改为一句话链回概要页对应锚点。年度事实、ICS、年度切换、検証履歴全部保留。`config/release-gate-baseline.json` 的 `pageContains`（資格名）在年度页 h1 仍存在，门禁不受影响；`verify-lib.mjs` 年度页探针标记 `2026年試験日程` 保留。测试：`tests/web-render.test.ts` 年度用例新增 5 条断言（无要点サマリー/无 source-list/无 disclosure、有锚点、有回链），vitest 31 files/525 用例全绿。**待数据**：Jaccard/containment 复测需 `visual_smoke.py` 运行环境；若复测仍 >40%，下一步候选是年度页移除検証履歴（概要页已含）。
 
 ### G-02 排序参数页可索引，且参数未做白名单校验（P0）
 

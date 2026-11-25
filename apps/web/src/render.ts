@@ -1281,6 +1281,15 @@ export function renderQualificationPage(view: PublicQualificationView): string {
 }
 
 /**
+ * G-01: the annual page keeps the #official-sources anchor (empty-state links
+ * target it) but defers the boilerplate source list to the overview page so the
+ * two pages stop sharing a ~1k-character identical block.
+ */
+function renderAnnualSourceModule(slug: string, year: number): string {
+  return `<section id="official-sources" class="source-module source-module--slim page-section"><h2>公式ソースと更新について</h2><p class="source-module__intro">${year}年の各日程・条件には、確認済みの公式公表資料へのリンクを項目ごとに付けています。登録済みの公式ソース一覧、情報ステータスの見方、更新・訂正の手順は<a href="/shikaku/${escapeHtml(slug)}/#official-sources">概要ページ</a>に掲載しています。</p></section>`;
+}
+
+/**
  * Year tables carry every past year, so the card lists on the overview and
  * pass-rate pages stay limited to the selected year's official facts.
  */
@@ -1398,7 +1407,10 @@ export function renderQualificationSectionPage(
       left.factKey.localeCompare(right.factKey),
   );
   const factGroups = resolveFactGroups(dedupeFacts(sortedFacts), section);
-  const detailSummary = renderDetailSummary(factGroups, qualification);
+  // The annual page answers "what happens in year X"; the KPI cards repeat the
+  // overview's summary and the fact groups below, so they are dropped there.
+  const detailSummary =
+    section === 'annual' ? '' : renderDetailSummary(factGroups, qualification);
   const facts = sortedFacts.length
     ? renderFactGroups(factGroups)
     : historyTables
@@ -1528,7 +1540,11 @@ export function renderQualificationSectionPage(
     )
       ? `<div class="page-hero__actions">${renderButtonLink({ href: `/ics/${qualification.slug}/${year}.ics`, label: `${year}年のICSをダウンロード`, variant: 'secondary', icon: 'calendar' })}</div>`
       : '';
-  const body = `<div class="container"><header class="page-hero detail-hero"><div class="tag-row"><span class="tag">${escapeHtml(fieldLabel(qualification.field))}</span><span class="tag">${escapeHtml(categoryLabel(qualification.category))}</span></div><h1>${escapeHtml(qualification.officialNameJa)}</h1>${heroSectionTitle ? `<p class="detail-hero__section">${escapeHtml(heroSectionTitle)}</p>` : ''}<p>${qualification.aliasesJa.map(escapeHtml).join(' / ') || '公式情報を整理して掲載します。'}</p>${sectionMeta ? `<p class="detail-hero__intro">${escapeHtml(sectionMeta.intro)}</p>` : ''}<div class="page-hero__meta">${status}<span class="meta">公式情報確認日: ${escapeHtml(formatVerifiedAt(view.officialVerifiedAt))}</span></div><nav class="detail-hero__years" aria-label="年度を選ぶ">${yearLinks}</nav>${annualIcs}</header><div class="detail-layout"><div class="detail-main">${detailSummary}${qualificationScopeNotice(qualification.slug)}${interpretationNote}${historyTables}${scopeNote}${facts}${renderVerificationHistory(sortedFacts)}${renderSourceModule(qualification.slug)}</div>${sidebar}</div></div>`;
+  const sourceModule =
+    section === 'annual'
+      ? renderAnnualSourceModule(qualification.slug, navigationYear)
+      : renderSourceModule(qualification.slug);
+  const body = `<div class="container"><header class="page-hero detail-hero"><div class="tag-row"><span class="tag">${escapeHtml(fieldLabel(qualification.field))}</span><span class="tag">${escapeHtml(categoryLabel(qualification.category))}</span></div><h1>${escapeHtml(qualification.officialNameJa)}</h1>${heroSectionTitle ? `<p class="detail-hero__section">${escapeHtml(heroSectionTitle)}</p>` : ''}<p>${qualification.aliasesJa.map(escapeHtml).join(' / ') || '公式情報を整理して掲載します。'}</p>${sectionMeta ? `<p class="detail-hero__intro">${escapeHtml(sectionMeta.intro)}</p>` : ''}<div class="page-hero__meta">${status}<span class="meta">公式情報確認日: ${escapeHtml(formatVerifiedAt(view.officialVerifiedAt))}</span></div><nav class="detail-hero__years" aria-label="年度を選ぶ">${yearLinks}</nav>${annualIcs}</header><div class="detail-layout"><div class="detail-main">${detailSummary}${qualificationScopeNotice(qualification.slug)}${interpretationNote}${historyTables}${scopeNote}${facts}${renderVerificationHistory(sortedFacts)}${sourceModule}</div>${sidebar}</div></div>`;
   const canonicalPath =
     section === 'overview'
       ? `/shikaku/${qualification.slug}/`
