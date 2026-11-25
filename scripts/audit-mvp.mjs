@@ -133,6 +133,13 @@ try {
     });
     const coverageGaps = evaluateMvpCoverage(facts, examYear);
     const provenance = summarizeProvenanceAudit(result.rows);
+    // Two different problems hide behind one gap count: a fact that exists but
+    // was never tagged with the dimension the contract asks for (fix: tag it),
+    // and a fact that does not exist at all (fix: create it). The totals add up
+    // to coverageGaps.length so a reader can keep using that number.
+    const dimensionMismatchGaps = coverageGaps.filter(
+      (gap) => gap.dimensionMismatch,
+    ).length;
     const status =
       coverageGaps.length === 0 && provenance.status === 'passed'
         ? 'passed'
@@ -147,6 +154,8 @@ try {
           summary: {
             approvedFacts: facts.length,
             coverageGaps: coverageGaps.length,
+            dimensionMismatchGaps,
+            missingDataGaps: coverageGaps.length - dimensionMismatchGaps,
             unverifiedFacts: provenance.blockedFacts,
           },
           coverageGaps,

@@ -51,6 +51,22 @@ function matchesDimensions(fact, dimensions) {
   );
 }
 
+/**
+ * True when `fact` sits in the requested scope except that one or more required
+ * dimensions are unlabelled (null/undefined) rather than different.
+ *
+ * The distinction is load-bearing. Ignoring dimensions outright would call a
+ * `bookkeeping:1` fact evidence for a `bookkeeping:3` gap, and a
+ * `fp academic:basic` fact evidence for an `fp academic` gap — both are real,
+ * separately scoped facts, not mislabelled ones. Only a null dimension means
+ * "this fact belongs to the requested scope but was never tagged".
+ */
+function isUnlabelled(fact, dimensions) {
+  return Object.entries(dimensions).every(
+    ([key, value]) => fact[key] === value || fact[key] == null,
+  );
+}
+
 function matchesField(fact, field, dimensions) {
   if (field === 'source_url')
     return Boolean(fact.sourceUrl) && fact.provenanceStatus === 'verified';
@@ -81,6 +97,13 @@ export function evaluateMvpCoverage(facts, examYear) {
   const gaps = [];
   for (const qualification of contract.qualifications) {
     const launchScopes = limitedLaunchScopes[qualification.slug];
+    // Same qualification and year, dimensions ignored. This is used only to tell
+    // a labelling problem from a missing fact: see isUnlabelled() below.
+    const sameScope = facts.filter(
+      (fact) =>
+        fact.qualificationSlug === qualification.slug &&
+        fact.examYear === examYear,
+    );
     for (const requirement of qualification.requirements) {
       if (
         !['required', 'conditional'].includes(requirement.requiredLevel) ||
@@ -107,6 +130,11 @@ export function evaluateMvpCoverage(facts, examYear) {
             examYear,
             dimensions,
             field,
+            dimensionMismatch: sameScope.some(
+              (fact) =>
+                isUnlabelled(fact, dimensions) &&
+                matchesField(fact, field, dimensions),
+            ),
             reason: ['source_url', 'official_verified_at'].includes(field)
               ? 'missing approved provenance'
               : 'missing approved fact',

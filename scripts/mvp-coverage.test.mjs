@@ -183,6 +183,105 @@ test('optional history and unpublished CBT dates do not block the core MVP', () 
   );
 });
 
+test('a gap whose fact exists with an unlabelled dimension is a labelling problem', () => {
+  const gaps = evaluateMvpCoverage(
+    [
+      fact({
+        qualificationSlug: 'it-passport',
+        examLevelId: null,
+        deliveryMode: null,
+        factKey: 'fee',
+      }),
+    ],
+    2026,
+  ).filter((gap) => gap.qualificationSlug === 'it-passport');
+  assert.ok(
+    gaps.some((gap) => gap.field === 'fee' && gap.dimensionMismatch === true),
+  );
+  assert.ok(
+    gaps.some(
+      (gap) => gap.field === 'exam_method' && gap.dimensionMismatch === false,
+    ),
+  );
+});
+
+test('a fact belonging to a different dimension value is not a labelling problem', () => {
+  // bookkeeping:1 fee is a real, separately scoped fact. It must never be read
+  // as evidence for the bookkeeping:3 gap.
+  const gaps = evaluateMvpCoverage(
+    [
+      fact({
+        qualificationSlug: 'bookkeeping',
+        examLevelId: 'bookkeeping:1',
+        deliveryMode: 'unified',
+        factKey: 'fee',
+      }),
+    ],
+    2026,
+  ).filter(
+    (gap) => gap.qualificationSlug === 'bookkeeping' && gap.field === 'fee',
+  );
+  for (const gap of gaps) {
+    assert.equal(
+      gap.dimensionMismatch,
+      false,
+      `bookkeeping:1 must not label the ${JSON.stringify(gap.dimensions)} gap`,
+    );
+  }
+});
+
+test('a child component fact is not a labelling problem for its parent component', () => {
+  const gaps = evaluateMvpCoverage(
+    [
+      fact({
+        qualificationSlug: 'fp',
+        providerId: 'kinzai',
+        examLevelId: 'fp:1',
+        examComponent: 'academic:basic',
+        deliveryMode: 'pbt',
+        factKey: 'question_count',
+      }),
+    ],
+    2026,
+  ).filter(
+    (gap) =>
+      gap.qualificationSlug === 'fp' &&
+      gap.field === 'question_count' &&
+      gap.dimensions.examComponent === 'academic' &&
+      gap.dimensions.providerId === 'kinzai' &&
+      gap.dimensions.examLevelId === 'fp:1',
+  );
+  assert.equal(gaps.length, 1);
+  assert.equal(gaps[0].dimensionMismatch, false);
+});
+
+test('a fact from another qualification or year never counts as a labelling problem', () => {
+  // Both halves have to be exercised separately: a case that changes the
+  // qualification AND the year at once cannot tell which half the code ignores.
+  const cases = [
+    { label: 'another qualification', fact: { qualificationSlug: 'takken' } },
+    {
+      label: 'another year',
+      fact: { qualificationSlug: 'it-passport', examYear: 2025 },
+    },
+  ];
+  for (const { label, fact: overrides } of cases) {
+    const gaps = evaluateMvpCoverage(
+      [fact({ deliveryMode: null, factKey: 'fee', ...overrides })],
+      2026,
+    ).filter(
+      (gap) => gap.qualificationSlug === 'it-passport' && gap.field === 'fee',
+    );
+    assert.ok(gaps.length > 0);
+    for (const gap of gaps)
+      assert.equal(
+        gap.dimensionMismatch,
+        false,
+        `a fact from ${label} must not label this gap`,
+      );
+  }
+});
+
 test('MVP audit without a database reports not_run with a non-success exit code', () => {
   const result = spawnSync(process.execPath, ['scripts/audit-mvp.mjs'], {
     cwd: new URL('..', import.meta.url),
