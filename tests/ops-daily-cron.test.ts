@@ -1,12 +1,13 @@
 import { spawnSync } from 'node:child_process';
 import {
+  chmodSync,
   existsSync,
   mkdirSync,
   readFileSync,
   rmSync,
   writeFileSync,
 } from 'node:fs';
-import { join, relative } from 'node:path';
+import { delimiter, join, relative } from 'node:path';
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 /**
@@ -50,6 +51,24 @@ function quote(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`;
 }
 
+/**
+ * Where the shim wrapper should point for `tool`.
+ *
+ * On Windows the shim runs inside WSL, so a Windows PATH lookup would hand back
+ * a .exe that bash cannot execute; Ubuntu keeps all the utilities the wrapper
+ * needs in /usr/bin, and so does the Linux CI runner. Elsewhere the real PATH is
+ * the right answer.
+ */
+function resolveOnPath(tool: string): string | undefined {
+  if (process.platform === 'win32') return `/usr/bin/${tool}`;
+  for (const dir of (process.env.PATH ?? '').split(delimiter)) {
+    if (!dir) continue;
+    const candidate = join(dir, tool);
+    if (existsSync(candidate)) return candidate;
+  }
+  return undefined;
+}
+
 function writeFakeDocker(): void {
   // Records its argv, then replays whatever the case staged as the report.
   writeFileSync(
@@ -78,7 +97,24 @@ interface RunResult {
   stderrFile: string;
 }
 
-function runScript(env: Record<string, string> = {}): RunResult {
+interface RunOptions {
+  /**
+   * Run with a PATH that genuinely has no `docker` on it.
+   *
+   * Deleting the fake `docker` from binDir is not enough: every dev machine and
+   * the CI runner have a real one, so the wrapper would reach *that* CLI. On
+   * GitHub's runner `docker compose run` then starts pulling the api image and
+   * blocks until vitest's 5s timeout kills the case (observed: 24635ms). Locally
+   * the same fall-through hit Docker Desktop's WSL shim, which fails in a second
+   * — which is why this only ever went red on Linux CI.
+   */
+  withoutDocker?: boolean;
+}
+
+function runScript(
+  env: Record<string, string> = {},
+  options: RunOptions = {},
+): RunResult {
   const assignments = {
     LOGGER_LOG: toPosixPath(loggerLog),
     NOTIFY_SCRIPT: toPosixPath(notifyScript),
@@ -95,7 +131,49 @@ function runScript(env: Record<string, string> = {}): RunResult {
   // '$PATH' would hand the script PATH='<bin>:$PATH', so even `sh` itself would
   // be unresolvable and the run would exit 127 (this is what failed on Linux CI
   // while Windows' bash silently rebuilt PATH from its login profile).
-  const pathAssignment = `PATH=${quote(toPosixPath(binDir))}:"$PATH"`;
+  //
+  // withoutDocker swaps the inherited PATH for a minimal shim that carries the
+  // utilities the wrapper needs but deliberately no `docker`, so "docker is not
+  // installed" is true of the PATH rather than merely of binDir.
+  //
+  // The shim holds wrapper scripts rather than symlinks: the work dir lives on
+  // DrvFs under Windows (/mnt/e/...), where ln -s is refused, and a silently
+  // empty shim would turn the case into "sh itself is missing" (exit 127).
+  //
+  // It is written from Node, not by a shell loop, because on Windows the script
+  // is handed to bash as a single -c argument and WSL's launcher splits that
+  // argument on `;` before bash ever sees it: `X=hello; echo $X` arrives as two
+  // separate commands, so the loop variable in `$c` is gone by the time the
+  // redirect target is expanded and every write lands on the directory itself
+  // ("Is a directory"). Building the files here keeps `$` and `;` out of the
+  // command string entirely.
+  const shimDir = join(workDir, 'shim');
+  const shimTools = [
+    'sh',
+    'sed',
+    'grep',
+    'head',
+    'tail',
+    'cut',
+    'tr',
+    'mkdir',
+    'date',
+    'dirname',
+    'cat',
+  ];
+  if (options.withoutDocker) {
+    mkdirSync(shimDir, { recursive: true });
+    for (const tool of shimTools) {
+      const resolved = resolveOnPath(tool);
+      if (!resolved) continue;
+      const wrapper = join(shimDir, tool);
+      writeFileSync(wrapper, `#!/bin/sh\nexec ${resolved} "$@"\n`, 'utf8');
+      chmodSync(wrapper, 0o755);
+    }
+  }
+  const pathAssignment = options.withoutDocker
+    ? `PATH=${quote(toPosixPath(binDir))}:${quote(toPosixPath(shimDir))}`
+    : `PATH=${quote(toPosixPath(binDir))}:"$PATH"`;
   const prefix = [pathAssignment]
     .concat(
       Object.entries(assignments).map(
@@ -104,8 +182,8 @@ function runScript(env: Record<string, string> = {}): RunResult {
     )
     .join(' ');
 
-  // The chmod is best-effort so a case can delete the fake docker to prove the
-  // wrapper survives a missing binary.
+  // The chmod is best-effort so a case can prove the wrapper survives a binary
+  // that never got installed.
   const command =
     `chmod +x ${quote(toPosixPath(join(binDir, 'docker')))} ` +
     `${quote(toPosixPath(join(binDir, 'logger')))} 2>/dev/null || true; ` +
@@ -327,7 +405,7 @@ describe('ops daily cron wrapper', () => {
   it('never exits non-zero when docker is not installed', () => {
     rmSync(join(binDir, 'docker'));
 
-    const { status, logs } = runScript();
+    const { status, logs } = runScript({}, { withoutDocker: true });
 
     expect(status).toBe(0);
     expect(logs).toHaveLength(1);
