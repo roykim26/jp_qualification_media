@@ -1,6 +1,12 @@
 import process from 'node:process';
+import { readFile, writeFile } from 'node:fs/promises';
 import { Client } from 'pg';
-import { evaluateMvpCoverage, limitedLaunchScopes } from './mvp-coverage.mjs';
+import {
+  evaluateMvpCoverage,
+  limitedLaunchScopes,
+  mvpGapKey,
+  splitGapsAgainstBaseline,
+} from './mvp-coverage.mjs';
 import {
   auditProvenanceRow,
   summarizeProvenanceAudit,
@@ -38,7 +44,9 @@ const auditColumns = [
 ];
 
 const args = process.argv.slice(2);
-const yearArgument = args.find((arg) => arg.startsWith('--year='));
+const updateBaseline = args.includes('--update-baseline');
+const positional = args.filter((arg) => arg !== '--update-baseline');
+const yearArgument = positional.find((arg) => arg.startsWith('--year='));
 const examYear = yearArgument
   ? Number(yearArgument.slice('--year='.length))
   : Number(
@@ -49,13 +57,15 @@ const examYear = yearArgument
     );
 
 if (
-  args.some((arg) => arg !== yearArgument) ||
-  args.length > 1 ||
+  positional.some((arg) => arg !== yearArgument) ||
+  positional.length > 1 ||
   !Number.isInteger(examYear) ||
   examYear < 2000 ||
   examYear > 2100
 ) {
-  console.error('Usage: node scripts/audit-mvp.mjs [--year=YYYY]');
+  console.error(
+    'Usage: node scripts/audit-mvp.mjs [--year=YYYY] [--update-baseline]',
+  );
   process.exit(2);
 }
 if (!process.env.DATABASE_URL) {
@@ -140,32 +150,79 @@ try {
     const dimensionMismatchGaps = coverageGaps.filter(
       (gap) => gap.dimensionMismatch,
     ).length;
-    const status =
-      coverageGaps.length === 0 && provenance.status === 'passed'
-        ? 'passed'
-        : 'blocked';
-    console.log(
-      JSON.stringify(
-        {
-          status,
-          checkedAt: new Date().toISOString(),
-          examYear,
-          limitedLaunchScopes,
-          summary: {
-            approvedFacts: facts.length,
-            coverageGaps: coverageGaps.length,
-            dimensionMismatchGaps,
-            missingDataGaps: coverageGaps.length - dimensionMismatchGaps,
-            unverifiedFacts: provenance.blockedFacts,
-          },
-          coverageGaps,
-          provenance,
-        },
-        null,
-        2,
-      ),
+    const baselineUrl = new URL(
+      '../config/mvp-audit-baseline.json',
+      import.meta.url,
     );
-    process.exitCode = status === 'passed' ? 0 : 1;
+    if (updateBaseline) {
+      // Soft-gate maintenance: snapshot the current gap set as the accepted
+      // baseline. Only run this deliberately, after confirming every listed
+      // gap is intended rather than a regression.
+      await writeFile(
+        baselineUrl,
+        `${JSON.stringify(
+          {
+            version: 1,
+            note: '既知の MVP カバレッジ欠落（監査 G-15 / 決定#6 のソフトゲート基線）。キーは slug|field|dimensions で examYear を含まない。意図的なデータ変更後に --update-baseline で再生成する。',
+            gapKeys: coverageGaps.map(mvpGapKey).sort(),
+          },
+          null,
+          2,
+        )}\n`,
+      );
+      console.log(
+        JSON.stringify({
+          status: 'baseline_updated',
+          examYear,
+          gapKeys: coverageGaps.length,
+        }),
+      );
+      process.exitCode = 0;
+    } else {
+      let baseline = null;
+      try {
+        baseline = JSON.parse(await readFile(baselineUrl, 'utf8'));
+      } catch {
+        baseline = null;
+      }
+      const { knownGaps, newGaps } = splitGapsAgainstBaseline(
+        coverageGaps,
+        baseline,
+      );
+      // Decision #6: known gaps downgrade the gate to `warning` (exit 0);
+      // anything new, or any provenance failure, still blocks.
+      const status =
+        provenance.status !== 'passed' || newGaps.length > 0
+          ? 'blocked'
+          : knownGaps.length > 0
+            ? 'warning'
+            : 'passed';
+      console.log(
+        JSON.stringify(
+          {
+            status,
+            checkedAt: new Date().toISOString(),
+            examYear,
+            limitedLaunchScopes,
+            summary: {
+              approvedFacts: facts.length,
+              coverageGaps: coverageGaps.length,
+              knownGaps: knownGaps.length,
+              newGaps: newGaps.length,
+              dimensionMismatchGaps,
+              missingDataGaps: coverageGaps.length - dimensionMismatchGaps,
+              unverifiedFacts: provenance.blockedFacts,
+              baselineLoaded: baseline !== null,
+            },
+            coverageGaps,
+            provenance,
+          },
+          null,
+          2,
+        ),
+      );
+      process.exitCode = status === 'blocked' ? 1 : 0;
+    }
   }
 } catch (error) {
   console.error(

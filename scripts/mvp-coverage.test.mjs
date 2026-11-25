@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { spawnSync } from 'node:child_process';
-import { evaluateMvpCoverage } from './mvp-coverage.mjs';
+import {
+  evaluateMvpCoverage,
+  mvpGapKey,
+  splitGapsAgainstBaseline,
+} from './mvp-coverage.mjs';
 
 function fact(overrides = {}) {
   return {
@@ -306,4 +310,49 @@ test('MVP audit rejects malformed year arguments before connecting', () => {
     assert.equal(result.status, 2);
     assert.match(result.stderr, /Usage:/);
   }
+});
+
+test('gap keys are year-independent and dimension-order-stable', () => {
+  const gap = {
+    qualificationSlug: 'bookkeeping',
+    examYear: 2026,
+    field: 'fee',
+    dimensions: { unified: 'x', examLevelId: 'bookkeeping:2' },
+  };
+  assert.equal(
+    mvpGapKey(gap),
+    'bookkeeping|fee|examLevelId=bookkeeping:2|unified=x',
+  );
+  assert.equal(
+    mvpGapKey({
+      ...gap,
+      examYear: 2027,
+      dimensions: { unified: 'x', examLevelId: 'bookkeeping:2' },
+    }),
+    mvpGapKey(gap),
+  );
+  assert.equal(
+    mvpGapKey({ qualificationSlug: 'fp', field: 'fee', dimensions: {} }),
+    'fp|fee',
+  );
+});
+
+test('the soft gate splits known gaps from new ones', () => {
+  const gaps = [
+    { qualificationSlug: 'fp', field: 'fee', dimensions: {} },
+    { qualificationSlug: 'takken', field: 'fee', dimensions: {} },
+  ];
+  const baseline = { gapKeys: ['fp|fee'] };
+  const { knownGaps, newGaps } = splitGapsAgainstBaseline(gaps, baseline);
+  assert.deepEqual(
+    knownGaps.map((gap) => gap.qualificationSlug),
+    ['fp'],
+  );
+  assert.deepEqual(
+    newGaps.map((gap) => gap.qualificationSlug),
+    ['takken'],
+  );
+  const withoutBaseline = splitGapsAgainstBaseline(gaps, null);
+  assert.equal(withoutBaseline.knownGaps.length, 0);
+  assert.equal(withoutBaseline.newGaps.length, 2);
 });

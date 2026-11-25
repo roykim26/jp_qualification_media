@@ -145,3 +145,26 @@ export function evaluateMvpCoverage(facts, examYear) {
   }
   return gaps;
 }
+
+/**
+ * Decision #6 (audit V2 G-15/T17): the MVP audit runs as a *soft* gate. A gap
+ * is identified by slug + field + its dimension set, deliberately excluding
+ * examYear so the baseline survives a year rollover.
+ */
+export function mvpGapKey(gap) {
+  const dimensions = Object.entries(gap.dimensions ?? {})
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([name, value]) => `${name}=${value}`)
+    .join('|');
+  return `${gap.qualificationSlug}|${gap.field}${dimensions ? `|${dimensions}` : ''}`;
+}
+
+export function splitGapsAgainstBaseline(gaps, baseline) {
+  const known = new Set(baseline?.gapKeys ?? []);
+  const knownGaps = [];
+  const newGaps = [];
+  for (const gap of gaps) {
+    (known.has(mvpGapKey(gap)) ? knownGaps : newGaps).push(gap);
+  }
+  return { knownGaps, newGaps };
+}

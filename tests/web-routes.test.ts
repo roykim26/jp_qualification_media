@@ -102,6 +102,7 @@ function historyFact(
  * `finally` — the same shape as `stubMode` above.
  */
 let stubExtraFacts: ReturnType<typeof historyFact>[] = [];
+let stubIcsStatus = 0;
 
 function stubView(slug: string) {
   const qualification =
@@ -146,6 +147,11 @@ beforeAll(async () => {
     }
     // The ICS proxy is the one route that forwards a body verbatim.
     if (url.startsWith('/api/v1/ics/')) {
+      if (stubIcsStatus) {
+        res.writeHead(stubIcsStatus, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ error: 'ics failure' }));
+        return;
+      }
       // The content type carries a marker that the route's own fallback
       // (`text/calendar; charset=utf-8`) does not, so "forwarded upstream"
       // and "fell back to the default" cannot be confused for each other.
@@ -548,6 +554,25 @@ describe('/shikaku/:slug/pass-rate/ year filter (ADR 0002 §2)', () => {
     });
   });
 
+  it('marks ?history=all noindex and keeps the canonical on the bare section', async () => {
+    await withYearFacts(async () => {
+      const web = await startWeb({ siteOrigin: 'https://example.test' });
+      try {
+        const response = await web.get(
+          '/shikaku/it-passport/pass-rate/?history=all',
+        );
+        expect(response.status).toBe(200);
+        const html = await response.text();
+        expect(html).toContain('<meta name="robots" content="noindex,follow">');
+        expect(html).toContain(
+          '<link rel="canonical" href="https://example.test/shikaku/it-passport/pass-rate/"',
+        );
+      } finally {
+        await web.close();
+      }
+    });
+  });
+
   it('ignores a year that is not four digits', async () => {
     // `server.ts` only accepts `^\d{4}$`; anything else has to behave exactly
     // like the bare page rather than becoming a noindex duplicate of it.
@@ -694,6 +719,34 @@ describe('ICS proxy', () => {
       expect(response.status).toBe(200);
       expect(await response.text()).toContain('BEGIN:VCALENDAR');
     } finally {
+      await web.close();
+    }
+  });
+
+  it('maps an upstream ICS 404 to the site not-found page', async () => {
+    stubIcsStatus = 404;
+    const web = await startWeb({ siteOrigin: 'https://example.test' });
+    try {
+      const response = await web.get('/ics/it-passport/2025.ics');
+      expect(response.status).toBe(404);
+      expect(response.headers.get('content-type')).toContain('text/html');
+      expect(await response.text()).toContain('ページが見つかりません');
+    } finally {
+      stubIcsStatus = 0;
+      await web.close();
+    }
+  });
+
+  it('maps an upstream ICS failure to 503 with Retry-After', async () => {
+    stubIcsStatus = 500;
+    const web = await startWeb({ siteOrigin: 'https://example.test' });
+    try {
+      const response = await web.get('/ics/it-passport/2025.ics');
+      expect(response.status).toBe(503);
+      expect(response.headers.get('retry-after')).toBe('60');
+      expect(await response.text()).toContain('一時的に');
+    } finally {
+      stubIcsStatus = 0;
       await web.close();
     }
   });

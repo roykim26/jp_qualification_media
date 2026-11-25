@@ -213,6 +213,7 @@
 - **影响**：G-02/G-03/G-10 这类「路由层行为」的修复没有回归网；改 `/sitemap.xml` 只能靠 `test:verify-gate` 的间接断言。
 - **改动文件范围**：`tests/`（新增进程级/路由级测试）、`vitest.config.ts`（如需 setup）。
 - **风险**：**低**。属纯测试新增。
+- **状态**：✅ **已闭环（2026-11-25 chore/phase1-baseline）**。路由/进程级测试主体已在 Sprint 3J（`tests/web-routes.test.ts`：静态资源白名单、robots/sitemap、slug 404、ICS 转发、空表 noindex 等）与 3K/3M 落地；本轮补齐剩余：`proxyIcs` 上游 404→站点 404、上游 5xx→503+Retry-After 两条错误路径测试，`?history=all` 变体（noindex＋canonical）路由测试，HTML ETag/304 协商测试（`web-server.test.ts`）。`audit:mvp` 按决策#6 接入 `release:check` 为**软门禁**：`config/mvp-audit-baseline.json` 落 22 条已知缺口基线（键=`slug|field|dimensions`，不含年度），已知→`warning` exit 0、新缺口或 provenance 失败→`blocked` exit 1；`--update-baseline` 供有意变更后再生成。gate 114 pass、vitest 31 files/531 全绿。
 
 ### G-16 `change_events` 的 schema 漂移（P2，工程风险）
 

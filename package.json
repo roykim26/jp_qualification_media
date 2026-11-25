@@ -32,7 +32,7 @@
     "ops:daily": "node scripts/ops-daily-report.mjs",
     "ready:check": "node scripts/check-readiness.mjs",
     "baseline:update": "node scripts/update-release-baseline.mjs",
-    "release:check": "pnpm run format:check && pnpm run lint && pnpm run typecheck && pnpm test && pnpm test:python && pnpm run build && pnpm test:verify-gate && pnpm run hygiene:check && pnpm verify:all && pnpm run db:verify-staleness",
+    "release:check": "pnpm run format:check && pnpm run lint && pnpm run typecheck && pnpm test && pnpm test:python && pnpm run build && pnpm test:verify-gate && pnpm run hygiene:check && pnpm verify:all && pnpm run db:verify-staleness && pnpm run audit:mvp",
     "ci:fixture:export": "node scripts/export-ci-db-fixture.mjs",
     "ci:fixture:restore": "node scripts/restore-ci-db-fixture.mjs",
     "ci:fixture:verify": "node scripts/verify-ci-fixture.mjs",

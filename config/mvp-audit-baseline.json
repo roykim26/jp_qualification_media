@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "note": "既知の MVP カバレッジ欠落（監査 G-15 / 決定#6 のソフトゲート基線）。キーは slug|field|dimensions で examYear を含まない。意図的なデータ変更後に --update-baseline で再生成する。",
+  "gapKeys": [
+    "bookkeeping|exam_subjects|deliveryMode=unified|examLevelId=bookkeeping:3",
+    "bookkeeping|exam_time|deliveryMode=unified|examLevelId=bookkeeping:3",
+    "bookkeeping|passing_standard|deliveryMode=unified|examLevelId=bookkeeping:3",
+    "bookkeeping|question_count|deliveryMode=unified|examLevelId=bookkeeping:1",
+    "bookkeeping|question_count|deliveryMode=unified|examLevelId=bookkeeping:3",
+    "bookkeeping|result_date|deliveryMode=unified|examLevelId=bookkeeping:3",
+    "fp|question_count|deliveryMode=pbt|examComponent=academic|examLevelId=fp:1|providerId=kinzai",
+    "fp|question_format|deliveryMode=pbt|examComponent=academic|examLevelId=fp:1|providerId=kinzai",
+    "it-passport|application_rule|deliveryMode=cbt",
+    "it-passport|booking_window|deliveryMode=cbt",
+    "it-passport|eligibility|deliveryMode=cbt",
+    "it-passport|exam_method|deliveryMode=cbt",
+    "it-passport|exam_subjects|deliveryMode=cbt",
+    "it-passport|exam_time|deliveryMode=cbt",
+    "it-passport|fee|deliveryMode=cbt",
+    "it-passport|official_verified_at|deliveryMode=cbt",
+    "it-passport|passing_standard|deliveryMode=cbt",
+    "it-passport|question_count|deliveryMode=cbt",
+    "it-passport|question_format|deliveryMode=cbt",
+    "it-passport|scoring_method|deliveryMode=cbt",
+    "it-passport|source_url|deliveryMode=cbt",
+    "it-passport|venue_rule|deliveryMode=cbt"
+  ]
+}
