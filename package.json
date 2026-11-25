@@ -23,7 +23,6 @@
     "test:verify-gate": "node --test scripts/verify-lib.test.mjs scripts/mvp-coverage.test.mjs scripts/staleness-lib.test.mjs scripts/ops-daily-lib.test.mjs scripts/query-shape-lib.test.mjs scripts/package-scripts.test.mjs",
     "audit:provenance": "node scripts/audit-approved-provenance.mjs",
     "audit:mvp": "node scripts/audit-mvp.mjs",
-    "audit:latency": "node scripts/dsh-latency-audit.mjs",
     "rollback:fact": "tsx scripts/rollback-fact.ts",
     "data:staleness": "node scripts/check-staleness.mjs",
     "patrol:sources": "python -m collector.patrol_sources",
