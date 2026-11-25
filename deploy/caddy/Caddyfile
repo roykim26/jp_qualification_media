@@ -37,6 +37,20 @@ shikakucheck.com {
 	handle /b416920e453b400196646cfea16e885b.txt {
 		respond "b416920e453b400196646cfea16e885b" 200
 	}
+	# Admin UI (审核 / 到期复核). The app enforces HTTP Basic auth from
+	# ADMIN_AUTH_USERS; Caddy only terminates TLS and strips the /admin prefix so
+	# the app keeps serving its normal root-relative routes.
+	handle /admin {
+		redir * /admin/ 308
+	}
+	handle_path /admin/* {
+		header {
+			X-Robots-Tag "noindex, nofollow"
+			Cache-Control "no-store"
+		}
+		reverse_proxy admin:3002
+	}
+
 	reverse_proxy web:3000
 }
 

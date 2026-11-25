@@ -44,6 +44,38 @@ services:
       retries: 12
       start_period: 20s
 
+  admin:
+    build:
+      context: ..
+    restart: unless-stopped
+    command: ['node', 'dist/apps/admin/src/server.js']
+    environment:
+      NODE_ENV: production
+      ADMIN_HOST: 0.0.0.0
+      ADMIN_PORT: '3002'
+      # Caddy strips this prefix before proxying; the app only needs it to build
+      # its own fetch() URLs so the browser stays on the edge route.
+      ADMIN_BASE_PATH: /admin
+      ADMIN_AUTH_USERS: ${ADMIN_AUTH_USERS:?ADMIN_AUTH_USERS is required for the admin app}
+      DATABASE_URL: postgresql://qualification_prod:${DB_PASSWORD}@db:5432/qualification_media
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      # Unauthenticated requests answer 401, so the check only requires that the
+      # process serves HTTP at all and does not return a 5xx.
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:3002/review/takken').then((response) => process.exit(response.status < 500 ? 0 : 1)).catch(() => process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+
   web:
     build:
       context: ..
@@ -86,6 +118,8 @@ services:
       - caddy_config:/config
     depends_on:
       web:
+        condition: service_healthy
+      admin:
         condition: service_healthy
 
 volumes:

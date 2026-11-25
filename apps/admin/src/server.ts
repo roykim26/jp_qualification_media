@@ -9,11 +9,25 @@ import {
   escapeHtml as escapeHtmlText,
   uiStyles,
 } from '../../../packages/ui/src/index.js';
+import { parseAuthUsers, verifyBasic } from './auth.js';
 import { adminStyles } from './styles.js';
 
 const port = Number(process.env.ADMIN_PORT ?? 3001);
+const host = process.env.ADMIN_HOST ?? '127.0.0.1';
+// Prefix under which the deployment exposes this app (e.g. "/admin"). Requests
+// arrive with the prefix stripped, but the HTML it renders must keep it so the
+// browser's fetch() calls come back through the same edge route.
+const basePath = (process.env.ADMIN_BASE_PATH ?? '').replace(/\/+$/, '');
 const reviewerId = process.env.ADMIN_REVIEWER_ID;
 const databaseUrl = process.env.DATABASE_URL;
+const authUsers = parseAuthUsers(process.env.ADMIN_AUTH_USERS);
+const basicAuthEnabled = authUsers.size > 0;
+
+if (!basicAuthEnabled && process.env.NODE_ENV === 'production') {
+  throw new Error(
+    'ADMIN_AUTH_USERS must be set in production; refusing to start without authentication',
+  );
+}
 
 function send(
   res: ServerResponse,
@@ -25,24 +39,71 @@ function send(
   res.end(body);
 }
 
-function authorizedWrite(req: IncomingMessage): boolean {
-  // Decisions must arrive with an explicit header: a reviewer id placed in a
-  // URL is replayable by any <img> tag, browser history, or proxy access log.
-  return Boolean(reviewerId && req.headers['x-reviewer-id'] === reviewerId);
-}
-
-function authorizedRead(req: IncomingMessage): boolean {
-  if (!reviewerId) return false;
+/**
+ * Resolve the acting reviewer, or null when the request is not authenticated.
+ *
+ * Production uses HTTP Basic (`ADMIN_AUTH_USERS`): the browser prompts once and
+ * re-sends the credentials on every same-origin request, so the identity written
+ * to reviews / retractions / verified_by is the account that actually signed in.
+ * The `x-reviewer-id` header and `?reviewer=` query exist only for local use
+ * where ADMIN_AUTH_USERS is unset; the startup check rejects that mode in
+ * production.
+ */
+function authenticate(req: IncomingMessage): string | null {
+  if (basicAuthEnabled)
+    return verifyBasic(req.headers.authorization, authUsers);
+  if (!reviewerId) return null;
   const queryReviewer = req.url
     ? new URL(req.url, 'http://127.0.0.1').searchParams.get('reviewer')
     : null;
-  return (
-    req.headers['x-reviewer-id'] === reviewerId || queryReviewer === reviewerId
-  );
+  return req.headers['x-reviewer-id'] === reviewerId ||
+    queryReviewer === reviewerId
+    ? reviewerId
+    : null;
+}
+
+function unauthorized(res: ServerResponse, json: boolean) {
+  return json
+    ? send(
+        res,
+        401,
+        JSON.stringify({ error: 'reviewer authentication required' }),
+        'application/json',
+      )
+    : send(
+        res,
+        401,
+        'reviewer authentication required',
+        'text/plain; charset=utf-8',
+      );
 }
 
 function escapeHtml(value: unknown): string {
   return escapeHtmlText(String(value ?? ''));
+}
+
+/** Embed a value inside an inline <script> without letting it close the tag. */
+function jsLiteral(value: unknown): string {
+  return JSON.stringify(value).replace(/</g, '\\u003c');
+}
+
+/**
+ * Client-side auth plumbing shared by both queue pages. In Basic mode the
+ * browser already holds the credentials, so the script never asks for an id and
+ * never sends `x-reviewer-id`; the server decides the actor. The legacy mode is
+ * the local-only header/query path.
+ */
+function authScript(): string {
+  return `const basePath = ${jsLiteral(basePath)};
+  const basicAuth = ${basicAuthEnabled ? 'true' : 'false'};
+  function authHeaders() {
+    const headers = { 'content-type': 'application/json' };
+    if (basicAuth) return headers;
+    const reviewer = prompt('审核人 ID');
+    if (!reviewer) return null;
+    headers['x-reviewer-id'] = reviewer;
+    return headers;
+  }`;
 }
 
 function page(
@@ -73,6 +134,7 @@ function page(
   return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${qualificationTitle}审核队列</title><style>${uiStyles}${adminStyles}</style></head><body><main class="admin-shell"><header class="admin-header"><div><p class="eyebrow">人工审核</p><h1>${qualificationTitle}审核队列</h1><p>高风险事实必须逐项核对官方原文后决定。批准会创建事实修订，不会绕过审核链。</p></div><p class="badge badge--info">待审核：${rows.length} 条</p></header><section class="admin-list" aria-label="待审核事实">
   ${cards || '<div class="feedback feedback--empty"><div><h2>当前没有待审核候选</h2><p>新的候选事实进入人工审核后会显示在这里。</p></div></div>'}</section></main>
   <script>
+  ${authScript()}
   const decisionLabels = { approve: '批准候选', reject: '拒绝候选', defer: '延期审核' };
   for (const card of document.querySelectorAll('.review-card')) for (const button of card.querySelectorAll('button')) button.onclick = async () => {
     const textarea = card.querySelector('textarea');
@@ -83,15 +145,15 @@ function page(
     if (!reason) { error.textContent = '请填写审核理由。'; textarea.focus(); return; }
     const decision = button.dataset.decision;
     if (!confirm('将记录为“' + decisionLabels[decision] + '”，是否继续？')) return;
-    const reviewer = prompt('审核人 ID');
-    if (!reviewer) { output.textContent = '操作已取消。'; return; }
+    const headers = authHeaders();
+    if (!headers) { output.textContent = '操作已取消。'; return; }
     const buttons = card.querySelectorAll('button');
     for (const item of buttons) item.disabled = true;
     button.dataset.originalLabel = button.textContent;
     button.textContent = '处理中…';
     output.textContent = '正在保存审核结果。';
     try {
-      const response = await fetch('/internal/reviews/' + encodeURIComponent(card.dataset.id), { method:'POST', headers:{'content-type':'application/json','x-reviewer-id':reviewer}, body:JSON.stringify({decision, reason}) });
+      const response = await fetch(basePath + '/internal/reviews/' + encodeURIComponent(card.dataset.id), { method:'POST', headers, body:JSON.stringify({decision, reason}) });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || 'request failed');
       output.textContent = '已记录：' + decisionLabels[result.decision];
@@ -133,6 +195,7 @@ async function reviewCandidate(
   id: string,
   decision: string,
   reason: string,
+  reviewer: string,
 ): Promise<void> {
   if (!databaseUrl)
     throw new Error('DATABASE_URL is required for the local review queue');
@@ -162,7 +225,7 @@ async function reviewCandidate(
           : 'pending_review';
     await client.query(
       'INSERT INTO reviews (id,candidate_fact_id,decision,reviewer_id,reason) VALUES ($1,$2,$3,$4,$5) ON CONFLICT (id) DO NOTHING',
-      [`review:${id}:${decision}`, id, decision, reviewerId, reason],
+      [`review:${id}:${decision}`, id, decision, reviewer, reason],
     );
     await client.query('UPDATE candidate_facts SET status=$1 WHERE id=$2', [
       status,
@@ -365,6 +428,7 @@ function duePage(
   return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${qualificationTitle}到期复核</title><style>${uiStyles}${adminStyles}</style></head><body><main class="admin-shell"><header class="admin-header"><div><p class="eyebrow">到期事实复核</p><h1>${qualificationTitle}待复核事实</h1><p>这些事实超过复核窗口但内容未变。确认无变化会追加一条同值修订（verified_at=now），公开值不变。</p></div><p class="badge badge--info">待复核：${rows.length} 条</p></header><section class="admin-list" aria-label="待复核事实">
    ${cards || '<div class="feedback feedback--empty"><div><h2>当前没有到期事实</h2><p>所有已批准事实都在复核窗口内。</p></div></div>'}</section></main>
   <script>
+  ${authScript()}
   for (const card of document.querySelectorAll('.review-card')) for (const button of card.querySelectorAll('button')) button.onclick = async () => {
     const textarea = card.querySelector('textarea');
     const error = card.querySelector('.field__error');
@@ -373,15 +437,15 @@ function duePage(
     error.textContent = '';
     if (!reason) { error.textContent = '请填写复核理由。'; textarea.focus(); return; }
     if (!confirm('将记录「确认无变化」，是否继续？')) return;
-    const reviewer = prompt('复核人 ID');
-    if (!reviewer) { output.textContent = '操作已取消。'; return; }
+    const headers = authHeaders();
+    if (!headers) { output.textContent = '操作已取消。'; return; }
     const buttons = card.querySelectorAll('button');
     for (const item of buttons) item.disabled = true;
     const originalLabel = button.textContent;
     button.textContent = '处理中…';
     output.textContent = '正在记录复核结果。';
     try {
-      const response = await fetch('/internal/reverifications/' + encodeURIComponent(card.dataset.id), { method:'POST', headers:{'content-type':'application/json','x-reviewer-id':reviewer}, body:JSON.stringify({reason}) });
+      const response = await fetch(basePath + '/internal/reverifications/' + encodeURIComponent(card.dataset.id), { method:'POST', headers, body:JSON.stringify({reason}) });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || 'request failed');
       output.textContent = '已记录：确认无变化';
@@ -401,7 +465,11 @@ function duePage(
  * intact; only verified_at / verified_by / verification_note change.  A unique
  * idempotency key per fact per JST day makes double-clicks harmless.
  */
-async function reverifyFact(factId: string, reason: string): Promise<string> {
+async function reverifyFact(
+  factId: string,
+  reason: string,
+  reviewer: string,
+): Promise<string> {
   if (!databaseUrl)
     throw new Error('DATABASE_URL is required for the local review queue');
   if (!reason.trim()) throw new Error('verification reason required');
@@ -448,7 +516,7 @@ async function reverifyFact(factId: string, reason: string): Promise<string> {
         JSON.stringify(row.normalized_value),
         row.display_value,
         idempotencyKey,
-        reviewerId,
+        reviewer,
         reason,
       ],
     );
@@ -478,6 +546,7 @@ async function reverifyFact(factId: string, reason: string): Promise<string> {
 async function retractCiCurrentFact(
   rejectedCandidateId: string,
   reason: string,
+  reviewer: string,
 ): Promise<void> {
   if (!databaseUrl)
     throw new Error('DATABASE_URL is required for the local review queue');
@@ -537,7 +606,7 @@ async function retractCiCurrentFact(
         `retraction:${rejectedCandidateId}`,
         factId,
         rejectedCandidateId,
-        reviewerId,
+        reviewer,
         reason,
       ],
     );
@@ -592,13 +661,7 @@ const server = createServer(async (req, res) => {
       ? reverifyRoutes[req.url.split('?')[0]]
       : undefined;
     if (req.method === 'GET' && reverifyRoute) {
-      if (!authorizedRead(req))
-        return send(
-          res,
-          401,
-          'reviewer authentication required',
-          'text/plain; charset=utf-8',
-        );
+      if (!authenticate(req)) return unauthorized(res, false);
       return send(
         res,
         200,
@@ -610,13 +673,7 @@ const server = createServer(async (req, res) => {
     }
     const route = req.url ? reviewRoutes[req.url.split('?')[0]] : undefined;
     if (req.method === 'GET' && route) {
-      if (!authorizedRead(req))
-        return send(
-          res,
-          401,
-          'reviewer authentication required',
-          'text/plain; charset=utf-8',
-        );
+      if (!authenticate(req)) return unauthorized(res, false);
       return send(
         res,
         200,
@@ -624,18 +681,18 @@ const server = createServer(async (req, res) => {
       );
     }
     if (req.method === 'POST' && req.url?.startsWith('/internal/reviews/')) {
-      if (!authorizedWrite(req))
-        return send(
-          res,
-          401,
-          JSON.stringify({ error: 'reviewer authentication required' }),
-          'application/json',
-        );
+      const reviewer = authenticate(req);
+      if (!reviewer) return unauthorized(res, true);
       const id = decodeURIComponent(req.url.slice('/internal/reviews/'.length));
       let body = '';
       for await (const chunk of req) body += chunk;
       const input = JSON.parse(body) as { decision?: string; reason?: string };
-      await reviewCandidate(id, input.decision ?? '', input.reason ?? '');
+      await reviewCandidate(
+        id,
+        input.decision ?? '',
+        input.reason ?? '',
+        reviewer,
+      );
       return send(
         res,
         200,
@@ -647,20 +704,15 @@ const server = createServer(async (req, res) => {
       req.method === 'POST' &&
       req.url?.startsWith('/internal/retractions/')
     ) {
-      if (!authorizedWrite(req))
-        return send(
-          res,
-          401,
-          JSON.stringify({ error: 'reviewer authentication required' }),
-          'application/json',
-        );
+      const reviewer = authenticate(req);
+      if (!reviewer) return unauthorized(res, true);
       const id = decodeURIComponent(
         req.url.slice('/internal/retractions/'.length),
       );
       let body = '';
       for await (const chunk of req) body += chunk;
       const input = JSON.parse(body) as { reason?: string };
-      await retractCiCurrentFact(id, input.reason ?? '');
+      await retractCiCurrentFact(id, input.reason ?? '', reviewer);
       return send(
         res,
         200,
@@ -672,20 +724,15 @@ const server = createServer(async (req, res) => {
       req.method === 'POST' &&
       req.url?.startsWith('/internal/reverifications/')
     ) {
-      if (!authorizedWrite(req))
-        return send(
-          res,
-          401,
-          JSON.stringify({ error: 'reviewer authentication required' }),
-          'application/json',
-        );
+      const reviewer = authenticate(req);
+      if (!reviewer) return unauthorized(res, true);
       const id = decodeURIComponent(
         req.url.slice('/internal/reverifications/'.length),
       );
       let body = '';
       for await (const chunk of req) body += chunk;
       const input = JSON.parse(body) as { reason?: string };
-      const revisionId = await reverifyFact(id, input.reason ?? '');
+      const revisionId = await reverifyFact(id, input.reason ?? '', reviewer);
       return send(
         res,
         200,
@@ -706,6 +753,8 @@ const server = createServer(async (req, res) => {
   }
 });
 
-server.listen(port, '127.0.0.1', () =>
-  console.log(`admin review on http://127.0.0.1:${port}/review/takken`),
+server.listen(port, host, () =>
+  console.log(
+    `admin review on http://${host}:${port}${basePath}/review/takken`,
+  ),
 );

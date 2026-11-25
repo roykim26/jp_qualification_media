@@ -59,6 +59,33 @@ pnpm dev:admin
 
 高风险事实不得自动批准。批准会在同一维度组合上创建新 revision 并复用（复活）既有 `facts` 行；拒绝与延期不撤销已发布的正式事实；撤销只对 `ci://` 快照驱动的事实生效。
 
+## admin 后台部署与鉴权
+
+本地开发仍用上面的 `ADMIN_REVIEWER_ID`（`x-reviewer-id` 请求头 / `?reviewer=` 查询参数），不要把该模式带到生产。
+
+生产把审核与到期复核页面挂在 `https://shikakucheck.com/admin/`：Caddy `handle_path /admin/*` 只负责 TLS 与剥离前缀，鉴权由应用自己做 HTTP Basic，避免两层口令不同步。`apps/admin` 作为独立 `admin` 容器（端口 3002）与 `/opt/jpqm/deploy/docker-compose.prod.yml` 一起部署。
+
+生成一条账号凭据（口令不入 shell 历史）：
+
+```bash
+ADMIN_PASSWORD='至少 12 位' node scripts/admin-hash-password.mjs operator
+# 输出形如 operator:scrypt:<saltHex>:<hashHex>
+```
+
+把输出写进生产 `deploy/.env` 的 `ADMIN_AUTH_USERS`（多账号用英文逗号分隔，`.env` 不提交）。**生产环境未设置时 `admin` 容器会拒绝启动**（fail closed）；`ADMIN_BASE_PATH=/admin` 仅用于让页面内 `fetch` 走 `/admin/internal/...`，容器内路由仍是根路径。
+
+验收：
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' https://shikakucheck.com/admin/review/takken          # 401
+curl -s -o /dev/null -w '%{http_code}\n' -u operator:口令 https://shikakucheck.com/admin/review/takken  # 200
+curl -s -o /dev/null -w '%{http_code} %{redirect_url}\n' https://shikakucheck.com/admin        # 308 …/admin/
+```
+
+换口令/加账号：重新生成条目 → 改 `deploy/.env` → `docker compose -f deploy/docker-compose.prod.yml up -d admin`（无需重建镜像）。
+
+排障 401：先看 `docker compose -f deploy/docker-compose.prod.yml exec -T admin printenv ADMIN_AUTH_USERS`（不应为空）；应用启动日志里 `invalid ADMIN_AUTH_USERS ...` 表示条目格式不对（名字 2–32 位 `[A-Za-z0-9._-]`、salt 32 个 hex、hash 64 个 hex）；浏览器可能缓存了旧口令，换无痕窗口再试。
+
 ## 正式发布前门禁
 
 本地正式发布前必须执行：
