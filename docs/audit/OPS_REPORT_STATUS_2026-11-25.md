@@ -3,7 +3,7 @@
 - 日期：2026-11-25
 - 分支：`chore/phase1-baseline`
 - 执行前 HEAD：`2cfb16c`
-- 本轮内容 commit：`<CONTENT_SHA>`
+- 本轮内容 commit：`0890d48`（收口 commit 只回填这一行）
 - 触发来源：`docs/audit/DEPLOY_3A_3M_REPORT_2026-11-25.md` §10.1 / §15 P3，`docs/audit/DUE_FACT_DIMENSIONS_2026-11-25.md` §8 第 4 条 / §9 P3
 
 ## 0. 一句话结论
