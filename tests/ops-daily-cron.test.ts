@@ -80,7 +80,6 @@ interface RunResult {
 
 function runScript(env: Record<string, string> = {}): RunResult {
   const assignments = {
-    PATH: `${toPosixPath(binDir)}:$PATH`,
     LOGGER_LOG: toPosixPath(loggerLog),
     NOTIFY_SCRIPT: toPosixPath(notifyScript),
     NOTIFY_LOG: toPosixPath(notifyLog),
@@ -92,8 +91,17 @@ function runScript(env: Record<string, string> = {}): RunResult {
     OPS_TODAY: today,
     ...env,
   };
-  const prefix = Object.entries(assignments)
-    .map(([key, value]) => `${key}=${quote(value)}`)
+  // $PATH must be expanded by the outer shell, not frozen by quote(): a quoted
+  // '$PATH' would hand the script PATH='<bin>:$PATH', so even `sh` itself would
+  // be unresolvable and the run would exit 127 (this is what failed on Linux CI
+  // while Windows' bash silently rebuilt PATH from its login profile).
+  const pathAssignment = `PATH=${quote(toPosixPath(binDir))}:"$PATH"`;
+  const prefix = [pathAssignment]
+    .concat(
+      Object.entries(assignments).map(
+        ([key, value]) => `${key}=${quote(value)}`,
+      ),
+    )
     .join(' ');
 
   // The chmod is best-effort so a case can delete the fake docker to prove the

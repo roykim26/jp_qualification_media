@@ -62,15 +62,23 @@ function runScript(env: Record<string, string> = {}): {
   state: string;
 } {
   const assignments = {
-    PATH: `${toPosixPath(binDir)}:$PATH`,
     READINESS_STATE_FILE: toPosixPath(stateFile),
     LOGGER_LOG: toPosixPath(loggerLog),
     NOTIFY_SCRIPT: toPosixPath(notifyScript),
     NOTIFY_LOG: toPosixPath(notifyLog),
     ...env,
   };
-  const prefix = Object.entries(assignments)
-    .map(([key, value]) => `${key}=${quote(value)}`)
+  // $PATH must be expanded by the outer shell, not frozen by quote(): a quoted
+  // '$PATH' would hand the script PATH='<bin>:$PATH', so even `sh` itself would
+  // be unresolvable and the run would exit 127 (this is what failed on Linux CI
+  // while Windows' bash silently rebuilt PATH from its login profile).
+  const pathAssignment = `PATH=${quote(toPosixPath(binDir))}:"$PATH"`;
+  const prefix = [pathAssignment]
+    .concat(
+      Object.entries(assignments).map(
+        ([key, value]) => `${key}=${quote(value)}`,
+      ),
+    )
     .join(' ');
 
   const command = `chmod +x ${quote(toPosixPath(join(binDir, 'docker')))} ${quote(
