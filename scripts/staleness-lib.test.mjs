@@ -3,8 +3,12 @@ import test from 'node:test';
 import {
   ageInDays,
   computeStaleness,
+  factDimensionFields,
+  factDimensions,
   factWindowDays,
+  formatFactTarget,
   referenceYear,
+  STALENESS_QUERY,
   windowsDays,
 } from './staleness-lib.mjs';
 
@@ -17,6 +21,12 @@ function row(overrides = {}) {
     fact_id: 'fact:1',
     exam_year: 2026,
     fact_key: 'fee',
+    provider_id: null,
+    exam_level_id: null,
+    exam_component: null,
+    delivery_mode: null,
+    payment_method: null,
+    exam_session: null,
     display_value: '7,500円',
     verified_at: daysAgo(1),
     qualification_slug: 'fundamental-it-engineer',
@@ -122,4 +132,99 @@ test('due facts sort by overdue ratio and summary counts match', () => {
   assert.equal(result.summary.checked, 2);
   assert.equal(result.dueFacts[0].factId, 'fact:fee');
   assert.deepEqual(result.windowsDays ?? windowsDays, windowsDays);
+});
+
+test('fact dimensions drop nulls and keep only set axes', () => {
+  assert.deepEqual(factDimensions(row()), {});
+  assert.deepEqual(
+    factDimensions(
+      row({ exam_level_id: 'bookkeeping:2', delivery_mode: 'network' }),
+    ),
+    { examLevelId: 'bookkeeping:2', deliveryMode: 'network' },
+  );
+  // An empty string is a value the loader can produce; it must not become a
+  // label like "component=" that tells a reviewer nothing.
+  assert.deepEqual(factDimensions(row({ exam_component: '' })), {});
+});
+
+test('fact target names the dimensions that distinguish two identical-looking facts', () => {
+  const plain = {
+    qualification: 'bookkeeping',
+    examYear: 2026,
+    factKey: 'fee',
+  };
+  // No dimensions: byte-for-byte what the report printed before this change.
+  assert.equal(formatFactTarget(plain), 'bookkeeping/2026/fee');
+  assert.equal(
+    formatFactTarget({
+      ...plain,
+      dimensions: { examLevelId: 'bookkeeping:2', deliveryMode: 'network' },
+    }),
+    'bookkeeping/2026/fee (examLevel=bookkeeping:2, delivery=network)',
+  );
+  // Dimension order is fixed by factDimensionFields, not by object key order, so
+  // two facts that differ only in insertion order still sort and render alike.
+  assert.equal(
+    formatFactTarget({
+      ...plain,
+      dimensions: { deliveryMode: 'unified', examLevelId: 'bookkeeping:3' },
+    }),
+    'bookkeeping/2026/fee (examLevel=bookkeeping:3, delivery=unified)',
+  );
+});
+
+test('fee facts that differ only in dimensions get distinct targets', () => {
+  const levels = ['bookkeeping:1', 'bookkeeping:2', 'bookkeeping:3'];
+  const modes = ['unified', 'network'];
+  const rows = [];
+  for (const level of levels) {
+    for (const mode of modes) {
+      rows.push(
+        row({
+          fact_id: `fact:${level}:${mode}`,
+          exam_level_id: level,
+          delivery_mode: mode,
+          verified_at: daysAgo(100),
+        }),
+      );
+    }
+  }
+  const result = computeStaleness(rows, now);
+  assert.equal(result.summary.dueFacts, 6);
+  const targets = result.dueFacts.map((fact) => formatFactTarget(fact));
+  assert.equal(new Set(targets).size, 6);
+});
+
+test('due facts with the same overdue ratio keep a stable order', () => {
+  // Same ratio, different ids: without the factId tie-break the order depends on
+  // whatever the database happened to return.
+  const result = computeStaleness(
+    [
+      row({ fact_id: 'fact:b', verified_at: daysAgo(100) }),
+      row({ fact_id: 'fact:a', verified_at: daysAgo(100) }),
+    ],
+    now,
+  );
+  assert.deepEqual(
+    result.dueFacts.map((fact) => fact.factId),
+    ['fact:a', 'fact:b'],
+  );
+});
+
+// The query is never executed by these tests, so dropping a column from the
+// SELECT list cannot fail anything at runtime here — the rows simply arrive
+// without that key and every dimension quietly disappears from the report. This
+// asserts the text of the query instead, which is the only guard available
+// without a database.
+test('the staleness query selects every dimension the target format prints', () => {
+  for (const { column } of factDimensionFields) {
+    assert.match(
+      STALENESS_QUERY,
+      new RegExp(`\\bf\\.${column}\\b`),
+      `STALENESS_QUERY must select f.${column} or the report cannot name it`,
+    );
+  }
+  // exam_year and fact_key anchor the target itself, not a dimension.
+  assert.match(STALENESS_QUERY, /\bf\.exam_year\b/);
+  assert.match(STALENESS_QUERY, /\bf\.fact_key\b/);
 });

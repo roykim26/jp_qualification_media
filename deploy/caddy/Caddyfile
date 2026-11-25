@@ -1,0 +1,70 @@
+www.shikakucheck.com {
+	redir https://shikakucheck.com{uri} permanent
+}
+
+shikakucheck.com {
+	encode gzip
+
+	log {
+		output file /var/log/caddy/access.log {
+			roll_size 10mb
+			roll_keep 5
+		}
+		format json
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+	}
+
+	handle /googlea01c41ed599c5311.html {
+		respond "google-site-verification: googlea01c41ed599c5311.html" 200
+	}
+	handle /BingSiteAuth.xml {
+		header Content-Type application/xml
+		respond "<?xml version=\"1.0\"?>
+<users>
+	<user>EDA4FA186A6B3A981863D4145C31280D</user>
+</users>" 200
+	}
+	handle /dd3d6c883de8475fb7f2d7639208d313.txt {
+		respond "dd3d6c883de8475fb7f2d7639208d313" 200
+	}
+	handle /b416920e453b400196646cfea16e885b.txt {
+		respond "b416920e453b400196646cfea16e885b" 200
+	}
+	reverse_proxy web:3000
+}
+
+# Blog host. The `blog` container is NOT part of deploy/docker-compose.prod.yml:
+# it is an independent nginx container (image nginx:1.27-alpine) that mounts
+# /opt/blog/dist and /opt/blog/nginx.conf from the host, created outside compose
+# and joined to this stack's `deploy_default` network so this name resolves.
+# Keep the block here so the live routing lives in version control; a fresh
+# deployment must bring that container up separately, otherwise this vhost
+# answers 502 instead of disappearing (Caddy resolves upstreams per request).
+blog.waystoneai.online {
+	encode gzip
+
+	log {
+		output file /var/log/caddy/blog-access.log {
+			roll_size 10mb
+			roll_keep 5
+		}
+		format json
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+	}
+
+	reverse_proxy blog:8080
+}

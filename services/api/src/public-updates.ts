@@ -4,6 +4,7 @@ import {
   updateEventLabel,
   updateFactLabel,
 } from '../../../packages/schema/src/updates.js';
+import { resolveDatabaseUrl } from './database-config.js';
 
 let pool: Pool | undefined;
 
@@ -27,13 +28,14 @@ export async function readPublicUpdates(
 ): Promise<PublicUpdatePage> {
   const limit = page.limit ?? 100;
   const offset = page.offset ?? 0;
-  if (!databaseUrl) return { events: [], hasMore: false };
+  const configuredUrl = resolveDatabaseUrl(databaseUrl, process.env.NODE_ENV);
+  if (!configuredUrl) return { events: [], hasMore: false };
   const values: (string | number)[] = [];
   if (qualificationSlug) values.push(qualificationSlug);
   values.push(limit + 1, offset);
   const limitPlaceholder = `$${values.length - 1}`;
   const offsetPlaceholder = `$${values.length}`;
-  const result = await databasePool(databaseUrl).query(
+  const result = await databasePool(configuredUrl).query(
     `
     SELECT e.id, e.event_type, e.affected_pages, e.created_at,
       q.slug, q.official_name_ja, q.aliases_ja, q.field, q.category,

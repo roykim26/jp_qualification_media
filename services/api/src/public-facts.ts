@@ -1,5 +1,6 @@
 import { Pool } from 'pg';
 import type { PublicFact } from '../../../packages/schema/src/index.js';
+import { resolveDatabaseUrl } from './database-config.js';
 
 let pool: Pool | undefined;
 
@@ -66,8 +67,9 @@ export async function readApprovedFacts(
   databaseUrl?: string,
   qualificationSlug?: string,
 ): Promise<PublicFact[]> {
-  if (!databaseUrl) return [];
-  const result = await databasePool(databaseUrl).query(
+  const configuredUrl = resolveDatabaseUrl(databaseUrl, process.env.NODE_ENV);
+  if (!configuredUrl) return [];
+  const result = await databasePool(configuredUrl).query(
     `
     SELECT q.slug AS qualification_slug, c.provider_id, c.exam_level_id, c.exam_component, c.delivery_mode, c.payment_method, c.exam_session, c.exam_year, c.fact_key,
       c.value_type, fr.normalized_value, fr.display_value, fr.status,
@@ -140,8 +142,10 @@ export async function readPendingFactCoverage(
   databaseUrl?: string,
   qualificationSlug?: string,
 ): Promise<PendingFactCoverage[]> {
-  if (!databaseUrl || !qualificationSlug) return [];
-  const result = await databasePool(databaseUrl).query(
+  const configuredUrl = resolveDatabaseUrl(databaseUrl, process.env.NODE_ENV);
+  // A missing slug is a legitimate "nothing to report" input, not a config error.
+  if (!configuredUrl || !qualificationSlug) return [];
+  const result = await databasePool(configuredUrl).query(
     `SELECT q.slug AS qualification_slug, c.provider_id, c.exam_level_id,
       c.exam_component, c.delivery_mode, c.payment_method, c.exam_year, c.fact_key
      FROM candidate_facts c

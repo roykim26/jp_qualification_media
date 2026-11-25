@@ -52,6 +52,12 @@ export const STALENESS_QUERY = `
       f.id AS fact_id,
       f.exam_year,
       f.fact_key,
+      f.provider_id,
+      f.exam_level_id,
+      f.exam_component,
+      f.delivery_mode,
+      f.payment_method,
+      f.exam_session,
       fr.display_value,
       fr.verified_at,
       q.slug AS qualification_slug,
@@ -77,6 +83,48 @@ export const STALENESS_QUERY = `
     ORDER BY q.slug, f.exam_year DESC, f.fact_key
   `;
 
+// A fact is identified by nine columns, not three (see facts_current_key_idx in
+// migrations/0017_exam_session_dimension.sql). Two approved facts can share
+// qualification/examYear/factKey and differ only in, say, exam level and
+// delivery mode — 日商簿記 2026 has seven distinct fee facts doing exactly that.
+// Carrying the dimensions through means a "needs review" line names one fact
+// instead of seven identical-looking ones.
+export const factDimensionFields = [
+  { field: 'providerId', column: 'provider_id', label: 'provider' },
+  { field: 'examLevelId', column: 'exam_level_id', label: 'examLevel' },
+  { field: 'examComponent', column: 'exam_component', label: 'component' },
+  { field: 'deliveryMode', column: 'delivery_mode', label: 'delivery' },
+  { field: 'paymentMethod', column: 'payment_method', label: 'payment' },
+  { field: 'examSession', column: 'exam_session', label: 'session' },
+];
+
+// Every dimension is nullable, and a null means "this fact does not distinguish
+// that axis" rather than "unknown". Dropping nulls keeps the label short and
+// keeps the common case (no dimensions at all) identical to the old output.
+export function factDimensions(row) {
+  const dimensions = {};
+  for (const { field, column } of factDimensionFields) {
+    const value = row[column];
+    if (typeof value === 'string' && value.length > 0) {
+      dimensions[field] = value;
+    }
+  }
+  return dimensions;
+}
+
+export function formatFactTarget(fact) {
+  const base = `${fact.qualification}/${fact.examYear}/${fact.factKey}`;
+  const dimensions = fact.dimensions ?? {};
+  const parts = [];
+  for (const { field, label } of factDimensionFields) {
+    const value = dimensions[field];
+    if (typeof value === 'string' && value.length > 0) {
+      parts.push(`${label}=${value}`);
+    }
+  }
+  return parts.length === 0 ? base : `${base} (${parts.join(', ')})`;
+}
+
 export function computeStaleness(rows, now) {
   const year = referenceYear(now);
   const dueFacts = [];
@@ -96,6 +144,7 @@ export function computeStaleness(rows, now) {
         qualification: row.qualification_slug,
         examYear: row.exam_year,
         factKey: row.fact_key,
+        dimensions: factDimensions(row),
         displayValue: row.display_value,
         verifiedAt: row.verified_at,
         ageDays,
@@ -117,7 +166,14 @@ export function computeStaleness(rows, now) {
     }
   }
 
-  dueFacts.sort((a, b) => b.ageDays / b.windowDays - a.ageDays / a.windowDays);
+  // Ratio decides the order; factId breaks ties so a report that runs twice on
+  // the same data lists the same facts in the same order (the SQL order stops at
+  // factKey, which is no longer unique once dimensions are in play).
+  dueFacts.sort(
+    (a, b) =>
+      b.ageDays / b.windowDays - a.ageDays / a.windowDays ||
+      a.factId.localeCompare(b.factId),
+  );
 
   return {
     referenceYear: year,

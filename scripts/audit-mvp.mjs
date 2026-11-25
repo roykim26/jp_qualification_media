@@ -5,6 +5,37 @@ import {
   auditProvenanceRow,
   summarizeProvenanceAudit,
 } from './provenance-audit-lib.mjs';
+import { shapeProblems } from './query-shape-lib.mjs';
+
+// Every column the two readers below touch. auditProvenanceRow needs the
+// provenance half; the facts map needs the dimension half. A column dropped from
+// the SELECT would arrive as `undefined`, which auditProvenanceRow reads as
+// "missing" and reports as a provenance issue — turning a query bug into a fake
+// data-quality verdict. So the shape is checked before either reader runs.
+const auditColumns = [
+  // provenance
+  'source_id',
+  'source_snapshot_id',
+  'snapshot_id',
+  'snapshot_source_id',
+  'snapshot_synthetic',
+  'content_hash',
+  'object_key',
+  'latest_review_decision',
+  'latest_review_at',
+  'canonical_url',
+  'allowed_domain',
+  // fact dimensions and identity
+  'fact_id',
+  'qualification_slug',
+  'provider_id',
+  'exam_level_id',
+  'exam_component',
+  'delivery_mode',
+  'payment_method',
+  'exam_year',
+  'fact_key',
+];
 
 const args = process.argv.slice(2);
 const yearArgument = args.find((arg) => arg.startsWith('--year='));
@@ -67,48 +98,75 @@ try {
     ORDER BY q.slug, c.exam_year, c.fact_key, f.id
   `);
   await client.query('COMMIT');
-  const facts = result.rows.map((row) => {
-    const verified = auditProvenanceRow(row).issues.length === 0;
-    return {
-      qualificationSlug: row.qualification_slug,
-      providerId: row.provider_id,
-      examLevelId: row.exam_level_id,
-      examComponent: row.exam_component,
-      deliveryMode: row.delivery_mode,
-      paymentMethod: row.payment_method,
-      examYear: row.exam_year,
-      factKey: row.fact_key,
-      sourceUrl: row.canonical_url,
-      provenanceStatus: verified ? 'verified' : 'incomplete',
-      officialVerifiedAt: verified ? row.latest_review_at : undefined,
-    };
-  });
-  const coverageGaps = evaluateMvpCoverage(facts, examYear);
-  const provenance = summarizeProvenanceAudit(result.rows);
-  const status =
-    coverageGaps.length === 0 && provenance.status === 'passed'
-      ? 'passed'
-      : 'blocked';
-  console.log(
-    JSON.stringify(
-      {
-        status,
-        checkedAt: new Date().toISOString(),
-        examYear,
-        limitedLaunchScopes,
-        summary: {
-          approvedFacts: facts.length,
-          coverageGaps: coverageGaps.length,
-          unverifiedFacts: provenance.blockedFacts,
-        },
-        coverageGaps,
-        provenance,
-      },
-      null,
-      2,
-    ),
+
+  const problems = shapeProblems(
+    'MVP audit query',
+    result,
+    auditColumns,
+    'provenance column',
   );
-  process.exitCode = status === 'passed' ? 0 : 1;
+  if (problems.length > 0) {
+    console.error(
+      JSON.stringify({
+        status: 'error',
+        reason: 'the MVP audit query does not match the shape this audit needs',
+        problems,
+      }),
+    );
+    process.exitCode = 2;
+  } else {
+    const facts = result.rows.map((row) => {
+      const verified = auditProvenanceRow(row).issues.length === 0;
+      return {
+        qualificationSlug: row.qualification_slug,
+        providerId: row.provider_id,
+        examLevelId: row.exam_level_id,
+        examComponent: row.exam_component,
+        deliveryMode: row.delivery_mode,
+        paymentMethod: row.payment_method,
+        examYear: row.exam_year,
+        factKey: row.fact_key,
+        sourceUrl: row.canonical_url,
+        provenanceStatus: verified ? 'verified' : 'incomplete',
+        officialVerifiedAt: verified ? row.latest_review_at : undefined,
+      };
+    });
+    const coverageGaps = evaluateMvpCoverage(facts, examYear);
+    const provenance = summarizeProvenanceAudit(result.rows);
+    // Two different problems hide behind one gap count: a fact that exists but
+    // was never tagged with the dimension the contract asks for (fix: tag it),
+    // and a fact that does not exist at all (fix: create it). The totals add up
+    // to coverageGaps.length so a reader can keep using that number.
+    const dimensionMismatchGaps = coverageGaps.filter(
+      (gap) => gap.dimensionMismatch,
+    ).length;
+    const status =
+      coverageGaps.length === 0 && provenance.status === 'passed'
+        ? 'passed'
+        : 'blocked';
+    console.log(
+      JSON.stringify(
+        {
+          status,
+          checkedAt: new Date().toISOString(),
+          examYear,
+          limitedLaunchScopes,
+          summary: {
+            approvedFacts: facts.length,
+            coverageGaps: coverageGaps.length,
+            dimensionMismatchGaps,
+            missingDataGaps: coverageGaps.length - dimensionMismatchGaps,
+            unverifiedFacts: provenance.blockedFacts,
+          },
+          coverageGaps,
+          provenance,
+        },
+        null,
+        2,
+      ),
+    );
+    process.exitCode = status === 'passed' ? 0 : 1;
+  }
 } catch (error) {
   console.error(
     JSON.stringify({

@@ -192,6 +192,22 @@ test('sitemap lists section pages if and only if they are indexable', () => {
     }),
     ['Sitemap lists a parameter-filtered page'],
   );
+  // G-02: sorting parameters are parameter variants too, so they must never
+  // reach sitemap.xml either.
+  assert.deepEqual(
+    evaluateSitemapRoutes({
+      routes: [],
+      sitemapXml: `${sitemapXml}?sort=pass_rate&order=desc`,
+    }),
+    ['Sitemap lists a parameter-filtered page'],
+  );
+  assert.deepEqual(
+    evaluateSitemapRoutes({
+      routes: [],
+      sitemapXml: `${sitemapXml}?order=asc`,
+    }),
+    ['Sitemap lists a parameter-filtered page'],
+  );
 });
 
 test('coverage gate fails after a required fact is removed and ignores duplicate noise', () => {

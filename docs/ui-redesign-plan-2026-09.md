@@ -1,6 +1,8 @@
 # 公开网站 UI 改造规划
 
 > 2026-09-22。依据 `product-design.md`、`design-system.md` 与当前 `apps/web` 实现。范围为公开网站；审核后台沿用原有高密度工作台规范。
+>
+> **2026-11-24 复核（基线 `01b86dd`）**：本页是 2026-09-22 的规划原文，§「本轮实施清单」当时留了三条未勾项。复核实测这三条**均已完成**，已在下方逐条补证据；本页此后只作追溯，当前 UI 口径以 `design-system.md` 与代码为准。
 
 ## 目标与边界
 
@@ -31,9 +33,12 @@
 - [x] 调整全局导航和首页的任务入口。
 - [x] 改造目录卡片、工具页与详情页的视觉层级。
 - [x] 完善响应式、焦点与空状态样式。
-- [ ] 浏览器视觉验收：当前环境的浏览器安全策略禁止访问本地预览文件，待可用的预览环境执行。
-- [ ] 真实更新列表与首页近期事件：需基于已批准 API 数据接入，不能用静态示例替代。
-- [ ] 完整月历、统计专题与政策页：现有路由/数据能力尚未落地，属于后续产品功能开发。
+- [x] 浏览器视觉验收：当前环境的浏览器安全策略禁止访问本地预览文件，待可用的预览环境执行。
+      → **2026-11-24 复核：已完成**。常备工具 `scripts/visual_smoke.py`（4333 B，2026-11-19 随 PR #111 / `01b86dd` 入库），参数 `--base-url/--pages/--viewports/--email/--out/--shots/--chrome`，四项判定＝横向溢出／页脚邮箱直显／`footer-note` 裁切（sw>cw）／pageerror，逐行 PASS/FAIL 并落 `report.json`，任一失败 exit 1。2026-11-19 生产实测 6/6 PASS exit 0、负例 exit 1。
+- [x] 真实更新列表与首页近期事件：需基于已批准 API 数据接入，不能用静态示例替代。
+      → **2026-11-24 复核：已完成**。`apps/web/src/render.ts:2639` `const recentUpdates = [...updateGroups.values()].slice(0, 3);` 由已批准事实的 `change_events` 聚合而来，`:2641` 渲染 `<ul class="home-updates">`（`:2644` 每条链到 `/updates/?qualification=`），`:2648` 底部「更新情報をすべて見る」；无事件时 `:2649` 走空态「更新情報はまだありません」，不生成静态假内容。
+- [x] 完整月历、统计专题与政策页：现有路由/数据能力尚未落地，属于后续产品功能开发。
+      → **2026-11-24 复核：已完成**。月历＝`apps/web/src/render.ts:1891` `<section class="schedule-month" aria-label="…">` 按月分组渲染；合格率统计＝`render.ts:2329-2332` `.pass-rate-table`；历年统计表＝`render.ts:1152-1245`（表头在 `:196`）；政策页＝`apps/web/src/editorial.ts` 的 `aboutPages`（`:318` 起）九页全在（`sources` `:319`、`editorial-policy` `:356`、`corrections` `:393`、`operator` `:443`、`privacy` `:487`、`terms` `:582`、`advertising-policy` `:645`、`ai-policy` `:684`、`contact` `:727`），路由在 `apps/web/src/server.ts:300-311`。
 
 ## 验收标准
 

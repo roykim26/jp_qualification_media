@@ -117,7 +117,7 @@ async function psql(sql) {
     network,
     '-e',
     `PGPASSWORD=${dbPassword}`,
-    'postgres:16-alpine',
+    'postgres:18-alpine',
     'psql',
     '-h',
     dbContainer,
@@ -159,7 +159,7 @@ async function main() {
       POSTGRES_USER: dbUser,
       POSTGRES_PASSWORD: dbPassword,
     }),
-    'postgres:16-alpine',
+    'postgres:18-alpine',
   ]);
   for (let attempt = 0; attempt < 60; attempt += 1) {
     const ready = await docker(
@@ -242,7 +242,7 @@ async function main() {
       '--network',
       network,
       ...envFlags({ PGPASSWORD: dbPassword }),
-      'postgres:16-alpine',
+      'postgres:18-alpine',
       'psql',
       '-h',
       dbContainer,
@@ -343,7 +343,7 @@ async function main() {
   await waitForUrl(`${apiBase}/api/v1/qualifications/bookkeeping`);
   await waitForUrl(`${webBase}/shikaku/bookkeeping/`);
 
-  await runChecked('the image restores the 999 approved facts', async () => {
+  await runChecked('the image restores the 1007 approved facts', async () => {
     const facts = await psql(
       `SELECT count(*) FROM facts f
          JOIN fact_revisions fr ON fr.id=f.current_revision_id
@@ -353,7 +353,7 @@ async function main() {
         WHERE f.status='approved' AND fr.status='approved'
           AND c.status='approved' AND c.synthetic=false`,
     );
-    expect(facts === '999', `expected 999 approved facts, got ${facts}`);
+    expect(facts === '1007', `expected 1007 approved facts, got ${facts}`);
     const snapshots = await psql('SELECT count(*) FROM snapshots');
     expect(
       snapshots === '37',
@@ -368,10 +368,7 @@ async function main() {
       page.contentType.includes('text/html'),
       `expected text/html, got ${page.contentType}`,
     );
-    expect(
-      page.body.includes('資格試験の公式情報'),
-      'home page lost its brand',
-    );
+    expect(page.body.includes('シカクチェック'), 'home page lost its brand');
   });
 
   await runChecked('the qualification pages render', async () => {
@@ -411,6 +408,11 @@ async function main() {
         !sitemap.body.includes('?year='),
         'sitemap must not list ?year= filter pages',
       );
+      // ADR 0002 §1: sorting parameters are parameter variants too (G-02).
+      expect(
+        !sitemap.body.includes('?sort='),
+        'sitemap must not list ?sort= filter pages',
+      );
     },
   );
 
@@ -422,6 +424,41 @@ async function main() {
     expect(
       page.body.includes('content="noindex,follow"'),
       'year filter page is missing noindex,follow',
+    );
+  });
+
+  // G-02 / ADR 0002 §2: only the sort variants are noindex; the base table stays
+  // indexable because sitemap.xml lists it (indexable ⇔ listed).
+  await runChecked('the pass-rate sort variants stay noindex', async () => {
+    // canonicalHref() prefixes SITE_ORIGIN in this container, so match on the
+    // path suffix instead of the whole attribute value.
+    const canonicalPassRate =
+      /<link rel="canonical" href="[^"]*\/pass-rate\/">/;
+
+    const base = await get(`${webBase}/pass-rate/`);
+    expect(base.status === 200, `expected 200, got ${base.status}`);
+    expect(
+      !base.body.includes('content="noindex,follow"'),
+      'the /pass-rate/ base page must stay indexable',
+    );
+    expect(
+      canonicalPassRate.test(base.body),
+      'the /pass-rate/ base page canonical is not /pass-rate/',
+    );
+    expect(
+      !(base.body.includes('/shikaku/') && base.body.includes('?year=')),
+      'the /pass-rate/ table must not link a noindex ?year= variant (G-18)',
+    );
+
+    const sorted = await get(`${webBase}/pass-rate/?sort=pass_rate&order=desc`);
+    expect(sorted.status === 200, `expected 200, got ${sorted.status}`);
+    expect(
+      sorted.body.includes('content="noindex,follow"'),
+      'sort filter page is missing noindex,follow',
+    );
+    expect(
+      canonicalPassRate.test(sorted.body),
+      'sort filter page canonical is not /pass-rate/',
     );
   });
 

@@ -8,9 +8,11 @@ import { STALENESS_QUERY, computeStaleness } from './staleness-lib.mjs';
 import {
   buildDailyReport,
   buildFactsVsBaseline,
+  buildNotificationHealth,
   buildSourceHealth,
   computeCoverageGap,
   groupChecksBySource,
+  parseDeliveryLog,
   renderMarkdown,
 } from './ops-daily-lib.mjs';
 
@@ -78,13 +80,39 @@ try {
     const registry = JSON.parse(readFileSync(registryPath, 'utf8'));
     coverageGap = computeCoverageGap(
       sources.rows.map((row) => row.id),
-      Object.keys(registry),
+      registry,
     );
   } else {
     coverageGap = {
       status: 'not_run',
       reason: 'var/patrol/registry.json missing; run patrol once first',
     };
+  }
+
+  // The alert channel is judged from the local delivery log, never by probing
+  // the webhook: this report is a read-only database inspection and makes no
+  // outbound requests (docs/runbook.md, "人工日检").
+  const deliveryLogPath = path.resolve(
+    process.env.FEISHU_DELIVERY_LOG ?? 'var/notifications/feishu.log',
+  );
+  let notificationChannel;
+  if (existsSync(deliveryLogPath)) {
+    const { records, skipped } = parseDeliveryLog(
+      readFileSync(deliveryLogPath, 'utf8'),
+    );
+    notificationChannel = buildNotificationHealth({
+      records,
+      now,
+      config: sourceOps,
+    });
+    notificationChannel.skippedLines = skipped;
+  } else {
+    notificationChannel = buildNotificationHealth({
+      records: [],
+      now,
+      config: sourceOps,
+      reason: `${path.relative(process.cwd(), deliveryLogPath).split(path.sep).join('/')} missing; the notifier has never run here`,
+    });
   }
 
   const report = buildDailyReport({
@@ -100,6 +128,7 @@ try {
     pendingReview: pending.rows,
     factsVsBaseline: buildFactsVsBaseline(approved.rows, baseline),
     coverageGap,
+    notificationChannel,
   });
 
   const jstDate = new Intl.DateTimeFormat('en-CA', {

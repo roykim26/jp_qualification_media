@@ -95,8 +95,8 @@ describe('scoped qualification comparisons', () => {
       html.match(/<div class="compare-entry">[\s\S]*?<\/div>/)?.[0] ?? '';
     expect(entry).toContain('日本FP協会・2級・学科・CBT');
     expect(entry).toContain('適用年度: 2026年');
-    expect(entry).toContain('2026/11/09');
-    expect(entry).not.toContain('2026/11/10');
+    expect(entry).toContain('2026年11月9日');
+    expect(entry).not.toContain('2026年11月10日');
     expect(entry).toContain('https://www.jafp.or.jp/exam/');
   });
 
@@ -113,7 +113,7 @@ describe('scoped qualification comparisons', () => {
     const entry =
       html.match(/<div class="compare-entry">[\s\S]*?<\/div>/)?.[0] ?? '';
     expect(entry).toContain('回帰用 fixture（確認時刻なし）');
-    expect(entry).not.toContain('2026/11/09');
+    expect(entry).not.toContain('2026年11月9日');
     expect(entry).toContain('&lt;img');
     expect(entry).not.toContain('<img');
   });
@@ -176,7 +176,7 @@ describe('scoped detail and historical evidence', () => {
     for (const table of tableBodies) {
       expect(table).toContain('<details>');
       expect(table).toContain('https://www.jafp.or.jp/exam/');
-      expect(table).toContain('2026/11/09');
+      expect(table).toContain('2026年11月9日');
     }
   });
 

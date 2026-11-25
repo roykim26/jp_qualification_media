@@ -1,13 +1,29 @@
+/**
+ * Site-wide non-official disclaimer (H1 compliance fix).
+ * The site is an independently operated reference aggregator, NOT an official
+ * exam-body site. This notice is shown in the footer, on the home page, and in
+ * the operator / terms pages to avoid misleading "official" impression.
+ */
+export const unofficialNotice =
+  '本サイトは個人が運営する非公式の参考情報サイトであり、各試験実施機関の公式サイトではありません。掲載内容は公式発表を出典として整理したものです。';
+
+/** Clarifies that the "公式確認済み" badge means verified-against-official, not endorsement. */
+export const verifiedBadgeClarification =
+  '※「公式確認済み」は公式発表と照合・確認済みであることを示し、実施機関による公認・背書を意味しません。';
+
 export type EditorialSection = {
   heading: string;
   paragraphs: readonly string[];
   items?: readonly string[];
+  links?: readonly { href: string; label: string }[];
 };
 
 export type EditorialPage = {
   title: string;
   description: string;
   eyebrow: string;
+  /** ガイド一覧カードに表示する想定読者。 */
+  audience?: string;
   sections: readonly EditorialSection[];
   related: readonly { href: string; label: string }[];
   compareQuery?: string;
@@ -145,6 +161,7 @@ const guidePages: Record<string, EditorialPage> = {
     description:
       '資格試験の公式情報を確認するときに、年度、出典、更新状況を見分けるためのガイドです。',
     eyebrow: '受験準備ガイド',
+    audience: '初めて公式情報を確認する人',
     sections: [
       {
         heading: 'まず年度を確認する',
@@ -183,6 +200,7 @@ const guidePages: Record<string, EditorialPage> = {
     description:
       '申込みから試験、合格発表までを公式情報に基づいて整理するためのガイドです。',
     eyebrow: '受験準備ガイド',
+    audience: '年間の学習・申込計画を立てる人',
     sections: [
       {
         heading: '予定は公式の日付から作る',
@@ -222,6 +240,7 @@ const guidePages: Record<string, EditorialPage> = {
     description:
       '資格試験へ申込む前に、公式案内で確認したい項目を整理したチェックリストです。',
     eyebrow: '受験準備ガイド',
+    audience: '申込み直前の確認をしたい人',
     sections: [
       {
         heading: '対象の試験を特定する',
@@ -259,6 +278,7 @@ const guidePages: Record<string, EditorialPage> = {
     description:
       '資格試験の合格率を、年度・母数・公式統計の口径とあわせて読むためのガイドです。',
     eyebrow: 'データの見方',
+    audience: '合格率データを比較する人',
     sections: [
       {
         heading: '年度と集計の対象をそろえる',
@@ -291,6 +311,9 @@ const guidePages: Record<string, EditorialPage> = {
 
 export const correctionsIssueUrl =
   'https://github.com/roykim26/jp_qualification_media/issues/new';
+
+/** Business contact mailbox (Cloudflare Email Routing -> personal inbox). */
+export const contactEmail = 'contact@shikakucheck.com';
 
 const aboutPages: Record<string, EditorialPage> = {
   sources: {
@@ -377,6 +400,13 @@ const aboutPages: Record<string, EditorialPage> = {
         heading: '受け付ける内容',
         paragraphs: [
           '掲載内容の確認や訂正のために、次のようなご連絡を受け付けています。',
+          '報告はメール（contact@shikakucheck.com）と GitHub の Issue で受け付けています。メールは非公開で扱い、Issue は公開されます。公開して差し支えない内容のみ Issue をご利用ください。',
+        ],
+        links: [
+          {
+            href: `mailto:${contactEmail}`,
+            label: `メールで訂正を報告する（${contactEmail}）`,
+          },
         ],
         items: [
           '事実の誤りや、公式発表より古い情報',
@@ -420,7 +450,8 @@ const aboutPages: Record<string, EditorialPage> = {
         heading: '運営体制',
         paragraphs: [
           '本サイトは、個人開発者による小規模な運営で公開しています。特定の試験実施機関、予備校、企業から独立して運営しており、掲載内容の判断は本サイトの編集方針に基づきます。',
-          '運営者の氏名、所在地、連絡先などの詳細は、下記の窓口から開示をご請求ください。請求の目的を確認したうえで、法令に基づき対応します。',
+          unofficialNotice,
+          '運営者の氏名、所在地、連絡先などの詳細は、メール（contact@shikakucheck.com）または下記の窓口から開示をご請求ください。請求の目的を確認したうえで、法令に基づき対応します。',
         ],
       },
       {
@@ -437,7 +468,13 @@ const aboutPages: Record<string, EditorialPage> = {
       {
         heading: '開示・訂正のご請求',
         paragraphs: [
-          '掲載内容の訂正、運営者情報の開示、個人情報の開示・訂正・削除のご請求は、訂正のご連絡からお送りください。対象ページのURLとご請求の内容を添えていただけると確認が進みます。',
+          '掲載内容の訂正、運営者情報の開示、個人情報の開示・訂正・削除のご請求は、メール（contact@shikakucheck.com）または訂正のご連絡からお送りください。対象ページのURLとご請求の内容を添えていただけると確認が進みます。',
+        ],
+        links: [
+          {
+            href: `mailto:${contactEmail}`,
+            label: `メールで請求する（${contactEmail}）`,
+          },
         ],
       },
     ],
@@ -473,8 +510,35 @@ const aboutPages: Record<string, EditorialPage> = {
       {
         heading: 'アクセス解析',
         paragraphs: [
-          '本サイトでは、利用状況を把握するために Google Analytics 4 を利用する場合があります。Google Analytics は Cookie を使用し、個人を特定しない形でアクセス情報を収集します。収集される情報とその扱いは、Google のプライバシーポリシーに従います。',
-          'ブラウザの設定で Cookie を無効にすると、解析の対象から外れる場合があります。',
+          '本サイトでは、利用状況を把握し掲載内容を改善するために Google Analytics 4 を利用します。ただし、Cookie等の利用に関するお知らせで「同意する」を選択した場合に限り、閲覧情報を送信します。同意しない場合、Google への情報送信は行われません。',
+          'Google Analytics は Cookie やこれに類する識別子を使用し、個人を特定しない形でアクセス情報を収集します。収集される情報とその扱いは、Google のプライバシーポリシーに従います。',
+        ],
+      },
+      {
+        heading: 'Cookie等による外部送信について',
+        paragraphs: [
+          'アクセス解析にあたり、本サイトは次の情報を Cookie 等を通じて Google へ外部送信します。送信先における情報の取り扱いは、送信先のプライバシーポリシーをご確認ください。',
+        ],
+        items: [
+          '送信される情報：Cookie等に保存された識別子（クライアントID）、閲覧したページのURL、参照元、アクセス日時、ブラウザ・端末の種類、IPアドレスから推定される地域',
+          '送信先：Google LLC',
+          '利用目的：サイトの利用状況の把握と掲載内容の改善',
+        ],
+        links: [
+          {
+            href: 'https://policies.google.com/privacy',
+            label: 'Google プライバシーポリシー',
+          },
+          {
+            href: 'https://tools.google.com/dlpage/gaoptout',
+            label: 'Google Analytics オプトアウト アドオン',
+          },
+        ],
+      },
+      {
+        heading: '同意の撤回（オプトアウト）',
+        paragraphs: [
+          'ページ下部のお知らせで「同意しない」を選ぶと、Google Analytics による収集は行われません。一度同意した後も、フッターの「Cookie設定」からいつでも同意を撤回できます。ブラウザの設定で Cookie を無効にする方法や、Google Analytics オプトアウト アドオンを利用する方法もあります。',
         ],
       },
       {
@@ -493,7 +557,13 @@ const aboutPages: Record<string, EditorialPage> = {
       {
         heading: '開示・訂正・削除',
         paragraphs: [
-          'ご本人からの請求により、保有する個人情報の開示、訂正、利用停止、削除に応じます。訂正のご連絡からご請求ください。ご本人であることを確認できない場合は、対応をお断りすることがあります。',
+          'ご本人からの請求により、保有する個人情報の開示、訂正、利用停止、削除に応じます。メール（contact@shikakucheck.com）または訂正のご連絡からご請求ください。ご本人であることを確認できない場合は、対応をお断りすることがあります。',
+        ],
+        links: [
+          {
+            href: `mailto:${contactEmail}`,
+            label: `メールで請求する（${contactEmail}）`,
+          },
         ],
       },
       {
@@ -525,6 +595,7 @@ const aboutPages: Record<string, EditorialPage> = {
         heading: '掲載情報の性質',
         paragraphs: [
           '本サイトは、試験実施機関や官公庁が公開する情報を整理して掲載する参考情報です。試験の申込み、受験、制度の適用に関する最終的な判断は、必ず実施機関の公式案内を確認してください。',
+          unofficialNotice,
           '掲載する日付、費用、受験資格などは、確認時点の情報です。その後に変更、訂正、延期される場合があります。',
         ],
       },
@@ -656,13 +727,14 @@ const aboutPages: Record<string, EditorialPage> = {
   contact: {
     title: 'お問い合わせ',
     description:
-      '本サイトへのご連絡方法と、お問い合わせの前に確認していただきたい事項をまとめています。',
+      '本サイトへのご連絡方法（メールとGitHub Issue）と、お問い合わせの前に確認していただきたい事項をまとめています。',
     eyebrow: '運営・方針',
     sections: [
       {
         heading: 'ご連絡方法',
         paragraphs: [
-          '本サイトへのご連絡は、GitHub の Issue で受け付けています。下のリンクから新しい Issue を作成し、対象ページのURLとご用件を記載してください。',
+          '本サイトへのご連絡は、メール（contact@shikakucheck.com）で受け付けています。下の「メールで連絡する」からメールソフトが開きます。対象ページのURLとご用件を記載してください。',
+          '掲載内容の誤りや表示不具合など、公開して差し支えない報告は、GitHub の Issue でも受け付けています。関連リンクから新しい Issue を作成し、対象ページのURLとご用件を記載してください。',
         ],
         items: [
           '掲載内容の誤り、古い情報、公式ソースとの不一致',
@@ -671,11 +743,17 @@ const aboutPages: Record<string, EditorialPage> = {
           '個人情報の開示・訂正・削除の請求',
           '引用・転載のご相談',
         ],
+        links: [
+          {
+            href: `mailto:${contactEmail}`,
+            label: `メールで連絡する（${contactEmail}）`,
+          },
+        ],
       },
       {
         heading: '記載しないでほしい情報',
         paragraphs: [
-          'Issue は公開されます。氏名、住所、電話番号、メールアドレス、受験票番号、その他個人を特定できる情報は記載しないでください。個別の事情がある場合は、その旨だけを記載していただければ、こちらから連絡方法をご案内します。',
+          'GitHub の Issue は公開されます。氏名、住所、電話番号、メールアドレス、受験票番号、その他個人を特定できる情報は Issue に記載しないでください。メールでご連絡いただく場合も、対応に必要な範囲を超える個人情報は記載しないでください。個別の事情がある場合は、その旨だけを記載していただければ、こちらから連絡方法をご案内します。',
         ],
       },
       {

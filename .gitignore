@@ -16,3 +16,4 @@ pytest-cache-files-*/
 .test-tmp/
 .pytest-basetemp/
 var/
+deploy/caddy-logs/

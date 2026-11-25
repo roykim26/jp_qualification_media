@@ -1,4 +1,4 @@
-import { ageInDays } from './staleness-lib.mjs';
+import { ageInDays, formatFactTarget } from './staleness-lib.mjs';
 
 export function groupChecksBySource(checks) {
   const grouped = new Map();
@@ -87,14 +87,143 @@ export function buildSourceHealth(sources, checksBySource, now, config) {
   return health;
 }
 
-export function computeCoverageGap(dbSourceIds, registrySourceIds) {
-  const registry = new Set(registrySourceIds);
+/**
+ * Compare the sources registered in the database with the ones the patrol
+ * registry knows about.
+ *
+ * The registry argument is the parsed registry *object*, not a list of ids,
+ * because `capture_only` lives in it. Capture-only sources are fetched for
+ * provenance but deliberately never written to the candidate or approval chain
+ * (docs/work-package-g-provenance-projection-design.md), so "not in the
+ * database" is their design rather than a gap. Reporting them as gaps put the
+ * same nine lines into every daily report, which is how a section teaches its
+ * readers to skip it. They are counted separately instead.
+ *
+ * An entry that predates the `capture_only` flag is treated as "should be in
+ * the database", so an old registry keeps reporting real gaps.
+ */
+export function computeCoverageGap(dbSourceIds, registry) {
+  if (Array.isArray(registry)) {
+    throw new TypeError(
+      'computeCoverageGap expects the parsed registry object (capture_only lives in it), not a list of ids',
+    );
+  }
   const database = new Set(dbSourceIds);
+  const registeredIds = Object.keys(registry ?? {});
+  const inRegistry = new Set(registeredIds);
+  const captureOnlyIds = new Set(
+    registeredIds.filter((id) => registry[id]?.capture_only === true),
+  );
   return {
     status: 'ok',
-    missingFromRegistry: dbSourceIds.filter((id) => !registry.has(id)),
-    missingFromDatabase: registrySourceIds.filter((id) => !database.has(id)),
+    missingFromRegistry: dbSourceIds.filter((id) => !inRegistry.has(id)),
+    missingFromDatabase: registeredIds.filter(
+      (id) => !database.has(id) && !captureOnlyIds.has(id),
+    ),
+    captureOnly: captureOnlyIds.size,
   };
+}
+
+/**
+ * Health of the alert channel itself, judged from the append-only delivery log
+ * that scripts/notify-feishu.sh writes.
+ *
+ * This exists because a broken alert channel is worse than a broken source: the
+ * source failure is loud, while a revoked webhook makes every future alert
+ * disappear without a trace. It is judged from a local file on purpose — the
+ * daily report is a read-only database inspection and must not start making
+ * network requests (see docs/runbook.md, "人工日检").
+ *
+ * The `channel_stale` verdict is deliberately a warning, not a conclusion:
+ * fourteen quiet days can mean "nothing broke" or "the webhook died", and only
+ * a human can tell which.
+ */
+export function buildNotificationHealth({ records, now, config, reason }) {
+  const failureThreshold = config.notificationFailureThreshold ?? 3;
+  const staleDays = config.notificationStaleDays ?? 14;
+
+  if (!Array.isArray(records) || records.length === 0) {
+    return {
+      status: 'not_run',
+      level: 'info',
+      reason: reason ?? 'no delivery records yet',
+      lastAt: null,
+      lastOk: null,
+      consecutiveFailures: 0,
+      lastSuccessAt: null,
+      lastFailureReason: null,
+    };
+  }
+
+  const ordered = [...records].sort((a, b) => {
+    const left = Date.parse(a?.at ?? '') || 0;
+    const right = Date.parse(b?.at ?? '') || 0;
+    return left - right;
+  });
+
+  const last = ordered[ordered.length - 1];
+  let consecutiveFailures = 0;
+  for (let index = ordered.length - 1; index >= 0; index -= 1) {
+    if (ordered[index]?.ok === true) break;
+    consecutiveFailures += 1;
+  }
+  const lastSuccess = [...ordered].reverse().find((item) => item?.ok === true);
+  const lastFailure = [...ordered].reverse().find((item) => item?.ok !== true);
+
+  let level = 'info';
+  let verdict = 'healthy';
+  if (last?.ok !== true) {
+    if (consecutiveFailures >= failureThreshold) {
+      level = 'critical';
+      verdict = 'consecutive_failures';
+    } else {
+      level = 'warning';
+      verdict = 'recent_failure';
+    }
+  } else {
+    const age = ageInDays(last.at, now);
+    if (age === null || age > staleDays) {
+      level = 'warning';
+      verdict = 'channel_stale';
+    }
+  }
+
+  return {
+    status: 'ok',
+    level,
+    reason: verdict,
+    lastAt: last?.at ?? null,
+    lastOk: last?.ok === true,
+    consecutiveFailures,
+    lastSuccessAt: lastSuccess?.at ?? null,
+    lastFailureReason: lastFailure?.reason ?? null,
+    ageDays: last?.ok === true ? ageInDays(last.at, now) : null,
+    failureThreshold,
+    staleDays,
+  };
+}
+
+/**
+ * Parse the newline-delimited JSON that notify-feishu.sh appends.
+ *
+ * A truncated last line is normal (the writer is a shell `printf`, not an atomic
+ * rename), so unparseable lines are counted and skipped rather than thrown.
+ */
+export function parseDeliveryLog(text) {
+  const records = [];
+  let skipped = 0;
+  for (const line of String(text ?? '').split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (parsed && typeof parsed === 'object') records.push(parsed);
+      else skipped += 1;
+    } catch {
+      skipped += 1;
+    }
+  }
+  return { records, skipped };
 }
 
 export function buildFactsVsBaseline(approvedCounts, baseline) {
@@ -120,6 +249,7 @@ export function buildDailyReport({
   pendingReview,
   factsVsBaseline,
   coverageGap,
+  notificationChannel,
 }) {
   const critical = sourceHealth.filter((item) => item.level === 'critical');
   const warning = sourceHealth.filter((item) => item.level === 'warning');
@@ -127,12 +257,26 @@ export function buildDailyReport({
     (sum, item) => sum + item.pending,
     0,
   );
+  const channel = notificationChannel ?? {
+    status: 'not_run',
+    level: 'info',
+    reason: 'notification channel was not checked',
+  };
   const todayActions = [];
   for (const item of critical) {
     todayActions.push({
       kind: 'source_critical',
       target: item.sourceId,
       detail: `${item.reasons.join(', ')}（连续失败 ${item.failedStreak}，最近状态 ${item.lastStatus ?? '从未检查'}）`,
+    });
+  }
+  // A dead alert channel belongs at the same level as a dead source: it is what
+  // stops every other finding on this page from ever reaching a person.
+  if (channel.level === 'critical') {
+    todayActions.push({
+      kind: 'notification_channel',
+      target: channel.lastFailureReason ?? 'feishu',
+      detail: `告警通道连续失败 ${channel.consecutiveFailures} 次（最近 ${channel.lastAt ?? '未知'}）；修好之前所有告警都发不出去`,
     });
   }
   for (const item of pendingReview) {
@@ -147,18 +291,28 @@ export function buildDailyReport({
   for (const fact of staleness.dueFacts.slice(0, 10)) {
     todayActions.push({
       kind: 'due_fact',
-      target: `${fact.qualification}/${fact.examYear}/${fact.factKey}`,
+      target: formatFactTarget(fact),
       detail: `已 ${fact.ageDays} 天未复核（窗口 ${fact.windowDays} 天）`,
     });
   }
+  const hasCritical = critical.length > 0 || channel.level === 'critical';
   return {
+    // `status` answers one question only: did the report get produced? The cron
+    // wrapper parses this field to tell a broken run from a working one, so a
+    // run that found critical problems still says `ok` here. That is easy to
+    // misread as "everything is fine", so the health verdict lives in
+    // `overallStatus` and the boolean lives in `hasCritical`.
     status: 'ok',
+    reportStatus: 'ok',
+    overallStatus: hasCritical ? 'action_needed' : 'ok',
     checkedAt: now.toISOString(),
     referenceYear: staleness.referenceYear,
     config: {
       consecutiveFailureThreshold: config.consecutiveFailureThreshold,
       sourceBehindDays: config.sourceBehindDays,
       goneStatusCodes: config.goneStatusCodes,
+      notificationFailureThreshold: config.notificationFailureThreshold,
+      notificationStaleDays: config.notificationStaleDays,
     },
     summary: {
       sources: sourceHealth.length,
@@ -173,10 +327,12 @@ export function buildDailyReport({
         coverageGap.status === 'ok'
           ? coverageGap.missingFromRegistry.length
           : null,
+      notificationLevel: channel.level ?? 'info',
     },
-    hasCritical: critical.length > 0,
+    hasCritical,
     todayActions,
     sourceHealth,
+    notificationChannel: channel,
     staleness: {
       summary: staleness.summary,
       dueFacts: staleness.dueFacts,
@@ -205,6 +361,11 @@ export function renderMarkdown(report) {
   lines.push('## 摘要');
   lines.push('');
   const summary = report.summary;
+  // First line on purpose: a reader who stops after the 摘要 block must not
+  // come away thinking a report full of critical findings is a healthy one.
+  lines.push(
+    `- 整体状态：${report.overallStatus === 'action_needed' ? '需要处理（见上）' : '正常'}`,
+  );
   lines.push(
     `- 来源 ${summary.sources}：critical ${summary.critical}／warning ${summary.warning}`,
   );
@@ -216,6 +377,28 @@ export function renderMarkdown(report) {
   lines.push(
     `- 巡检覆盖缺口 ${summary.coverageGap === null ? '未检查（先跑一次巡检）' : summary.coverageGap}`,
   );
+  lines.push(`- 告警通道 ${summary.notificationLevel ?? 'info'}`);
+  lines.push('');
+  lines.push('## 通知渠道');
+  lines.push('');
+  const channel = report.notificationChannel ?? { status: 'not_run' };
+  if (channel.status !== 'ok') {
+    lines.push(
+      `未检查：${channel.reason ?? 'no delivery records'}（跑一次 \`sh scripts/notify-feishu.sh --test\` 即可产生记录）`,
+    );
+  } else {
+    lines.push(`- 级别：${channel.level}（${channel.reason}）`);
+    lines.push(
+      `- 最近一次投递：${channel.lastAt ?? '未知'}（${channel.lastOk ? '成功' : `失败：${channel.lastFailureReason ?? '未知原因'}`}）`,
+    );
+    lines.push(`- 连续失败：${channel.consecutiveFailures}`);
+    lines.push(`- 最近一次成功：${channel.lastSuccessAt ?? '从未'}`);
+    if (channel.reason === 'channel_stale') {
+      lines.push(
+        `- ⚠ 通道已 ${channel.ageDays} 天没有成功投递（阈值 ${channel.staleDays} 天）。可能是长期无故障，也可能是 webhook 已失效——手动跑一次 \`--test\` 可区分。`,
+      );
+    }
+  }
   lines.push('');
   lines.push('## 来源健康');
   lines.push('');
@@ -254,7 +437,7 @@ export function renderMarkdown(report) {
   } else {
     for (const fact of report.staleness.dueFacts.slice(0, 20)) {
       lines.push(
-        `- ${fact.qualification}/${fact.examYear}/${fact.factKey}：${fact.ageDays} 天（窗口 ${fact.windowDays}）`,
+        `- ${formatFactTarget(fact)}：${fact.ageDays} 天（窗口 ${fact.windowDays}）`,
       );
     }
   }
@@ -270,6 +453,11 @@ export function renderMarkdown(report) {
     lines.push(
       `巡检清单有但库未登记：${report.coverageGap.missingFromDatabase.length ? report.coverageGap.missingFromDatabase.join(', ') : '无'}`,
     );
+    if (report.coverageGap.captureOnly > 0) {
+      lines.push(
+        `另有 ${report.coverageGap.captureOnly} 个 capture-only 来源按设计不入库（只抓取存档，不写候选链）`,
+      );
+    }
   }
   lines.push('');
   return lines.join('\n');
