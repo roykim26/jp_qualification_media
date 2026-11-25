@@ -121,6 +121,26 @@ PARSED_HASCRITICAL=true
 
 即：生产上现有的 `ops-daily-cron.sh`（无论宿主机上那版还是镜像里那版）读到新报告时行为完全不变。
 
+## 5.1 生产部署与验证
+
+- 内容 commit `0890d48` → 收口 `9d793c9` → `git push` `2cfb16c..9d793c9`。
+- VPS：`git merge --ff-only` **`b9b5228..9d793c9`，8 files +486/−24**（含 `scripts/verify-staleness-query.mjs` 与 `docs/audit/OPS_REPORT_STATUS_2026-11-25.md` 两个新文件），`MERGE_EXIT=0`；`grep -c blog.waystoneai.online deploy/caddy/Caddyfile` = **1**（博客 vhost 保住）。
+- 回滚点：`deploy-api:pre-status` = `sha256:79f618b8e2a3…`、`deploy-web:pre-status` = `sha256:16d61103a436…`（即 `b9b5228` 那版）。新镜像 `deploy-api:latest` = `sha256:467802e4cacc…`、`deploy-web:latest` = `sha256:c884cda85860…`，Created `2026-11-25T08:03:50+08:00`。
+- `docker compose build` + `up -d` 全绿，recreate 顺序 db(healthy)→api(healthy)→web(healthy)→caddy；`grep -c overallStatus scripts/ops-daily-lib.mjs` = **3**（新代码确实在镜像里）。
+- **用新镜像重跑真实日检**（`docker compose run --rm -T -v /opt/jpqm/var:/app/var api node scripts/ops-daily-report.mjs`，退出码 1 = 有 critical，符合既有逻辑）：
+
+  ```text
+  "status": "ok"
+  "reportStatus": "ok"
+  "overallStatus": "action_needed"
+  "hasCritical": true
+  actions: 12
+  ```
+
+  生产 markdown `var/ops-reports/2026-11-25.md:20` 实测为 `- 整体状态：需要处理（见上）`（用 `cat -A` 逐字节确认，行内是 UTF-8 的「需要处理（见上）」而非乱码）。
+
+- 复验：公网 `/` `/shikaku/` `/pass-rate/` `/schedule/` `/updates/` `/compare/` `/sitemap.xml` `/robots.txt` 全 **200**、`/ready` 仍 **404**、`var/readiness/last-status` 仍 `ready\n0`、4 容器 healthy。
+
 ## 6. 完整矩阵
 
 | 检查                                    | 结果                                       |
@@ -158,4 +178,4 @@ PARSED_HASCRITICAL=true
 
 ## 10. 停止声明
 
-本轮只做 `status` 语义拆分这一件事。未改动 `ops-daily-cron.sh` 的任何判据、未改动 `ops-daily-report.mjs` 的退出码逻辑、未部署、未改 crontab、未进入 patrol 或 Caddyfile 等其它待办。下一步由 Owner 决定。
+本轮只做 `status` 语义拆分这一件事。未改动 `ops-daily-cron.sh` 的任何判据、未改动 `ops-daily-report.mjs` 的退出码逻辑、未改 crontab、未进入 patrol 或 Caddyfile 等其它待办。改动已部署到生产并验证。下一步由 Owner 决定。
