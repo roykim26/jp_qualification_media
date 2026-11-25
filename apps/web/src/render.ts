@@ -2577,6 +2577,20 @@ export function renderUpdatesPage(
   });
 }
 
+function pageExitLinks(inputId: string, formClass: string): string {
+  const searchForm = `<form class="qualification-search ${formClass}" role="search" action="/shikaku/" method="get"><div class="field"><label for="${inputId}">資格名・略称で検索</label><div class="search-control">${renderIcon('search')}<input id="${inputId}" name="q" type="search" placeholder="例：宅建、ITパスポート、簿記" autocomplete="off"></div><p class="field__help">正式名称、略称、別名で探せます。</p></div><div class="qualification-search__actions"><button class="button button--primary" type="submit">${renderIcon('search')}<span>検索</span></button></div></form>`;
+  const popularPages = [
+    { href: '/schedule/', label: '試験日程' },
+    { href: '/compare/', label: '資格比較' },
+    { href: '/pass-rate/', label: '合格率データ' },
+    { href: '/updates/', label: '更新情報' },
+    { href: '/guide/', label: '資格試験ガイド' },
+  ];
+  const popularPageLinks = `<nav class="popular-pages" aria-label="よく見られるページ"><h2>よく見られるページ</h2><ul>${popularPages.map((page) => `<li><a href="${escapeHtml(page.href)}"><span>${escapeHtml(page.label)}</span><span aria-hidden="true">→</span></a></li>`).join('')}</ul></nav>`;
+  const quickQualifications = `<div class="popular-links" aria-label="主な資格"><span>主な資格</span><a href="/shikaku/takken/">宅建</a><a href="/shikaku/it-passport/">ITパスポート</a><a href="/shikaku/bookkeeping/">日商簿記</a><a href="/shikaku/fp/">FP</a></div>`;
+  return `${searchForm}${popularPageLinks}${quickQualifications}`;
+}
+
 export function renderErrorPage(): string {
   return renderPublicDocument({
     title: '一時的に表示できません',
@@ -2592,7 +2606,7 @@ export function renderErrorPage(): string {
           variant: 'secondary',
         }),
       },
-    )}</div>`,
+    )}${pageExitLinks('error-search', 'error-search')}</div>`,
   });
 }
 
@@ -2715,15 +2729,6 @@ export function renderHomePage(
 }
 
 export function renderNotFoundPage(): string {
-  const searchForm = `<form class="qualification-search not-found-search" role="search" action="/shikaku/" method="get"><div class="field"><label for="not-found-search">資格名・略称で検索</label><div class="search-control">${renderIcon('search')}<input id="not-found-search" name="q" type="search" placeholder="例：宅建、ITパスポート、簿記" autocomplete="off"></div><p class="field__help">正式名称、略称、別名で探せます。</p></div><div class="qualification-search__actions"><button class="button button--primary" type="submit">${renderIcon('search')}<span>検索</span></button></div></form>`;
-  const popularPages = [
-    { href: '/schedule/', label: '試験日程' },
-    { href: '/compare/', label: '資格比較' },
-    { href: '/pass-rate/', label: '合格率データ' },
-    { href: '/updates/', label: '更新情報' },
-    { href: '/guide/', label: '資格試験ガイド' },
-  ];
-  const popularPageLinks = `<nav class="popular-pages" aria-label="よく見られるページ"><h2>よく見られるページ</h2><ul>${popularPages.map((page) => `<li><a href="${escapeHtml(page.href)}"><span>${escapeHtml(page.label)}</span><span aria-hidden="true">→</span></a></li>`).join('')}</ul></nav>`;
   return renderPublicDocument({
     title: 'ページが見つかりません',
     noindex: true,
@@ -2734,6 +2739,6 @@ export function renderNotFoundPage(): string {
         body: 'URLが変更されたか、ページがまだ公開されていない可能性があります。ホームまたは資格一覧から目的のページを探してください。',
         actions: `${renderButtonLink({ href: '/', label: 'ホームへ戻る' })}${renderButtonLink({ href: '/shikaku/', label: '資格一覧を見る', variant: 'secondary' })}`,
       },
-    )}${searchForm}${popularPageLinks}<div class="popular-links" aria-label="主な資格"><span>主な資格</span><a href="/shikaku/takken/">宅建</a><a href="/shikaku/it-passport/">ITパスポート</a><a href="/shikaku/bookkeeping/">日商簿記</a><a href="/shikaku/fp/">FP</a></div></div>`,
+    )}${pageExitLinks('not-found-search', 'not-found-search')}</div>`,
   });
 }

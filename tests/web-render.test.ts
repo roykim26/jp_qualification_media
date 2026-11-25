@@ -14,6 +14,7 @@ import {
   renderSchedulePage,
   renderUpdatesPage,
   renderNotFoundPage,
+  renderErrorPage,
 } from '../apps/web/src/render.js';
 import {
   contactEmail,
@@ -1084,6 +1085,29 @@ describe('shared qualification page rendering', () => {
       '/pass-rate/',
       '/updates/',
       '/guide/',
+    ]) {
+      expect(html).toContain(`href="${href}"`);
+    }
+    expect(html).toContain('<meta name="robots" content="noindex,follow">');
+  });
+
+  it('gives the error page the same search and popular exits as the 404 page', () => {
+    const html = renderErrorPage();
+    expect(html).toContain('ページを表示できません');
+    expect(html).toContain(
+      '<form class="qualification-search error-search" role="search" action="/shikaku/" method="get">',
+    );
+    expect(html).toContain('name="q"');
+    expect(html).toContain(
+      '<nav class="popular-pages" aria-label="よく見られるページ">',
+    );
+    for (const href of [
+      '/schedule/',
+      '/compare/',
+      '/pass-rate/',
+      '/updates/',
+      '/guide/',
+      '/shikaku/takken/',
     ]) {
       expect(html).toContain(`href="${href}"`);
     }

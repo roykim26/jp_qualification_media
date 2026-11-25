@@ -41,7 +41,7 @@ export const webStyles = String.raw`
 .directory-overview__value { color: var(--color-ink) !important; font-size: var(--font-size-2xl); font-weight: 700; font-variant-numeric: tabular-nums; }
 .directory-overview__fields .tag-row { margin: var(--space-2) 0 0; }
 .qualification-search { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-4); align-items: end; margin-bottom: var(--space-6); padding: var(--space-5); border: 1px solid var(--color-border); border-radius: var(--radius-card); background: var(--color-surface); }
-.not-found-search { margin-top: var(--space-8); margin-bottom: 0; }
+.not-found-search, .error-search { margin-top: var(--space-8); margin-bottom: 0; }
 .not-found-heading h1 { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
 .not-found__code { display: inline-flex; min-height: 32px; align-items: center; padding: 2px var(--space-3); border-radius: var(--radius-pill); color: var(--color-muted); background: var(--color-bg-subtle); font-size: 14px; font-weight: 700; letter-spacing: .04em; }
 .popular-pages { margin-top: var(--space-8); padding-top: var(--space-6); border-top: 1px solid var(--color-border); }
