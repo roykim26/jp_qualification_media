@@ -80,7 +80,7 @@ try {
     const registry = JSON.parse(readFileSync(registryPath, 'utf8'));
     coverageGap = computeCoverageGap(
       sources.rows.map((row) => row.id),
-      Object.keys(registry),
+      registry,
     );
   } else {
     coverageGap = {

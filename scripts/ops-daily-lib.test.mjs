@@ -154,9 +154,58 @@ test('source health sorts critical first and carries streaks', () => {
 });
 
 test('coverage gap reports both directions', () => {
-  const gap = computeCoverageGap(['a', 'b', 'c'], ['b', 'c', 'd']);
+  const registry = {
+    b: { capture_only: false },
+    c: { capture_only: false },
+    d: { capture_only: false },
+  };
+  const gap = computeCoverageGap(['a', 'b', 'c'], registry);
   assert.deepEqual(gap.missingFromRegistry, ['a']);
   assert.deepEqual(gap.missingFromDatabase, ['d']);
+  assert.equal(gap.captureOnly, 0);
+});
+
+test('capture-only sources are counted, never reported as missing', () => {
+  // Capture-only sources are fetched for provenance and deliberately never
+  // written to the candidate chain, so "not in the database" is their design.
+  // Before this, the same nine ids appeared in every daily report.
+  const registry = {
+    'source:real': { capture_only: false },
+    'capture-only:a': { capture_only: true },
+    'capture-only:b': { capture_only: true },
+  };
+  const gap = computeCoverageGap(['source:real'], registry);
+  assert.deepEqual(gap.missingFromDatabase, []);
+  assert.deepEqual(gap.missingFromRegistry, []);
+  assert.equal(gap.captureOnly, 2);
+});
+
+test('a registry entry without the capture_only flag is treated as a real gap', () => {
+  // An older registry predates the flag. Defaulting those to capture-only would
+  // hide a source that should have been ingested.
+  const registry = { 'source:legacy': {} };
+  const gap = computeCoverageGap([], registry);
+  assert.deepEqual(gap.missingFromDatabase, ['source:legacy']);
+  assert.equal(gap.captureOnly, 0);
+});
+
+test('a capture-only source still reports when the database has it', () => {
+  // The two directions stay independent: a capture-only id that somehow landed
+  // in the database is still a registry/database mismatch worth seeing.
+  const registry = { 'capture-only:a': { capture_only: true } };
+  const gap = computeCoverageGap(['capture-only:a'], registry);
+  assert.deepEqual(gap.missingFromRegistry, []);
+  assert.deepEqual(gap.missingFromDatabase, []);
+  assert.equal(gap.captureOnly, 1);
+});
+
+test('coverage gap refuses a bare list of ids', () => {
+  // The capture_only flag lives in the values. Accepting Object.keys() here is
+  // what produced the noise in the first place, so fail loudly instead.
+  assert.throws(
+    () => computeCoverageGap(['a'], ['a', 'b']),
+    /expects the parsed registry object/,
+  );
 });
 
 test('facts versus baseline computes deltas and defaults missing to zero', () => {
@@ -248,6 +297,45 @@ test('markdown renders the action list and source table', () => {
   assert.ok(markdown.includes('source:bad'));
   assert.ok(markdown.includes('source_critical'));
   assert.ok(markdown.includes('facts 对基线'));
+});
+
+test('markdown says capture-only sources are out of scope by design', () => {
+  // The count has to appear in prose, otherwise a reader who sees "库未登记：无"
+  // next to nine capture-only sources in the registry cannot tell whether the
+  // section checked them or silently dropped them.
+  const report = buildDailyReport({
+    now,
+    config,
+    sourceHealth: [],
+    staleness: {
+      referenceYear: 2026,
+      summary: {
+        approvedFacts: 0,
+        historicalSkipped: 0,
+        checked: 0,
+        dueFacts: 0,
+        sourcesBehindOnSnapshot: 0,
+      },
+      dueFacts: [],
+      dueSources: [],
+    },
+    pendingReview: [],
+    factsVsBaseline: [],
+    coverageGap: {
+      status: 'ok',
+      missingFromRegistry: [],
+      missingFromDatabase: [],
+      captureOnly: 9,
+    },
+  });
+  const markdown = renderMarkdown(report);
+  assert.ok(markdown.includes('9 个 capture-only 来源按设计不入库'));
+  assert.ok(markdown.includes('巡检清单有但库未登记：无'));
+});
+
+test('markdown omits the capture-only line when there are none', () => {
+  const markdown = renderMarkdown(reportFixture());
+  assert.ok(!markdown.includes('capture-only 来源按设计不入库'));
 });
 
 // `status` is what the cron wrapper parses to tell a broken run from a working

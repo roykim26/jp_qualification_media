@@ -87,13 +87,40 @@ export function buildSourceHealth(sources, checksBySource, now, config) {
   return health;
 }
 
-export function computeCoverageGap(dbSourceIds, registrySourceIds) {
-  const registry = new Set(registrySourceIds);
+/**
+ * Compare the sources registered in the database with the ones the patrol
+ * registry knows about.
+ *
+ * The registry argument is the parsed registry *object*, not a list of ids,
+ * because `capture_only` lives in it. Capture-only sources are fetched for
+ * provenance but deliberately never written to the candidate or approval chain
+ * (docs/work-package-g-provenance-projection-design.md), so "not in the
+ * database" is their design rather than a gap. Reporting them as gaps put the
+ * same nine lines into every daily report, which is how a section teaches its
+ * readers to skip it. They are counted separately instead.
+ *
+ * An entry that predates the `capture_only` flag is treated as "should be in
+ * the database", so an old registry keeps reporting real gaps.
+ */
+export function computeCoverageGap(dbSourceIds, registry) {
+  if (Array.isArray(registry)) {
+    throw new TypeError(
+      'computeCoverageGap expects the parsed registry object (capture_only lives in it), not a list of ids',
+    );
+  }
   const database = new Set(dbSourceIds);
+  const registeredIds = Object.keys(registry ?? {});
+  const inRegistry = new Set(registeredIds);
+  const captureOnlyIds = new Set(
+    registeredIds.filter((id) => registry[id]?.capture_only === true),
+  );
   return {
     status: 'ok',
-    missingFromRegistry: dbSourceIds.filter((id) => !registry.has(id)),
-    missingFromDatabase: registrySourceIds.filter((id) => !database.has(id)),
+    missingFromRegistry: dbSourceIds.filter((id) => !inRegistry.has(id)),
+    missingFromDatabase: registeredIds.filter(
+      (id) => !database.has(id) && !captureOnlyIds.has(id),
+    ),
+    captureOnly: captureOnlyIds.size,
   };
 }
 
@@ -426,6 +453,11 @@ export function renderMarkdown(report) {
     lines.push(
       `巡检清单有但库未登记：${report.coverageGap.missingFromDatabase.length ? report.coverageGap.missingFromDatabase.join(', ') : '无'}`,
     );
+    if (report.coverageGap.captureOnly > 0) {
+      lines.push(
+        `另有 ${report.coverageGap.captureOnly} 个 capture-only 来源按设计不入库（只抓取存档，不写候选链）`,
+      );
+    }
   }
   lines.push('');
   return lines.join('\n');
