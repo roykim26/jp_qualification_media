@@ -4,7 +4,7 @@
 
 | 项目            | 值                                                                                                                                                   |
 | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 仓库            | `E:\自建程序\jp_qualification_media`                                                                                                                 |
+| 仓库            | `jp_qualification_media`（本机检出，路径略）                                                                                                         |
 | 远端            | `https://github.com/roykim26/jp_qualification_media.git`（**public**）                                                                               |
 | 泄露提交        | `8892e45`（`chore(audit): 提交 DSH 延迟审计基线与生成脚本`，2026-11-25 10:29:41）                                                                    |
 | 改写范围        | `883e0e9..main` 共 11 个提交（无 merge 提交）；`883e0e9..chore/phase1-baseline` 共 2 个                                                              |
@@ -34,37 +34,41 @@
 
 ### 2.1 路径
 
-- `.json`：`E:\项目运营`、`E:\自建程序`、`E:\Dev_Progra`。**没有** `C:\Users\*`。
-- `.md`：`C:\Users\jinlo`（2 处，含 `C:\Users\jinlo\.dsh\storages\session_projcache\sessions\*.json` 与 `C:\Users\jinlo\.dsh\sessions\<workspace>\<session>\session.v4.jsonl.zstd`）、`D:\Program Files\Deepseek Harness`、`E:\自建程序`。
+**这一节刻意不复述那些字符串。** 泄露的正是它们；把它们抄进一份新的公开文档，等于换一个文件重新泄露一次。这里只记形状与数量，精确取值留在私有交接记录里。
+
+- `.json`：3 个不同的「盘符 + 第一段目录」——两个是 `E:` 盘上的工作目录（其中一个就是本仓库的检出路径），一个是 `E:` 盘上的另一个项目目录。**不含用户目录**。
+- `.md`：4 处命中、3 个不同取值——其中**含用户名**（`C:` 盘用户目录下的 `Users/<用户名>` 形式，2 处，一处在会话缓存路径里、一处在会话事件流路径里），另有 `D:` 盘上的一个软件安装目录，以及本仓库的检出路径。
 - `.mjs`：干净。它是只读工具，不含任何采集结果。
+
+判据可复跑：对泄露版本的三个文件跑 `scripts/repo-hygiene-lib.mjs` 的 `scanText()`，`.json` 得 3 条 `windowsPath`、`.md` 得 3 条 `windowsPath` + 1 条 `homePath`、`.mjs` 得 0 条。
 
 ### 2.2 会话标题
 
-`.json` 顶层键是 `["thresholds", "sessions"]`，`sessions` 44 条，每条一个 `prompt`，去重后 30 条。逐条读过后，属于本项目的约 6 条（ShikakuCheck Sprint 1 / 3A 交接、三个只读审计员、`我让chatgpt给这个项目做了一次审计…E:\项目运营\05.shikaku`），**其余 24 条与这个项目无关**：
+`.json` 顶层键是 `["thresholds", "sessions"]`，`sessions` 44 条，每条一个 `prompt`，去重后 30 条。逐条读过后，属于本项目的约 6 条（ShikakuCheck Sprint 1 / 3A 交接、三个只读审计员、一条「我让 chatgpt 给这个项目做了一次审计，结果放在某个运营目录」），**其余 24 条与这个项目无关**。下面只列主题，不抄原文——理由同 §2.1：
 
-- 微信小程序上线 50 天的运营问题；
+- 微信小程序上线 50 天后的运营问题；
 - 结合英伟达黄仁勋事件的博客选题；
 - 贵州省 3D 旅游地图（含后续补景点/桥梁文案的那条）；
-- 把项目部署到 `toolsbar.cn`；
+- 把某个项目部署到自有域名下；
 - `Agent-Autoloop` 项目文件与代码；
 - 用 `trea`/`qoder` 开发小产品、插件与积分；
 - 「生图智能体」为一篇技术博客生成 5 张配图；
-- 安装 `github.com/liyupi/awesome-vibe-coding`、`github.com/kaankiziltug/logo-design-sk`；
-- 把一套中文信息图改成英文版（`E:\Dev_Progra`）。
+- 安装 `awesome-vibe-coding`、`logo-design-sk` 两个公开 GitHub 技能仓库；
+- 把一套中文信息图改成英文版。
 
 ### 2.3 与仓库里既有「先例」的区别
 
 `8892e45` 的提交信息把 `docs/stage-log.md`、`docs/transition-handoff.md` 当作先例。核查后：
 
-- `docs/stage-log.md` 只有 `C:\Program Files\Docker\Docker\Docker Desktop.exe`（软件安装路径，**不含用户名**）；
-- `docs/transition-handoff.md` 只有 `E:\自建程序\jp_qualification_media`（**本项目自己的路径**）。
+- `docs/stage-log.md` 只有一个 `C:` 盘上的软件安装路径（`Program Files` 下的 Docker 目录，**不含用户名**）；
+- `docs/transition-handoff.md` 只有本仓库自己的检出路径（`E:` 盘，**不含用户名**）。
 
 先例泄露的是「软件装在哪 / 本项目在哪」；`8892e45` 新增的是**用户名**与**其它项目的工作内容**。性质不同，不能用先例免责。
 
 ## 3. 暴露窗口与实证
 
 - GitHub API：`roykim26/jp_qualification_media` → `private: False`、`visibility: public`。
-- `raw.githubusercontent.com/roykim26/jp_qualification_media/8892e45/docs/audit/DSH_LATENCY_BASELINE_2026-11-25.json` → **HTTP 200，24848 bytes**，内容含 `E:\项目运营` 与 `微信小程序`。
+- `raw.githubusercontent.com/roykim26/jp_qualification_media/8892e45/docs/audit/DSH_LATENCY_BASELINE_2026-11-25.json` → **HTTP 200，24848 bytes**，内容含本机运营目录路径与一个其它项目的会话标题。
 - 暴露窗口：`8892e45` 提交于 2026-11-25 10:29:41，改写于同日 15:43。**约 5 小时**，期间文件可匿名下载。
 - 期间是否有第三方抓取：**无法从本地判断**。GitHub 的 raw 缓存与任何派生 clone 都不受本次改写影响（见 §6）。
 

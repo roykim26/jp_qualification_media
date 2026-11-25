@@ -60,6 +60,7 @@ gh pr list --state open --json number,headRefName,headRefOid,mergeable,mergeStat
 - 改 `config/data-coverage-contract.json`（判级面）＝产品决策，另行请示；`config/release-gate-baseline.json`、CI 夹具、`verify-ci-fixture.mjs`、`docker-smoke.mjs` 属同一条计数链，必须**同一个 PR** 一起改（baseline 是下限：只抬 baseline 不重导夹具，本机绿、CI 必红）。
 - `git add --` **逐路径，绝不 `-A`**；仓库根未跟踪的 **`Python/` 永不提交、也不要删**。
 - 临时件放 gitignored 的 `var/` 并在提交前删（往轮遗留的 `var/` 文件别动）；`uv run` 生成的 `services/collector/uv.lock` 是未跟踪的本地产物（CI 用 pip 装包），提交前删掉。
+- **不得把本机绝对路径与会话内容提交进仓库**：仓库是公开的，用户目录形式的绝对路径、盘符检出路径、会话标题/提示词原样进 git 等于对外披露本机目录结构与其他项目。`pnpm run hygiene:check`（`scripts/check-repo-hygiene.mjs`）扫暂存区并已接进 `release:check`；确需保留的历史文档按 `(path, kind, value)` 三元组登记到 `scripts/repo-hygiene-allowlist.json` 并写明理由，值用正斜杠无前导斜杠形式（清单因此不含扫描器能匹配的字符串，无需豁免自己）。测试夹具用运行时拼装，不写完整路径。
 - **判据可复跑、数字要现取**：报任何计数前先跑只读命令；发命令那条消息不得预写读数；写库用词分三态（「入库 N 条」要带 `pending_review` 与「未公开」，「批准 N 条」要带 `facts` 计数变化）。交接单与环境结论会过期，每轮重取。
 - 门禁语义：非合成 `pending_review != 0` ⇒ `verify:all` **硬失败**（设计内中间态）；`scripts/verify-lib.mjs` 跳过 `requiredLevel ∈ {post_event, optional, not_applicable}` ⇒ 历史统计类**永远不会把门禁跑红**，属产品覆盖债，只能靠人记着。FE 的维度全 NULL，三个 `{deliveryMode:"cbt"}` 条件字段因此不参与检查 ⇒ **6/6 ≠ 字段齐全**。
 - 并行窗口：优先 `git worktree` 隔离；**不碰主工作树里的未提交改动、不回滚别的窗口的写入**；删分支前先确认它确实属于自己这轮。

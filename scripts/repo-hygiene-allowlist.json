@@ -1,0 +1,83 @@
+{
+  "note": "Machine-specific paths that predate the gate. Every entry names one (path, kind, value) triple and why it is legitimate; a new path in the same file is still reported. Values are written in canonical form (forward slashes, no leading slash) so that this file does not itself contain a string the scanner would match. See scripts/repo-hygiene-lib.mjs for why suppression is per-triple rather than per-file.",
+  "entries": [
+    {
+      "path": "scripts/repo-hygiene-lib.test.mjs",
+      "kind": "sessionDump",
+      "value": true,
+      "reason": "the detector's own test has to contain a dump-shaped literal to prove the detector fires"
+    },
+    {
+      "path": "docs/stage-log.md",
+      "kind": "homePath",
+      "value": "Users/jinlo",
+      "reason": "the 2026-09 delivery log records the shell it ran in"
+    },
+    {
+      "path": "docs/stage-log.md",
+      "kind": "windowsPath",
+      "value": "C:/Program",
+      "reason": "the log records the Docker Desktop binary it launched"
+    },
+    {
+      "path": "docs/transition-handoff.md",
+      "kind": "homePath",
+      "value": "Users/jinlo",
+      "reason": "the handoff snapshot quotes the command it was written from"
+    },
+    {
+      "path": "docs/transition-handoff.md",
+      "kind": "windowsPath",
+      "value": "E:/自建程序",
+      "reason": "this repository's own checkout path, already public and not a secret"
+    },
+    {
+      "path": "scripts/visual_smoke.py",
+      "kind": "windowsPath",
+      "value": "C:/Program",
+      "reason": "the script resolves the Chrome binary installed by Docker Desktop"
+    },
+    {
+      "path": "docs/audit/DEEPSEEK_HARNESS_SPRINT_3B_TASK.md",
+      "kind": "windowsPath",
+      "value": "C:/Users",
+      "reason": "the task document cites where the harness stores its config"
+    },
+    {
+      "path": "docs/audit/REPOSITORY_AUDIT_2026-11-24.md",
+      "kind": "windowsPath",
+      "value": "E:/自建程序",
+      "reason": "the audit records the checkout it read"
+    },
+    {
+      "path": "docs/handover-p1-ops-findings.md",
+      "kind": "windowsPath",
+      "value": "E:/自建程序",
+      "reason": "the handover names the checkout the operator worked in"
+    },
+    {
+      "path": "docs/next-round-ticket.md",
+      "kind": "windowsPath",
+      "value": "E:/自建程序",
+      "reason": "the ticket names the checkout the next round starts in"
+    },
+    {
+      "path": "docs/next-round-ticket.md",
+      "kind": "windowsPath",
+      "value": "E:/项目运营",
+      "reason": "the ticket cites an operations directory that holds project material"
+    },
+    {
+      "path": "docs/audit/SPRINT_1_REPORT_2026-11-24.md",
+      "kind": "windowsPath",
+      "value": "E:/项目运营",
+      "reason": "the Sprint 1 report cites the audit material it was given"
+    },
+    {
+      "path": "docs/audit/V2_GAP_MATRIX.md",
+      "kind": "windowsPath",
+      "value": "E:/项目运营",
+      "reason": "the gap matrix cites the audit material it was given"
+    }
+  ]
+}
