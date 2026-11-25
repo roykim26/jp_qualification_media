@@ -168,6 +168,28 @@ describe('shared UI foundation', () => {
     expect(webStyles).toContain('@page { margin: 16mm 14mm; }');
   });
 
+  it('meets the WCAG 2.2 AA 24x24 minimum target size for controls', () => {
+    expect(uiStyles).toContain(
+      'input[type="checkbox"], input[type="radio"] { width: 24px; height: 24px;',
+    );
+    expect(uiStyles).toContain(
+      '.footer-group a { display: inline-flex; min-height: 24px; align-items: center; }',
+    );
+    expect(webStyles).toContain(
+      '.compare-choice input { width: 24px; height: 24px; }',
+    );
+    expect(webStyles).toContain(
+      '.pass-rate-table__sort { display: inline-flex; min-height: 24px;',
+    );
+    expect(webStyles).toContain(
+      '.footer-link-button { display: inline-flex; min-height: 24px;',
+    );
+    expect(webStyles).toContain(
+      '.schedule-event .meta a, .update-card .meta a, .compare-entry .meta a',
+    );
+    expect(webStyles).not.toContain('width: 18px; height: 18px');
+  });
+
   it('offers popular page exits on the 404 page', () => {
     const notFound = renderNotFoundPage();
     expect(notFound).toContain('<span class="not-found__code">404</span>');

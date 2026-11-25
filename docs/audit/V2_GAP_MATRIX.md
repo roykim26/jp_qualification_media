@@ -146,6 +146,7 @@
 - **影响**：WCAG 2.2 AA 的 2.5.8（Target Size Minimum，24×24 CSS px）不满足；移动端误触风险。
 - **改动文件范围**：`packages/ui/src/index.ts`（链接/按钮/checkbox 的最小高度或 padding）、`apps/web/src/styles.ts`（表头排序链接）、**`apps/web/src/assets.ts` 的 `criticalCss`（双维护点，必须同步）**、`tests/ui-foundation.test.ts`。
 - **风险**：**中**。①`criticalCss` 与 `uiStyles`/`webStyles` 是两处维护点（`assets.ts:1-13` 注释明确要求同步），漏改会出现首屏闪动；②改 CSS 会改变 `siteCssHash`（`sha256(siteCss).slice(0,12)`）→ 资源 URL 变化，属正常行为但需确认 Caddy 缓存策略；③需重跑 `scripts/visual_smoke.py` 做视觉回归。
+- **状态**：✅ **已修复（2026-11-25 chore/phase1-baseline）**。`packages/ui/src/index.ts`：`input[type=checkbox]/radio` 基准 24×24、`.footer-group a` `inline-flex + min-height:24px`；`apps/web/src/styles.ts`：`.compare-choice input` 18→24px、`.pass-rate-table__sort` 加 `min-height:24px`、`.footer-link-button` 改 `inline-flex + min-height:24px`，新增 `.schedule-event/.update-card/.compare-entry .meta a`＋`.fact details p a`＋`.history-value details a` 的 24px 最小目标规则。所改选择器均不在 `criticalCss` 快照内（已核对 `assets.ts` 无 footer-group/checkbox/sort/cookie 规则），无需双维护点同步；`siteCssHash` 变化属预期。门禁：`tests/ui-foundation.test.ts` 新增 24×24 断言 1 例，vitest 31 files/524 用例全绿、gate 112 pass、hygiene clean。**遗留**：`scripts/visual_smoke.py` 视觉回归待有运行环境时补跑。
 
 ### G-09 移动端 Cookie 横幅遮挡首屏约 1/4（P1）
 

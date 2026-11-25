@@ -165,7 +165,7 @@ export const webStyles = String.raw`
 .compare-selector legend { margin-bottom: var(--space-3); color: var(--color-text-secondary); font-weight: 700; }
 .compare-choices { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3); }
 .compare-choice { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0 var(--space-2); align-items: center; min-height: 64px; padding: var(--space-3); border: 1px solid var(--color-border-control); border-radius: var(--radius-control); background: var(--color-bg-subtle); cursor: pointer; }
-.compare-choice input { width: 18px; height: 18px; }
+.compare-choice input { width: 24px; height: 24px; }
 .compare-choice span { min-width: 0; font-weight: 700; overflow-wrap: anywhere; }
 .compare-choice small { grid-column: 2; color: var(--color-muted); font-size: 13px; overflow-wrap: anywhere; }
 .compare-table-wrap { overflow: auto; max-height: 70vh; border: 1px solid var(--color-border); border-radius: var(--radius-card); background-color: var(--color-surface); background-image: linear-gradient(to right, var(--color-surface) 30%, rgb(255 255 255 / 0)), linear-gradient(to left, var(--color-surface) 30%, rgb(255 255 255 / 0)), radial-gradient(farthest-side at 0% 50%, rgb(15 23 42 / .14), rgb(15 23 42 / 0)), radial-gradient(farthest-side at 100% 50%, rgb(15 23 42 / .14), rgb(15 23 42 / 0)); background-repeat: no-repeat; background-size: 40px 100%, 40px 100%, 18px 100%, 18px 100%; background-attachment: local, local, scroll, scroll; }
@@ -422,7 +422,7 @@ export const webStyles = String.raw`
 .pass-rate-table th:not(:first-child), .pass-rate-table td { text-align: right; }
 .pass-rate-table tbody th { font-size: 15px; font-weight: 700; }
 .pass-rate-table tbody tr:hover { background: var(--color-bg-subtle); }
-.pass-rate-table__sort { display: inline-flex; align-items: center; gap: 4px; color: inherit; text-decoration: none; }
+.pass-rate-table__sort { display: inline-flex; min-height: 24px; align-items: center; gap: 4px; color: inherit; text-decoration: none; }
 .pass-rate-table__sort:hover { color: var(--color-primary); text-decoration: underline; }
 .pass-rate-table__dimension { display: block; margin-top: 2px; color: var(--color-muted); font-size: 13px; font-weight: 500; }
 .pass-rate-table__note { margin-top: var(--space-4); color: var(--color-muted); font-size: 13px; }
@@ -487,8 +487,9 @@ export const webStyles = String.raw`
 .cookie-banner__inner { display: flex; align-items: center; gap: var(--space-6); padding-block: var(--space-4); }
 .cookie-banner__text { flex: 1 1 auto; margin: 0; font-size: 14px; line-height: 1.7; }
 .cookie-banner__actions { display: flex; flex: 0 0 auto; gap: var(--space-2); }
-.footer-link-button { padding: 0; border: 0; background: transparent; color: var(--color-muted); font-size: 14px; text-align: left; cursor: pointer; }
+.footer-link-button { display: inline-flex; min-height: 24px; align-items: center; padding: 0; border: 0; background: transparent; color: var(--color-muted); font-size: 14px; text-align: left; cursor: pointer; }
 .footer-link-button:hover { color: var(--color-primary); text-decoration: underline; }
+.schedule-event .meta a, .update-card .meta a, .compare-entry .meta a, .fact details p a, .history-value details a { display: inline-flex; min-height: 24px; align-items: center; }
 @media (max-width: 767px) {
   .cookie-banner { bottom: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom)); }
   .cookie-banner__inner { flex-direction: column; align-items: stretch; gap: var(--space-3); }

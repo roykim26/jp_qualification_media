@@ -227,6 +227,7 @@ body.has-menu-open { overflow: hidden; }
 .footer-group ul { padding: 0; list-style: none; }
 .footer-group li { margin-block: var(--space-2); }
 .footer-group a, .footer-group span { color: var(--color-muted); font-size: 14px; }
+.footer-group a { display: inline-flex; min-height: 24px; align-items: center; }
 .footer-group .is-disabled { opacity: .68; }
 .footer-group--collapsible { grid-column: span 2; }
 .footer-group--collapsible > summary { display: flex; min-height: 44px; align-items: center; gap: var(--space-3); margin-bottom: var(--space-3); color: var(--color-ink); font-size: 16px; font-weight: 700; cursor: pointer; list-style: none; }
@@ -257,7 +258,7 @@ body.has-menu-open { overflow: hidden; }
 .field { display: grid; gap: var(--space-2); }
 .field label { color: var(--color-text-secondary); font-weight: 600; }
 .field input, .field select, .field textarea { width: 100%; min-height: 44px; padding: var(--space-2) var(--space-3); border: 1px solid var(--color-border-control); border-radius: var(--radius-control); background: var(--color-surface); }
-input[type="checkbox"], input[type="radio"] { accent-color: var(--color-primary); }
+input[type="checkbox"], input[type="radio"] { width: 24px; height: 24px; accent-color: var(--color-primary); }
 .field textarea { min-height: 112px; resize: vertical; }
 .field__help, .field__error { margin: 0; font-size: 14px; }
 .field__help { color: var(--color-muted); }
