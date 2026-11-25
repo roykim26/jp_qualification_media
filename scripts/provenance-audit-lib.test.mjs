@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   auditProvenanceRow,
+  isSanitizedCiFixture,
   summarizeProvenanceAudit,
 } from './provenance-audit-lib.mjs';
 
@@ -56,4 +57,23 @@ test('rejects non-HTTPS and source/snapshot inconsistencies', () => {
     'synthetic_snapshot',
     'snapshot_hash_missing',
   ]);
+});
+
+test('sanitized CI fixture is detected only when every object key is a ci:// placeholder', () => {
+  assert.equal(
+    isSanitizedCiFixture([
+      { object_key: 'ci://official-snapshot/snapshot:1' },
+      { object_key: 'ci://official-snapshot/snapshot:2' },
+    ]),
+    true,
+  );
+  assert.equal(
+    isSanitizedCiFixture([
+      { object_key: 'ci://official-snapshot/snapshot:1' },
+      { object_key: 'var/official-snapshots/fp/jafp-schedule.html' },
+    ]),
+    false,
+  );
+  assert.equal(isSanitizedCiFixture([{ object_key: null }]), false);
+  assert.equal(isSanitizedCiFixture([]), false);
 });

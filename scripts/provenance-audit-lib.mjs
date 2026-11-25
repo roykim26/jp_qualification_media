@@ -54,3 +54,18 @@ export function summarizeProvenanceAudit(rows) {
     facts,
   };
 }
+
+/**
+ * True when every row's snapshot object key is a `ci://` placeholder, i.e. the
+ * database was rebuilt from the sanitized CI fixture.  That fixture strips the
+ * real snapshot objects and review rows on purpose, so the provenance half of
+ * the audit can only fail there by construction.  Callers may downgrade a
+ * provenance block to a known state in that mode; a database with any real
+ * object key keeps the strict behaviour.
+ */
+export function isSanitizedCiFixture(rows) {
+  return (
+    rows.length > 0 &&
+    rows.every((row) => String(row.object_key ?? '').startsWith('ci://'))
+  );
+}
