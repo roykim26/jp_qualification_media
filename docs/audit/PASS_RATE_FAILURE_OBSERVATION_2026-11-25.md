@@ -7,10 +7,12 @@
 | 仓库            | `jp_qualification_media`                    |
 | 分支            | `chore/phase1-baseline`（与 `main` 同 SHA） |
 | 执行前 HEAD     | `930cf38`                                   |
-| 本轮内容 commit | `<CONTENT_SHA>`（第二段回填这一行）         |
+| 本轮内容 commit | `c492d26`（第二段回填这一行）               |
 | 生产运行版本    | VPS `/opt/jpqm` HEAD `be43cc2`（见 §5.1）   |
 
 本轮只做观测与记录，**不改任何代码**。报告本身是唯一产物。
+
+提交分两段：第一段 `c492d26` 是报告正文（表里 `本轮内容 commit` 填的就是它），第二段只把这一行从占位换成真实 hash。这样报告里引用的 commit 不会指向一个还不存在的对象。
 
 ## 1. 为什么观测这一项
 
