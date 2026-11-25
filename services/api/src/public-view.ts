@@ -84,6 +84,34 @@ const componentFieldSuffixes: Record<string, string> = {
   question_format: 'format',
 };
 
+// Stable fields do not change by exam year: an approved fact at any year covers
+// the coverage year. Only genuinely per-year fields (exam dates, schedule,
+// result/application windows) must be dated to the coverage year. Keep in step
+// with scripts/verify-lib.mjs.
+const yearAgnosticFactKeys = new Set([
+  'eligibility',
+  'exam_method',
+  'exam_subjects',
+  'exam_time',
+  'question_count',
+  'question_format',
+  'passing_standard',
+  'scoring_method',
+  'application_method',
+  'practical_subject',
+  'interview_count',
+  'fee',
+  'statistics_methodology',
+]);
+
+function isYearAgnosticFact(factKey: string): boolean {
+  return (
+    factKey.endsWith('_rule') ||
+    factKey.startsWith('exam_subject_') ||
+    yearAgnosticFactKeys.has(factKey)
+  );
+}
+
 function satisfiesRequirementField(factKey: string, field: string) {
   // FE names subject facts exam_subject_{a|b}_time rather than
   // exam_time_subject_a; keep this in step with scripts/verify-lib.mjs.
@@ -134,13 +162,21 @@ export function buildPublicQualificationView(
       requirement.requiredLevel === 'not_applicable'
     )
       continue;
+    const inDimensions = (fact: PublicFact) =>
+      matchesRequirement(fact, requirement.dimensions);
+    // A conditional scope is assessed only once it has a fact dated to the
+    // coverage year; year-agnostic facts alone must not drag an unpublished
+    // future year into the gate.
+    const presentThisYear = facts.some(
+      (fact) => fact.examYear === year && inDimensions(fact),
+    );
+    if (requirement.requiredLevel === 'conditional' && !presentThisYear)
+      continue;
     const scoped = facts.filter(
       (fact) =>
-        fact.examYear === year &&
-        matchesRequirement(fact, requirement.dimensions),
+        (fact.examYear === year || isYearAgnosticFact(fact.factKey)) &&
+        inDimensions(fact),
     );
-    if (requirement.requiredLevel === 'conditional' && scoped.length === 0)
-      continue;
     for (const field of requirement.fields) {
       const available = scoped.some((fact) =>
         satisfiesApprovedFact(fact, field),

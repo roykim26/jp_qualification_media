@@ -28,9 +28,10 @@ DIRECTLY_CITED_CAPTURE_SOURCES = {
     "capture-only:takken:faq": "https://www.retio.or.jp/exam/faq/",
     "capture-only:takken:past-questions": "https://www.retio.or.jp/exam/past_ques_ans/other/",
     "capture-only:takken:registration-course": "https://www.retio.or.jp/exam/tourokukosyu/",
-    # Work package F: 統計概要 carries the historical applicant, examinee, passed
-    # and pass-rate series.  It is capture-only because `snapshot_from_html()`
-    # still pins every Takken snapshot to the single TAKKEN_SOURCE ingestion id.
+    # G-17 调研（docs/audit/G-17-TAKKEN-STATS-SOURCES.md §1.3）：此页实为《宅建
+    # 業者と宅建士の統計概要》，只承载登记者/从业者规模，不是历年申込・受験・
+    # 合格・合格率序列；合格率序列的官方入口是 /exam/ 页挂的「試験実施概況（過
+    # 去10年間）」PDF。本条仅作 statistics_methodology/背景佐证，不支撑 pass_rate。
     "capture-only:takken:statistics-overview": "https://www.retio.or.jp/toukei/toukei/",
 }
 DIRECTLY_CITED_CAPTURE_DOCUMENTS = {

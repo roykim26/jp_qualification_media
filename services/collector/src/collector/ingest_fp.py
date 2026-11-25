@@ -20,6 +20,7 @@ COLLECTOR_VERSION = "collector.capture_fp"
 # page the parser reports `structure_changed` for must stay out of this mapping:
 # ingest_snapshot() aborts on any parse issue rather than staging nothing.
 INGEST_SOURCES = {
+    "jafp-1-outline.html": "source:fp:jafp-1-outline",
     "jafp-2-3-outline.html": "source:fp:jafp-2-3-outline",
     "jafp-schedule.html": "source:fp:jafp-schedule",
     "kinzai-1-academic.html": "source:fp:kinzai-1-academic",
@@ -44,6 +45,48 @@ def capture_record(source_id: str, snapshot_path: Path) -> dict[str, object]:
     if sha256(snapshot_path.read_bytes()).hexdigest() != record["content_hash"]:
         raise ValueError("raw snapshot hash does not match capture report")
     return record
+
+
+def candidate_id(
+    snapshot_hash: str,
+    provider_id: str,
+    exam_level_id: str,
+    exam_component: str,
+    delivery_mode: str,
+    fact_key: str,
+    exam_year: int | None = None,
+) -> str:
+    """Year-tagged candidates gain a segment; untagged ids stay byte-identical.
+
+    The schedule page now publishes two 年度 sections under one snapshot hash,
+    so the year must separate their ids or the second section would overwrite
+    the first through the pending-review upsert.
+    """
+    scope = f":{exam_year}" if exam_year is not None else ""
+    return (
+        f"candidate:fp:{snapshot_hash}:{provider_id}:{exam_level_id}"
+        f":{exam_component}:{delivery_mode}{scope}:{fact_key}"
+    )
+
+
+def approved_value_keys(cursor) -> set[tuple[str, ...]]:
+    """Approved values must not re-enter the queue when a re-capture re-reads them.
+
+    Mirrors the bookkeeping guard: the 2026 section of the schedule page is
+    unchanged, so only the new 2027 facts may stage as pending_review.
+    """
+    cursor.execute(
+        """SELECT fact_key, provider_id, exam_level_id, exam_component, delivery_mode,
+                  exam_year, normalized_value::text, display_value
+        FROM candidate_facts
+        WHERE qualification_id=%s AND status='approved' AND synthetic=false""",
+        (QUALIFICATION_ID,),
+    )
+    return {
+        (row[0], row[1], row[2], row[3], row[4], row[5],
+         json.dumps(json.loads(row[6]), sort_keys=True, ensure_ascii=False), row[7])
+        for row in cursor.fetchall()
+    }
 
 
 def ingest_snapshot(database_url: str, source_id: str, snapshot_path: str | Path, exam_year: int = 2026) -> dict[str, int | str]:
@@ -79,17 +122,36 @@ def ingest_snapshot(database_url: str, source_id: str, snapshot_path: str | Path
                 ON CONFLICT (source_id,content_hash) DO UPDATE SET
                   object_key=EXCLUDED.object_key,synthetic=EXCLUDED.synthetic,retrieved_at=EXCLUDED.retrieved_at,
                   capture_run_id=EXCLUDED.capture_run_id,original_url=EXCLUDED.original_url,final_url=EXCLUDED.final_url,
-                  http_status=EXCLUDED.http_status,retrieved_at_jst=EXCLUDED.retrieved_at_jst,collector_version=EXCLUDED.collector_version""",
+                  http_status=EXCLUDED.http_status,retrieved_at_jst=EXCLUDED.retrieved_at_jst,collector_version=EXCLUDED.collector_version
+                RETURNING id""",
                 (snapshot_id, source_id, snapshot.content_hash, str(path), captured_at, capture_run_id,
                  record["url"], record["url"], record["status_code"], captured_at, COLLECTOR_VERSION))
+            # The same page may already be recorded under a patrol id; keep that
+            # row's id so the source_checks and candidate FKs point at a real row.
+            snapshot_id = cursor.fetchone()[0]
             cursor.execute("""INSERT INTO source_checks
                 (id,source_id,capture_run_id,snapshot_id,checked_at,status,http_status,message)
                 VALUES (%s,%s,%s,%s,%s,'changed',%s,'Captured official page; candidate staging is pending review.')
                 ON CONFLICT (id) DO NOTHING""",
                 (f"source-check:fp:{snapshot.content_hash}", source_id, capture_run_id, snapshot_id,
                  captured_at, record["status_code"]))
+            approved = approved_value_keys(cursor)
+            skipped = 0
             for c in candidates:
-                candidate_id = f"candidate:fp:{snapshot.content_hash}:{c.provider_id}:{c.exam_level_id}:{c.exam_component}:{c.delivery_mode}:{c.fact_key}"
+                year = exam_year if c.exam_year is None else c.exam_year
+                key = (
+                    c.fact_key, c.provider_id, c.exam_level_id, c.exam_component,
+                    c.delivery_mode, year,
+                    json.dumps(c.normalized_value, sort_keys=True, ensure_ascii=False),
+                    c.display_value,
+                )
+                if key in approved:
+                    skipped += 1
+                    continue
+                candidate_id_value = candidate_id(
+                    snapshot.content_hash, c.provider_id, c.exam_level_id,
+                    c.exam_component, c.delivery_mode, c.fact_key, c.exam_year,
+                )
                 cursor.execute("""INSERT INTO candidate_facts
                     (id,qualification_id,provider_id,exam_level_id,exam_component,delivery_mode,exam_year,fact_key,value_type,normalized_value,display_value,evidence_text,status,risk_level,source_id,source_snapshot_id,synthetic)
                     VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s,%s,'pending_review',%s,%s,%s,false)
@@ -97,11 +159,11 @@ def ingest_snapshot(database_url: str, source_id: str, snapshot_path: str | Path
                       display_value=EXCLUDED.display_value, evidence_text=EXCLUDED.evidence_text,
                       value_type=EXCLUDED.value_type
                     WHERE candidate_facts.status='pending_review'""",
-                    (candidate_id, QUALIFICATION_ID, c.provider_id, c.exam_level_id, c.exam_component, c.delivery_mode, exam_year,
+                    (candidate_id_value, QUALIFICATION_ID, c.provider_id, c.exam_level_id, c.exam_component, c.delivery_mode, year,
                      c.fact_key, c.value_type, json.dumps(c.normalized_value, ensure_ascii=False), c.display_value,
                      c.evidence_text, c.risk_level, source_id, snapshot_id))
                 inserted += cursor.rowcount
-    return {"source_id": source_id, "candidates": inserted, "approval": "not_run"}
+    return {"source_id": source_id, "candidates": inserted, "skipped_approved": skipped, "approval": "not_run"}
 
 
 if __name__ == "__main__":

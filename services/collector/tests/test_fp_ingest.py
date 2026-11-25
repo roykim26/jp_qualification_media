@@ -10,11 +10,12 @@ SOURCE_ID = "source:fp:jafp-2-3-outline"
 SOURCE_URL = "https://www.jafp.or.jp/exam/outline/"
 
 # Pages the FP adapter cannot read any contracted field out of (2026-10-11 只读
-# 预演：磁盘快照逐条解析，这六个全部报 structure_changed)。They stay out of
+# 预演：磁盘快照逐条解析，这几个全部报 structure_changed)。They stay out of
 # INGEST_SOURCES on purpose — ingest_snapshot() aborts on any parse issue.
+# jafp-1-outline left this list once _extract_jafp_1_outline taught the adapter
+# to read its 1級実技 PBT fields.
 UNPARSED_FP_SOURCES = (
     "source:fp:jafp-home",
-    "source:fp:jafp-1-outline",
     "source:fp:jafp-2-3-application",
     "source:fp:kinzai-home",
     "source:fp:kinzai-2",
@@ -162,6 +163,7 @@ def test_fp_capture_record_reads_the_merged_report(monkeypatch, tmp_path: Path):
 
 def test_fp_ingest_mapping_covers_every_source_the_parser_can_read():
     assert set(INGEST_SOURCES.values()) == {
+        "source:fp:jafp-1-outline",
         "source:fp:jafp-2-3-outline",
         "source:fp:jafp-schedule",
         "source:fp:kinzai-1-academic",
@@ -173,6 +175,22 @@ def test_fp_ingest_mapping_covers_every_source_the_parser_can_read():
         assert source_id in FP_SOURCES
         assert name == f"{source_id.removeprefix('source:fp:')}.html"
     assert set(INGEST_SOURCES.values()).isdisjoint(UNPARSED_FP_SOURCES)
+
+
+def test_fp_candidate_id_gains_year_segment_only_for_tagged_candidates():
+    untagged = ingest_module.candidate_id(
+        "hash", "jafp", "fp:2", "academic", "cbt", "exam_dates"
+    )
+    assert untagged == "candidate:fp:hash:jafp:fp:2:academic:cbt:exam_dates"
+    tagged = ingest_module.candidate_id(
+        "hash", "jafp", "fp:2", "academic", "cbt", "exam_dates", 2027
+    )
+    assert tagged == "candidate:fp:hash:jafp:fp:2:academic:cbt:2027:exam_dates"
+    assert tagged != untagged
+    # Two 年度 sections share one snapshot hash; their ids must not collide.
+    assert ingest_module.candidate_id(
+        "hash", "jafp", "fp:2", "academic", "cbt", "exam_dates", 2026
+    ) != tagged
 
 
 def test_fp_ingest_aborts_when_the_page_has_no_contracted_fields(monkeypatch, tmp_path: Path):

@@ -276,6 +276,10 @@ def check_source(cursor, report: Report, approved: set[tuple], filename: str, so
                 "SELECT id FROM candidate_facts WHERE id = ANY(%s)", (fresh,)
             ).fetchall()
         }
+        # A pending row of this same generation is the writer's own output
+        # (ON CONFLICT DO NOTHING re-runs safely); only ids held by another
+        # generation or source are a real collision.
+        foreign -= stored_current
         if foreign:
             report.add(
                 "id_collision",

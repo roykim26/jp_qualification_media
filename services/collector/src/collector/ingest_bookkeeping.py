@@ -23,6 +23,7 @@ INGEST_SOURCES = {
     "home.html": "source:bookkeeping:home",
     "network.html": "source:bookkeeping:network",
     "calendar-2026.html": "source:bookkeeping:calendar-2026",
+    "calendar-2027.html": "source:bookkeeping:calendar-2027",
     "class1-exam.html": "source:bookkeeping:class1-exam",
     "class2-exam.html": "source:bookkeeping:class2-exam",
     "class3-exam.html": "source:bookkeeping:class3-exam",

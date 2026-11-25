@@ -343,7 +343,7 @@ async function main() {
   await waitForUrl(`${apiBase}/api/v1/qualifications/bookkeeping`);
   await waitForUrl(`${webBase}/shikaku/bookkeeping/`);
 
-  await runChecked('the image restores the 1007 approved facts', async () => {
+  await runChecked('the image restores the 1037 approved facts', async () => {
     const facts = await psql(
       `SELECT count(*) FROM facts f
          JOIN fact_revisions fr ON fr.id=f.current_revision_id
@@ -353,11 +353,11 @@ async function main() {
         WHERE f.status='approved' AND fr.status='approved'
           AND c.status='approved' AND c.synthetic=false`,
     );
-    expect(facts === '1007', `expected 1007 approved facts, got ${facts}`);
+    expect(facts === '1037', `expected 1037 approved facts, got ${facts}`);
     const snapshots = await psql('SELECT count(*) FROM snapshots');
     expect(
-      snapshots === '37',
-      `expected 37 fixture snapshots, got ${snapshots}`,
+      snapshots === '40',
+      `expected 40 fixture snapshots, got ${snapshots}`,
     );
   });
 
@@ -424,6 +424,33 @@ async function main() {
     expect(
       page.body.includes('content="noindex,follow"'),
       'year filter page is missing noindex,follow',
+    );
+  });
+
+  // ADR 0002 §2: the section route honours ?year= only. A ?sort= there renders
+  // the bare section byte-for-byte, so it is a parameter variant and must be
+  // noindex with the canonical still on the bare section.
+  await runChecked('the section sort variant stays noindex', async () => {
+    const base = await get(`${webBase}/shikaku/bookkeeping/pass-rate/`);
+    expect(base.status === 200, `expected 200, got ${base.status}`);
+    expect(
+      !base.body.includes('content="noindex,follow"'),
+      'the bare section must stay indexable',
+    );
+
+    const sorted = await get(
+      `${webBase}/shikaku/bookkeeping/pass-rate/?sort=pass_rate&order=desc`,
+    );
+    expect(sorted.status === 200, `expected 200, got ${sorted.status}`);
+    expect(
+      sorted.body.includes('content="noindex,follow"'),
+      'section sort variant is missing noindex,follow',
+    );
+    expect(
+      /<link rel="canonical" href="[^"]*\/shikaku\/bookkeeping\/pass-rate\/">/.test(
+        sorted.body,
+      ),
+      'section sort variant canonical is not the bare section',
     );
   });
 

@@ -321,3 +321,84 @@ test('fixture provenance blocks the verified status without hiding business cove
   );
   assert.equal(expectedCoverageStatus(gaps), 'partially_announced');
 });
+
+test('year-agnostic stable fields cover a future schedule year', () => {
+  const dims = {
+    providerId: 'jafp',
+    examLevelId: 'fp:2',
+    examComponent: 'academic',
+    deliveryMode: 'cbt',
+  };
+  const provenance = {
+    sourceUrl: 'https://www.jafp.or.jp/exam/outline/',
+    provenanceStatus: 'verified',
+    officialVerifiedAt: '2026-11-01T00:00:00.000Z',
+  };
+  const stable = [
+    'eligibility',
+    'fee',
+    'exam_method',
+    'exam_time',
+    'question_count',
+    'question_format',
+    'passing_standard',
+    'application_open_rule',
+    'application_deadline_rule',
+  ].map((factKey) => ({ examYear: 2026, factKey, ...dims, ...provenance }));
+  const schedule = ['exam_dates', 'exam_schedule', 'result_date'].map(
+    (factKey) => ({ examYear: 2027, factKey, ...dims, ...provenance }),
+  );
+  assert.deepEqual(evaluateCoverage('fp', [...stable, ...schedule], 2027), []);
+});
+
+test('a conditional scope with no coverage-year fact stays skipped', () => {
+  const dims = {
+    providerId: 'kinzai',
+    examLevelId: 'fp:1',
+    examComponent: 'academic',
+    deliveryMode: 'pbt',
+  };
+  const stable = ['eligibility', 'fee', 'exam_method'].map((factKey) => ({
+    examYear: 2026,
+    factKey,
+    ...dims,
+    sourceUrl: 'https://www.kinzai.or.jp/x',
+    provenanceStatus: 'verified',
+    officialVerifiedAt: '2026-11-01T00:00:00.000Z',
+  }));
+  const gaps = evaluateCoverage('fp', stable, 2027).filter(
+    (gap) => gap.dimensions.providerId === 'kinzai',
+  );
+  assert.deepEqual(gaps, []);
+});
+
+test('a per-year field missing at the coverage year still gaps', () => {
+  const dims = {
+    providerId: 'jafp',
+    examLevelId: 'fp:2',
+    examComponent: 'academic',
+    deliveryMode: 'cbt',
+  };
+  const provenance = {
+    sourceUrl: 'https://www.jafp.or.jp/exam/outline/',
+    provenanceStatus: 'verified',
+    officialVerifiedAt: '2026-11-01T00:00:00.000Z',
+  };
+  const stable = [
+    'eligibility',
+    'fee',
+    'exam_method',
+    'exam_time',
+    'question_count',
+    'question_format',
+    'passing_standard',
+    'application_open_rule',
+    'application_deadline_rule',
+  ].map((factKey) => ({ examYear: 2026, factKey, ...dims, ...provenance }));
+  const partial = [
+    { examYear: 2027, factKey: 'exam_dates', ...dims, ...provenance },
+  ];
+  const gaps = evaluateCoverage('fp', [...stable, ...partial], 2027);
+  assert.ok(gaps.some((gap) => gap.field === 'result_date'));
+  assert.ok(gaps.some((gap) => gap.field === 'exam_schedule'));
+});

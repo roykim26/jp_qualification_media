@@ -19,6 +19,7 @@ def test_bookkeeping_source_plan_is_explicit_and_official():
         "source:bookkeeping:home",
         "source:bookkeeping:network",
         "source:bookkeeping:calendar-2026",
+        "source:bookkeeping:calendar-2027",
         "source:bookkeeping:class1-exam",
         "source:bookkeeping:class2-exam",
         "source:bookkeeping:class1",
@@ -87,7 +88,7 @@ def test_history_subpages_write_distinct_snapshot_files():
     # overwrite, so a slug collision would silently destroy another page's bytes.
     slugs = [source_id.rsplit(":", 1)[-1] for source_id in BOOKKEEPING_SOURCES]
 
-    assert len(slugs) == len(set(slugs)) == 22
+    assert len(slugs) == len(set(slugs)) == 23
     assert len({slug for slug in slugs if slug.startswith("candidate-data")}) == 7
 
 
@@ -208,6 +209,32 @@ def test_calendar_snapshot_stops_asserting_an_unpublished_format():
         snapshot_from_html("source:bookkeeping:calendar-2026", html, synthetic=False)
     )
     assert not issues
+    assert not any(item.fact_key == "exam_method" for item in candidates)
+
+
+def test_calendar_2027_reads_printed_level_ranges_and_tags_fiscal_year():
+    # Mirrors the live table: tbody wrapper, full-width digits, rowspan fee
+    # cell, and the 178th sitting (2028-02-27) printed as 2〜3級 only.
+    html = """<h2>簿記 1級~3級（統一試験）</h2>
+    <table><tbody>
+    <tr><th colspan="2">試験日・回</th><th>受験料（税込）</th></tr>
+    <tr><td>2027年６月13日(日)</td><td>第176回 １〜３級</td><td rowspan="3">１級 8,800円<br/>２級 5,500円<br/>３級 3,300円</td></tr>
+    <tr><td>2027年11月21日(日)</td><td>第177回 １〜３級</td></tr>
+    <tr><td>2028年２月27日(日)</td><td>第178回 ２〜３級</td></tr>
+    </tbody></table>"""
+    candidates, issues = extract_candidates(
+        snapshot_from_html("source:bookkeeping:calendar-2027", html, synthetic=False)
+    )
+    assert not issues
+    assert len(candidates) == 6
+    assert all(item.exam_year == 2027 for item in candidates)
+    by_scope = {(item.exam_level_id, item.fact_key): item for item in candidates}
+    assert by_scope[("bookkeeping:1", "exam_dates")].normalized_value == "2027-06-13,2027-11-21"
+    assert by_scope[("bookkeeping:2", "exam_dates")].normalized_value == "2027-06-13,2027-11-21,2028-02-27"
+    assert by_scope[("bookkeeping:3", "exam_dates")].normalized_value == "2027-06-13,2027-11-21,2028-02-27"
+    assert by_scope[("bookkeeping:1", "fee")].normalized_value == "8800"
+    assert by_scope[("bookkeeping:2", "fee")].normalized_value == "5500"
+    assert by_scope[("bookkeeping:3", "fee")].normalized_value == "3300"
     assert not any(item.fact_key == "exam_method" for item in candidates)
 
 
