@@ -7,7 +7,7 @@
 | 仓库            | `roykim26/jp_qualification_media`（**公开**）       |
 | 分支            | `chore/phase1-baseline`（与 `main` 同 SHA）         |
 | 执行前 HEAD     | `3c79940`（`docs: 补记 force-push 之后的实测结果`） |
-| 本轮内容 commit | `3c79940` 之后的下一个提交（第二段回填这一行）      |
+| 本轮内容 commit | `b15feb1`（第二段提交这份回填）                     |
 | 生产运行版本    | 未变（本轮无部署）                                  |
 
 两段式：第一段提交内容，第二段把上面那行的占位换成真实 hash。回填 hash 会改变表格列宽，所以第二段提交前必须重跑 prettier。
