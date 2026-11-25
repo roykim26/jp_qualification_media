@@ -344,6 +344,8 @@ details.disclosure > div { padding-bottom: var(--space-4); color: var(--color-mu
   .mobile-bottom-nav a[aria-current="page"], .mobile-bottom-nav button[aria-expanded="true"] { color: var(--color-primary); background: var(--color-primary-soft); }
   .card__body { padding: var(--space-5); }
   .modal__header, .modal__body, .modal__actions { padding: var(--space-4); }
+  .subnav { scroll-snap-type: x proximity; }
+  .subnav a, .subnav span { padding-inline: var(--space-2); font-size: 13px; scroll-snap-align: start; }
 }
 
 @media (prefers-reduced-motion: reduce) {

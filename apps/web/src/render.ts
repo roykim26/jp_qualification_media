@@ -1494,6 +1494,12 @@ export function renderQualificationSectionPage(
       label: '合格率',
     },
   ]
+    .filter(
+      (item) =>
+        item.section !== 'pass-rate' ||
+        section === 'pass-rate' ||
+        qualificationSectionHasContent(view, 'pass-rate'),
+    )
     .map(
       (item) =>
         `<a href="${escapeHtml(item.href)}"${item.section === section ? ' aria-current="page"' : ''}>${escapeHtml(item.label)}</a>`,
@@ -1560,6 +1566,10 @@ export function renderQualificationSectionPage(
       qualification.slug,
       section,
       navigationYear,
+      section === 'pass-rate' ||
+        qualificationSectionHasContent(view, 'pass-rate')
+        ? undefined
+        : ['overview', 'annual', 'application', 'exam-content'],
     ),
     canonicalPath,
     // The ?year= variant renders the same history tables as /pass-rate/ and only

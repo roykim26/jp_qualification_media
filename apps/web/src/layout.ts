@@ -278,6 +278,7 @@ export function renderQualificationSubnav(
   slug: string,
   current: 'overview' | 'annual' | 'application' | 'exam-content' | 'pass-rate',
   year = 2026,
+  visibleSections?: readonly string[],
 ): string {
   const basePath = `/shikaku/${escapeHtml(slug)}`;
   const items = [
@@ -296,6 +297,7 @@ export function renderQualificationSubnav(
     { key: 'pass-rate', label: '合格率', href: `${basePath}/pass-rate/` },
   ];
   const links = items
+    .filter((item) => !visibleSections || visibleSections.includes(item.key))
     .map(
       (item) =>
         `<a href="${item.href}"${item.key === current ? ' aria-current="page"' : ''}>${item.label}</a>`,

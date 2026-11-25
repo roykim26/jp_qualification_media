@@ -92,6 +92,8 @@ body.has-menu-open { overflow: hidden; }
   .home-hero h1 { font-size: 28px; }
   .home-search__row { grid-template-columns: minmax(0, 1fr); }
   .home-search .button { width: 100%; }
+  .subnav { scroll-snap-type: x proximity; }
+  .subnav a, .subnav span { padding-inline: var(--space-2); font-size: 13px; scroll-snap-align: start; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }

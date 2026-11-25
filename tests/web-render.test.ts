@@ -338,6 +338,48 @@ describe('shared qualification page rendering', () => {
     expect(html).not.toContain('/shikaku/it-passport/application/');
   });
 
+  it('hides the empty pass-rate tab from the qualification subnav', () => {
+    const takken = launchQualifications.find((item) => item.slug === 'takken')!;
+    const view = {
+      qualification: takken,
+      status: 'awaiting_official' as const,
+      facts: [],
+      officialVerifiedAt: null,
+    };
+    const overview = renderQualificationPage(view);
+    expect(overview).toContain('/shikaku/takken/application/');
+    expect(overview).not.toContain('/shikaku/takken/pass-rate/');
+    const passRate = renderQualificationSectionPage(view, 'pass-rate');
+    expect(passRate).toContain('aria-current="page">合格率<');
+  });
+
+  it('keeps the pass-rate subnav tab when history stats exist', () => {
+    const takken = launchQualifications.find((item) => item.slug === 'takken')!;
+    const html = renderQualificationPage({
+      qualification: takken,
+      status: 'verified' as const,
+      officialVerifiedAt: '2026-10-13T00:00:00.000Z',
+      facts: [
+        {
+          qualificationSlug: 'takken',
+          examLevelId: null,
+          examYear: 2025,
+          factKey: 'pass_rate',
+          valueType: 'decimal' as const,
+          normalizedValue: '47.4',
+          displayValue: '47.4%',
+          status: 'approved' as const,
+          riskLevel: 'medium' as const,
+          sourceId: 'source:takken:mlit',
+          sourceSnapshotId: 'snapshot:official',
+          synthetic: false,
+          verifiedAt: '2026-10-13T00:00:00.000Z',
+        },
+      ],
+    });
+    expect(html).toContain('/shikaku/takken/pass-rate/');
+  });
+
   it('renders the launch directory without exposing unimplemented qualifications', () => {
     const items = launchQualifications
       .filter((item) => ['takken', 'it-passport'].includes(item.slug))
