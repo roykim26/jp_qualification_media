@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   classifyReferer,
   isBot,
+  isScannerNoise,
   parseAccessLine,
   summarize,
 } from '../scripts/access-report.mjs';
@@ -181,6 +182,50 @@ describe('summarize', () => {
       }),
     )!,
   ];
+
+  it('separates real 404s from scanner noise (T18)', () => {
+    expect(isScannerNoise('/wp-admin/install.php')).toBe(true);
+    expect(isScannerNoise('/wp-login.php')).toBe(true);
+    expect(isScannerNoise('/.env')).toBe(true);
+    expect(isScannerNoise('/.git/config')).toBe(true);
+    expect(isScannerNoise('/service-account.json')).toBe(true);
+    expect(isScannerNoise('/xmlrpc.php')).toBe(true);
+    expect(isScannerNoise('/shikaku/takken/')).toBe(false);
+    expect(isScannerNoise('/missing')).toBe(false);
+    expect(isScannerNoise('/favicon.ico')).toBe(false);
+
+    const report = summarize([
+      parseAccessLine(
+        logLine({
+          status: 404,
+          request: { uri: '/missing', headers: { 'User-Agent': [chrome] } },
+        }),
+      )!,
+      parseAccessLine(
+        logLine({
+          status: 404,
+          request: {
+            uri: '/wp-login.php',
+            headers: { 'User-Agent': [chrome] },
+          },
+        }),
+      )!,
+      parseAccessLine(
+        logLine({
+          status: 404,
+          request: {
+            uri: '/wp-login.php',
+            headers: { 'User-Agent': [chrome] },
+          },
+        }),
+      )!,
+    ]);
+    expect(report.noise.real404).toBe(1);
+    expect(report.noise.scannerRequests).toBe(2);
+    expect(report.noise.topReal404Paths[0].path).toBe('/missing');
+    expect(report.noise.topScannerPaths[0].path).toBe('/wp-login.php');
+    expect(report.noise.topScannerPaths[0].count).toBe(2);
+  });
 
   it('aggregates totals, statuses, referrers, features and pages', () => {
     const report = summarize(entries);

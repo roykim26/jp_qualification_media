@@ -28,9 +28,18 @@ export type AccessReport = {
     { requests: number; uniqueIps: number }
   >;
   topPages: { path: string; count: number }[];
+  noise: {
+    scannerRequests: number;
+    scannerShare: number;
+    real404: number;
+    topScannerPaths: { path: string; count: number }[];
+    topReal404Paths: { path: string; count: number }[];
+  };
   days: { date: string; requests: number; uniqueIps: number }[];
   skippedLines?: number;
 };
+
+export function isScannerNoise(pathname: string): boolean;
 
 export function parseAccessLine(line: string): AccessEntry | null;
 export function isBot(userAgent: string): boolean;

@@ -36,6 +36,22 @@ const SNS_HOST_PATTERN =
 const ASSET_PATTERN =
   /\.(png|jpe?g|gif|svg|webp|ico|css|js|mjs|woff2?|ttf|map)$/i;
 
+// T18: automated WordPress/.env/.git probes make the raw 404 rate meaningless
+// (the 2026-11-24 log window had 2800 404s, of which only 11 were real site
+// paths). These patterns identify that scanner noise so the report can show a
+// real-404 signal separately. Deliberately narrow: only well-known probe
+// shapes, never a legitimate content path.
+const SCANNER_PATH_PATTERN =
+  /^(?:\/(?:wp-|xmlrpc\.php|cgi-bin|phpmyadmin|administrator|vendor|node_modules|\.env|\.git|\.svn|\.hg|\.aws|\.ssh|\.DS_Store|service-account\.json|server-status|server-info|actuator|manager\/html|drupal|django-admin|telescope|horizon)|.*\/\.(?:env|git|svn|aws|ssh)\/)/i;
+const SCANNER_FILE_PATTERN = /\.(php|asp|aspx|jsp|war|sql|bak|old|swp)[/?]?$/i;
+
+export function isScannerNoise(pathname) {
+  if (typeof pathname !== 'string') return false;
+  return (
+    SCANNER_PATH_PATTERN.test(pathname) || SCANNER_FILE_PATTERN.test(pathname)
+  );
+}
+
 export function parseAccessLine(line) {
   if (typeof line !== 'string' || !line.trim()) return null;
   let record;
@@ -132,6 +148,32 @@ export function summarize(entries, options = {}) {
     byStatus[entry.status] = (byStatus[entry.status] ?? 0) + 1;
   }
 
+  const scannerNoise = filtered.filter(
+    (entry) => entry.status >= 400 && isScannerNoise(entry.pathname),
+  );
+  const realNotFound = filtered.filter(
+    (entry) => entry.status === 404 && !isScannerNoise(entry.pathname),
+  );
+  const scannerPaths = new Map();
+  for (const entry of scannerNoise) {
+    scannerPaths.set(
+      entry.pathname,
+      (scannerPaths.get(entry.pathname) ?? 0) + 1,
+    );
+  }
+  const realPaths = new Map();
+  for (const entry of realNotFound) {
+    realPaths.set(entry.pathname, (realPaths.get(entry.pathname) ?? 0) + 1);
+  }
+  const topCounts = (map) =>
+    [...map.entries()]
+      .map(([path, count]) => ({ path, count }))
+      .sort(
+        (left, right) =>
+          right.count - left.count || left.path.localeCompare(right.path),
+      )
+      .slice(0, top);
+
   const referrers = { direct: 0, search: 0, sns: 0, internal: 0, other: 0 };
   const pageCounts = new Map();
   const featureStats = {
@@ -194,6 +236,13 @@ export function summarize(entries, options = {}) {
       uniqueIps,
     },
     byStatus,
+    noise: {
+      scannerRequests: scannerNoise.length,
+      scannerShare: filtered.length ? scannerNoise.length / filtered.length : 0,
+      real404: realNotFound.length,
+      topScannerPaths: topCounts(scannerPaths),
+      topReal404Paths: topCounts(realPaths),
+    },
     referrers,
     featureUsage,
     topPages,
@@ -217,6 +266,17 @@ export function renderTextReport(report, files) {
     .map(([status, count]) => `${status}=${count}`)
     .join(' ');
   lines.push(`ステータス: ${statusText || 'なし'}`);
+  const noise = report.noise;
+  if (noise) {
+    lines.push(
+      `404内訳: 実ページ ${noise.real404} / スキャナノイズ ${noise.scannerRequests}（全体の${Math.round(noise.scannerShare * 100)}%）`,
+    );
+    if (noise.topReal404Paths.length > 0) {
+      lines.push(
+        `  実404: ${noise.topReal404Paths.map((p) => `${p.path}(${p.count})`).join(' ')}`,
+      );
+    }
+  }
   const ref = report.referrers;
   lines.push(
     `参照元: 直接=${ref.direct} 検索=${ref.search} SNS=${ref.sns} 内部=${ref.internal} その他=${ref.other}`,
