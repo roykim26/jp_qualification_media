@@ -28,6 +28,7 @@
     "data:staleness": "node scripts/check-staleness.mjs",
     "patrol:sources": "python -m collector.patrol_sources",
     "patrol:record": "python -m collector.patrol_record",
+    "patrol:sync": "node scripts/patrol-sync.mjs",
     "ops:daily": "node scripts/ops-daily-report.mjs",
     "ready:check": "node scripts/check-readiness.mjs",
     "baseline:update": "node scripts/update-release-baseline.mjs",

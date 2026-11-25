@@ -245,6 +245,19 @@ PATROL_LIVE_AUTHORIZED=1 PATROL_SOURCE_IDS="source:fundamental-it:cbt-s" PYTHONI
 
 判据＝报告 `database_write: not_run`、`candidate_ingest: not_run`；`var/patrol/patrol-report.json` 每来源一条四态结果；`changed` 来源在对应快照目录有新 hash 文件。`NODE_ENV=production` 或缺开关直接拒绝。
 
+抓取在哪台机器跑：默认在**开发机**跑，再把产物同步到生产（见下一条）。2026-11-25 实测生产云出口访问 jafp／kinzai／gyoseishoshi 会被连接重置或超时（16 条 `failed` 全部是本机 200），在生产直接跑抓取会把「出口被限」记成「来源坏了」，污染连续失败记录。开发机需要 Python 3.13 与 `httpx`／`beautifulsoup4`／`lxml`／`pydantic`（生产镜像 `node:24-slim` 不含 Python，宿主 Python 3.6 也跑不了 collector），并设置 `PYTHONPATH=services/collector/src:services/parser/src`（Windows 用分号）。
+
+### 同步巡检产物到生产（patrol:sync）
+
+抓取只写本机 `var/patrol/`；生产只需 `registry.json` 给 `ops:daily` 算覆盖缺口，另外 `patrol-report.json`／`cache.json` 留作证据与 304 缓存。落库前若在生产执行 `patrol:record`，还要先把快照文件送过去。
+
+```bash
+pnpm patrol:sync                 # 只同步三份产物（report/registry/cache）
+pnpm patrol:sync -- --snapshots  # 连 var/official-snapshots/<qual>/ 一起同步
+```
+
+同步前脚本会校验本机三份产物齐全、报告 `run_id` 与结果条数一致，并把报告里的 `snapshot_path` 在**传输副本**里改写成仓库相对 POSIX 路径（本地原始报告不动，`patrol:record` 仍用本机绝对路径校验哈希）。远端目录由 `PATROL_REMOTE_DIR`（默认 `/opt/jpqm/var/patrol`）、`PATROL_REMOTE_SNAPSHOTS`、`PATROL_SYNC_HOST`、`PATROL_SSH_KEY` 决定。判据＝打印本地 `run_id`／条数并列出远端三份文件的 `ls -l`。
+
 第二步·巡检落库（独立授权；只写 `capture_runs`／`snapshots`／`source_checks` 三张运营表，绝不写候选与事实）：
 
 ```bash
@@ -252,6 +265,18 @@ DATABASE_URL="postgresql://postgres@127.0.0.1:55432/qualification_media" PATROL_
 ```
 
 判据＝`status: recorded`、`candidates: 0`、`approval: not_run`；仅 localhost 库。同一条报告重跑，`capture_runs`／`source_checks` 新增为 0（幂等），`snapshots` 按 `(source_id,content_hash)` 对齐。
+
+生产库落库（开发机执行）：护栏要求 `DATABASE_URL` 的 hostname 是 localhost／127.0.0.1，所以先开 SSH 隧道，把生产 db 容器端口映射到本机，再用生产角色 `qualification_prod` 落库。生产 compose 里 db 未发布端口，容器 IP 用 `docker inspect` 取（本例 `172.19.0.2`）。
+
+```bash
+ssh -i ~/.ssh/jpqm_deploy -N -L 15432:172.19.0.2:5432 root@47.79.87.163   # 另开一个终端
+# 密码：ssh ... 'cd /opt/jpqm && docker compose -f deploy/docker-compose.prod.yml exec -T db printenv POSTGRES_PASSWORD'
+export DATABASE_URL="postgresql://qualification_prod:<pw>@127.0.0.1:15432/qualification_media"
+export PATROL_LOCAL_WRITE=1 NODE_ENV=development
+pnpm patrol:record
+```
+
+落库只写 `capture_runs`／`snapshots`／`source_checks`，不产候选、不改事实；未登记在 `sources` 表的 capture-only id 会以 `skipped_unregistered` 跳过（2026-11-25 实测 11 条）。`source_checks` 的 `checked_at` 用报告时间，所以生产「来源健康」立刻反映这次抓取——这是清掉陈旧 `blocked` 记录的正规方式（陈旧记录不会再被手工 UPDATE 掩盖）。
 
 ## 人工日检（ops:daily，只读）
 
