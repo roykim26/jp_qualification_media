@@ -18,6 +18,7 @@ import {
   factDimensionFields,
   formatFactTarget,
 } from './staleness-lib.mjs';
+import { duplicatedTargets, shapeProblems } from './query-shape-lib.mjs';
 
 function emit(payload, exitCode) {
   console.log(JSON.stringify(payload, null, 2));
@@ -46,41 +47,22 @@ if (!databaseUrl) {
     const result = await client.query(STALENESS_QUERY);
     await client.query('COMMIT');
 
-    const problems = [];
+    const problems = shapeProblems(
+      'STALENESS_QUERY',
+      result,
+      factDimensionFields.map(({ column }) => column),
+      'dimension key',
+    );
 
-    // 1. The query must return every column factDimensionFields names. This is
-    //    the assertion that catches a SELECT that lost a dimension.
-    const returned = new Set(result.fields.map((field) => field.name));
-    const missingColumns = factDimensionFields
-      .map(({ column }) => column)
-      .filter((column) => !returned.has(column));
-    if (missingColumns.length > 0) {
-      problems.push(
-        `STALENESS_QUERY does not return: ${missingColumns.join(', ')}`,
-      );
-    }
-
-    // 2. Every row must carry those keys, so computeStaleness can read them.
-    const rowsMissingKeys = result.rows.filter((row) =>
-      factDimensionFields.some(({ column }) => !(column in row)),
-    ).length;
-    if (rowsMissingKeys > 0) {
-      problems.push(`${rowsMissingKeys} row(s) lack a dimension key`);
-    }
-
-    // 3. The targets that ops:daily prints must be distinct. This is the actual
-    //    regression: 12 actions with only 4 distinct targets was the bug.
+    // The targets that ops:daily prints must be distinct. This is the actual
+    // regression: 12 actions with only 4 distinct targets was the bug.
     const staleness = computeStaleness(result.rows, new Date());
     const targets = staleness.dueFacts.map((fact) => formatFactTarget(fact));
     const distinct = new Set(targets);
-    if (distinct.size !== targets.length) {
-      const duplicated = targets.filter(
-        (target, index) => targets.indexOf(target) !== index,
-      );
+    const duplicates = duplicatedTargets(targets);
+    if (duplicates) {
       problems.push(
-        `${targets.length - distinct.size} due fact(s) share a target: ${[
-          ...new Set(duplicated),
-        ].join('; ')}`,
+        `${duplicates.extra} due fact(s) share a target: ${duplicates.repeated.join('; ')}`,
       );
     }
 
