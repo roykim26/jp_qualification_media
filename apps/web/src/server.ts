@@ -355,9 +355,14 @@ function isCalendarEnvelope(value: unknown): boolean {
  * - a `null` cell `entries` array, a `null` entry;
  * - a `null` entry `factKey` or `value`.
  *
+ * `entry.sourceUrl` is checked for the same reason: it is optional, so only
+ * checked when present, and a number reaches `escapeHtml()` inside the source
+ * anchor. Measured: `200` with an empty body.
+ *
  * Not checked because they do not throw: `row.key`, `qualification.aliasesJa`
  * and `qualification.field` (the selector renders the local qualification
- * list, not the comparison's copy), `entry.examYear`, `missingReason`.
+ * list, not the comparison's copy), `entry.examYear`, `entry.verifiedAt`,
+ * `missingReason` (all three measured: `200` with the full page).
  *
  * `entry.examYear` is deliberately left alone even though `/schedule/` checks
  * its own: the compare cell prints it as `適用年度: ${entry.examYear}年`, which
@@ -381,7 +386,9 @@ function isComparisonEnvelope(value: unknown): boolean {
           (entry) =>
             isRecord(entry) &&
             typeof entry.factKey === 'string' &&
-            typeof entry.value === 'string',
+            typeof entry.value === 'string' &&
+            (entry.sourceUrl === undefined ||
+              typeof entry.sourceUrl === 'string'),
         ),
     );
   });
@@ -398,11 +405,36 @@ function isComparisonEnvelope(value: unknown): boolean {
  * `previousValue: 123`, `affectedPages: null`, `affectedPages: [null]`,
  * `createdAt: null`, `sourceUrl: 123`, and a `null` element in `data`.
  *
- * Not checked because they do not throw: `factLabel`, `verifiedAt`,
- * `eventType`, `id`, `examYear`, and `qualification.*` (unlike `/schedule/`
- * and `/compare/`, this page interpolates the qualification into a template
- * string before escaping it, so a null name renders as text rather than
- * throwing -- measured, not assumed).
+ * Two more were measured in the follow-up round, both `200` plus an empty
+ * body, and both now checked:
+ *
+ * - `qualification` itself: `renderUpdatesPage()` reads
+ *   `event.qualification.slug` while building the batch key and
+ *   `event.qualification.officialNameJa` in the card title, so a `null`
+ *   qualification throws. Sprint 3M recorded this field as safe because it
+ *   measured `qualification.officialNameJa: null` -- which does degrade to
+ *   visible text -- and generalised from there. A `null` qualification is a
+ *   different value and is not safe.
+ * - `factLabel`: `updateRowLabel()` returns it unchanged when it differs from
+ *   `factKey`, so a number, object or array reaches `escapeHtml()` and throws.
+ *   A `null` or empty `factLabel` is fine (it renders 公式情報), which is why
+ *   the check allows `null` and rejects every other non-string -- measured:
+ *   `null` and `''` both return `200` with the full page, `123`, `{a: 1}` and
+ *   `['a']` all return `200` with an empty body.
+ *
+ * `qualification` is checked as "is an object", not with
+ * `hasQualificationIdentity()`. That is the whole of what throws here:
+ * `event.qualification.slug` and `.officialNameJa` are read off the object, so
+ * `null`, a string, a number or an array all throw, while an object with a
+ * `null` slug or name renders a visible `/shikaku/null/2026/` link and a
+ * `nullの...` title -- ugly, but not blank, and measured as such. `/schedule/`
+ * and `/compare/` do require the full identity because *their* renderers throw
+ * on a null name; the same upstream field legitimately needs a different check
+ * on a page that reads it differently.
+ *
+ * Not checked because they do not throw: `verifiedAt`, `eventType`, `id`,
+ * `examYear` (all measured: `200` with the full page; `eventType` and
+ * `examYear` only ever become part of the batch key, never markup).
  */
 function isUpdatesEnvelope(value: unknown): boolean {
   if (!isRecord(value) || !Array.isArray(value.data)) return false;
@@ -411,6 +443,8 @@ function isUpdatesEnvelope(value: unknown): boolean {
       isRecord(event) &&
       typeof event.eventLabel === 'string' &&
       typeof event.factKey === 'string' &&
+      (event.factLabel === null || typeof event.factLabel === 'string') &&
+      isRecord(event.qualification) &&
       typeof event.newValue === 'string' &&
       (event.previousValue === null ||
         typeof event.previousValue === 'string') &&

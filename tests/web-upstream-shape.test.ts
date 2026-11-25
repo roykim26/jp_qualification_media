@@ -65,6 +65,12 @@ type BodyMode =
   | 'updates-null-created-at'
   | 'updates-numeric-source-url'
   | 'updates-null-element'
+  | 'updates-null-qualification'
+  | 'updates-string-qualification'
+  | 'updates-numeric-fact-label'
+  | 'updates-object-fact-label'
+  | 'updates-null-fact-label'
+  | 'updates-null-qualification-slug'
   | 'compare-null-row-label'
   | 'compare-null-cells'
   | 'compare-null-entries'
@@ -75,6 +81,7 @@ type BodyMode =
   | 'compare-null-qualification'
   | 'compare-null-name'
   | 'compare-null-slug'
+  | 'compare-numeric-entry-source-url'
   | 'single-failure';
 
 let bodyMode: BodyMode = 'ok';
@@ -319,11 +326,24 @@ function bodyFor(url: string): string {
     case 'updates-null-page':
     case 'updates-null-created-at':
     case 'updates-numeric-source-url':
-    case 'updates-null-element': {
+    case 'updates-null-element':
+    case 'updates-null-qualification':
+    case 'updates-string-qualification':
+    case 'updates-numeric-fact-label':
+    case 'updates-object-fact-label':
+    case 'updates-null-fact-label':
+    case 'updates-null-qualification-slug': {
       // Sprint 3M, measured. `/updates/` reads `eventLabel`, `factKey`,
       // `newValue` through `escapeHtml()`, and `factKey` again through
       // `factLabel()` (`factKey.match(...)`); `affectedPages` is `.map`-ed and
       // `createdAt` goes to `formatVerifiedDay()`. All of them blank the page.
+      //
+      // The follow-up round added four more, all measured the same way:
+      // a null/non-object `qualification` (read as `.slug` and
+      // `.officialNameJa`), a non-string `factLabel` (handed to `escapeHtml()`
+      // verbatim), and -- the two that must stay 200 -- a null `factLabel`
+      // and a null `qualification.slug`, which render 公式情報 and a dead
+      // link rather than throwing.
       const event: Record<string, unknown> = { ...updateEvent() };
       if (bodyMode === 'updates-null-event-label') event.eventLabel = null;
       if (bodyMode === 'updates-null-fact-key') event.factKey = null;
@@ -335,6 +355,14 @@ function bodyFor(url: string): string {
       if (bodyMode === 'updates-null-page') event.affectedPages = [null];
       if (bodyMode === 'updates-null-created-at') event.createdAt = null;
       if (bodyMode === 'updates-numeric-source-url') event.sourceUrl = 123;
+      if (bodyMode === 'updates-null-qualification') event.qualification = null;
+      if (bodyMode === 'updates-string-qualification')
+        event.qualification = 'it-passport';
+      if (bodyMode === 'updates-numeric-fact-label') event.factLabel = 123;
+      if (bodyMode === 'updates-object-fact-label') event.factLabel = { a: 1 };
+      if (bodyMode === 'updates-null-fact-label') event.factLabel = null;
+      if (bodyMode === 'updates-null-qualification-slug')
+        event.qualification = { ...itPassport, slug: null };
       return JSON.stringify({
         data: bodyMode === 'updates-null-element' ? [null] : [event],
         pagination: { hasMore: false },
@@ -349,7 +377,8 @@ function bodyFor(url: string): string {
     case 'compare-null-row':
     case 'compare-null-qualification':
     case 'compare-null-name':
-    case 'compare-null-slug': {
+    case 'compare-null-slug':
+    case 'compare-numeric-entry-source-url': {
       // Sprint 3M, measured. `/compare/` prints the row label, each cell's
       // entries and each entry's value; the qualification header goes through
       // `escapeHtml()` too. `rows: null` was already caught by the pre-3M
@@ -376,7 +405,8 @@ function bodyFor(url: string): string {
       if (
         bodyMode === 'compare-null-entry' ||
         bodyMode === 'compare-null-entry-value' ||
-        bodyMode === 'compare-null-entry-fact-key'
+        bodyMode === 'compare-null-entry-fact-key' ||
+        bodyMode === 'compare-numeric-entry-source-url'
       ) {
         const cell = (
           row.cells as Record<string, { entries: Record<string, unknown>[] }>
@@ -384,6 +414,8 @@ function bodyFor(url: string): string {
         const entry: Record<string, unknown> = { ...cell.entries[0] };
         if (bodyMode === 'compare-null-entry-value') entry.value = null;
         if (bodyMode === 'compare-null-entry-fact-key') entry.factKey = null;
+        if (bodyMode === 'compare-numeric-entry-source-url')
+          entry.sourceUrl = 42;
         cell.entries =
           bodyMode === 'compare-null-entry'
             ? ([null] as unknown as Record<string, unknown>[])
@@ -665,6 +697,30 @@ describe('web server rejects unusable upstream bodies', () => {
       path: '/updates/',
     },
     {
+      // The follow-up round: `renderUpdatesPage()` reads `.slug` and
+      // `.officialNameJa` off this object, so a non-object blanks the page.
+      mode: 'updates-null-qualification',
+      label: 'an update with a null qualification',
+      path: '/updates/',
+    },
+    {
+      mode: 'updates-string-qualification',
+      label: 'an update whose qualification is a string',
+      path: '/updates/',
+    },
+    {
+      // `updateRowLabel()` passes a factLabel that differs from factKey
+      // straight to `escapeHtml()`, which calls `replaceAll`.
+      mode: 'updates-numeric-fact-label',
+      label: 'an update whose factLabel is a number',
+      path: '/updates/',
+    },
+    {
+      mode: 'updates-object-fact-label',
+      label: 'an update whose factLabel is an object',
+      path: '/updates/',
+    },
+    {
       mode: 'compare-null-row-label',
       label: 'a comparison row with a null label',
       path: '/compare/',
@@ -716,6 +772,13 @@ describe('web server rejects unusable upstream bodies', () => {
       label: 'a comparison qualification with a null slug',
       path: '/compare/',
     },
+    {
+      // `renderComparePage()` wraps an entry's source URL in an anchor after
+      // `escapeHtml()`, so a number blanks the page.
+      mode: 'compare-numeric-entry-source-url',
+      label: 'a comparison entry whose sourceUrl is a number',
+      path: '/compare/',
+    },
   ];
 
   for (const { mode, label, path } of malformed) {
@@ -762,6 +825,39 @@ describe('web server rejects unusable upstream bodies', () => {
       const response = await web.get('/shikaku/it-passport/');
       expect(response.status).toBe(200);
       expect(await response.text()).toContain('ITパスポート');
+    } finally {
+      await web.close();
+    }
+  });
+
+  it('keeps /updates/ 200 when only the factLabel is null', async () => {
+    // The counterweight to `updates-numeric-fact-label`. `updateRowLabel()`
+    // falls back to 公式情報 for a null or empty label, so rejecting null here
+    // would turn a page that renders correctly into a 503. Both cases were
+    // measured: null and '' return 200 with the full page, a number, object or
+    // array return 200 with an empty body.
+    bodyMode = 'updates-null-fact-label';
+    const web = await startWeb();
+    try {
+      const response = await web.get('/updates/');
+      expect(response.status).toBe(200);
+      expect((await response.text()).length).toBeGreaterThan(1000);
+    } finally {
+      await web.close();
+    }
+  });
+
+  it('keeps /updates/ 200 when the qualification slug is null', async () => {
+    // `renderUpdatesPage()` reads `qualification.slug` but only interpolates
+    // it into a link, so a null slug produces a dead `/shikaku/null/2026/`
+    // href rather than a throw. Checked as "is an object" rather than full
+    // identity for exactly this reason -- see the validator's doc comment.
+    bodyMode = 'updates-null-qualification-slug';
+    const web = await startWeb();
+    try {
+      const response = await web.get('/updates/');
+      expect(response.status).toBe(200);
+      expect((await response.text()).length).toBeGreaterThan(1000);
     } finally {
       await web.close();
     }
