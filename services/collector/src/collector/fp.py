@@ -218,7 +218,10 @@ def _extract_jafp_2_3_application_rule(snapshot: FPSnapshot, soup: BeautifulSoup
     for level in ("2", "3"):
         for component in ("academic", "practical:asset-design"):
             result.append(_candidate(snapshot, "application_open_rule", "随時", always_open, "jafp", level, component, "cbt", evidence=always_open))
-            result.append(_candidate(snapshot, "application_deadline_rule", "締切日なし", deadline_evidence, "jafp", level, component, "cbt", evidence=deadline_evidence))
+            # 官方无「締切日なし」短语；预约窗口截止是受检日3天前（§5 建议2），
+            # 作为注记追加到 display，evidence 保持官方原文逐字引用。
+            deadline_display = f"{deadline_evidence}（受検日の3日前までに予約要）"
+            result.append(_candidate(snapshot, "application_deadline_rule", "締切日なし", deadline_display, "jafp", level, component, "cbt", evidence=deadline_evidence))
     return result
 
 
@@ -460,8 +463,11 @@ def _extract_kinzai_1_academic(snapshot: FPSnapshot, soup: BeautifulSoup) -> lis
     amount = re.sub(r"\D", "", fee_text)
     if not amount:
         return []
+    # 官方用语是「紙方式」（FP-ACADEMIC-OFFICIAL-CHECK §5 建议1）；normalized
+    # 保留 PBT 与 2/3 级 CBT 对称，display 用官方措辞便于用户回官方页检索。
+    method_display = "紙方式（基礎編・応用編）" if exam_method == "PBT" else exam_method
     result = [
-        _candidate(snapshot, "exam_method", exam_method, exam_method, "kinzai", "1", "academic", delivery_mode, evidence=format_text),
+        _candidate(snapshot, "exam_method", exam_method, method_display, "kinzai", "1", "academic", delivery_mode, evidence=format_text),
         _candidate(snapshot, "exam_time", str(total_minutes), time_display, "kinzai", "1", "academic", delivery_mode, "integer", time_text),
         _candidate(snapshot, "passing_standard", passing_standard, passing_text, "kinzai", "1", "academic", delivery_mode, evidence=passing_text),
     ]
