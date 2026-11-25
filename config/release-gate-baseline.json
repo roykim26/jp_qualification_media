@@ -28,7 +28,7 @@
     },
     {
       "slug": "fp",
-      "expectedFacts": 92,
+      "expectedFacts": 99,
       "pageContains": "FP技能検定"
     }
   ]
