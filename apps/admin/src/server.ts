@@ -672,6 +672,28 @@ const server = createServer(async (req, res) => {
       );
     }
     const route = req.url ? reviewRoutes[req.url.split('?')[0]] : undefined;
+    const pathname = req.url ? req.url.split('?')[0] : '';
+    if (req.method === 'GET' && (pathname === '/' || pathname === '')) {
+      if (!authenticate(req)) return unauthorized(res, false);
+      const links = Object.entries(reviewRoutes)
+        .map(
+          ([path, item]) =>
+            `<li><a href="${basePath}${path}">${item.title}</a>
+             <span class="muted">· <a href="${basePath}${path.replace('/review/', '/reverify/')}">到期复核</a></span></li>`,
+        )
+        .join('\n');
+      return send(
+        res,
+        200,
+        `<!doctype html><html lang="zh-CN"><meta charset="utf-8">
+<meta name="robots" content="noindex, nofollow">
+<title>数据审核后台</title>
+<style>body{font-family:system-ui,sans-serif;margin:3rem auto;max-width:44rem;line-height:1.7}li{margin:.35rem 0}.muted{color:#666}</style>
+<h1>数据审核后台</h1>
+<p>选择资格进入审核队列，或进入该资格的到期事实复核页。</p>
+<ul>${links}</ul>`,
+      );
+    }
     if (req.method === 'GET' && route) {
       if (!authenticate(req)) return unauthorized(res, false);
       return send(
