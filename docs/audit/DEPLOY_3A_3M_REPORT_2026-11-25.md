@@ -424,6 +424,8 @@ commit `cac5a7e`，已推送并 FF 到生产（`6986a5b..cac5a7e`，2 files +36�
 
 **问题**：字段名 `status` 强烈暗示「整体健康度」，实际只是「进程是否成功产出报告」。任何人（包括未来的我）第一次读这份 JSON 都会误解。建议改名为 `reportStatus` / 或增加独立的 `overallStatus`。
 
+**2026-11-25 已处理**（commit `0890d48`，已上生产 `9d793c9`）：采用「新增字段」而不是改名——`status` 保留（`ops-daily-cron.sh` 的字段提取与 runbook 判据都依赖它，改名需要镜像 + 宿主机 crontab + 文档协同发布），新增 `reportStatus`（同义、名字说清）与 `overallStatus`（`ok` / `action_needed`，真正的健康度，与 `hasCritical` 由同一个 `const` 派生）。markdown 摘要第一行直接写「整体状态」。详见 `docs/audit/OPS_REPORT_STATUS_2026-11-25.md`。
+
 ### 10.2 `due_fact` 的 target 粒度不足以唯一定位一条事实
 
 今日报告的 12 条 `todayActions` 里只有 **4 个 distinct target**：
@@ -444,6 +446,8 @@ target: `${fact.qualification}/${fact.examYear}/${fact.factKey}`,
 ```
 
 丢掉了 `examComponent` / `examLevelId` 这些区分维度。于是 7 条不同的事实渲染成 7 行**一模一样**的话，看报告的人无法知道到底该去复核哪一条，也无法判断是「7 个问题」还是「1 个问题重复 7 次」。
+
+**2026-11-25 已处理**（commit `35168b1`，已上生产 `b9b5228`）：`formatFactTarget()` 在有区分维度时输出 `bookkeeping/2026/fee (examLevel=bookkeeping:2, delivery=network)`，无维度时逐字节保持原格式；`STALENESS_QUERY` 补 SELECT 六列，并新增连库门禁 `scripts/verify-staleness-query.mjs`（`db:verify-staleness`，已接进 `release:check`）断言 `distinctTargets` 与 `dueFacts` 相等。生产实测 `duplicatedTargets=0`。详见 `docs/audit/DUE_FACT_DIMENSIONS_2026-11-25.md`。
 
 **更大的面**：`GROUP BY slug, exam_year, fact_key HAVING count(*)>1` 显示 `bookkeeping/2021/pass_rate` 11 条、`2021/passed` 11 条、2022–2024 的 `pass_rate`/`passed` 各 10 条。这不是数据错误——是 `factKey` 本身粒度不足以唯一定位一条事实。
 
@@ -493,10 +497,10 @@ Caddy access log（7605 行，2026-11-14 11:29Z – 2026-11-24 23:19Z）：
 
 ## 12. 未处理问题
 
-1. **生产代码不在 GitHub 的 `main` 上**。生产跑 `cac5a7e`（`chore/phase1-baseline`），`origin/main` 仍是 `01b86dd`，落后 41 个 commit。任何人 clone 仓库拿到的都是不含 3A–3M 的代码。需要一次 `main` 的合并 + push。
+1. **生产代码不在 GitHub 的 `main` 上**。生产跑 `9d793c9`（`chore/phase1-baseline`，撰写本报告时为 `cac5a7e`，之后又叠了 due_fact 维度化与 status 语义拆分两次部署），`origin/main` 仍是 `01b86dd`，落后 40+ 个 commit。任何人 clone 仓库拿到的都是不含 3A–3M 的代码。需要一次 `main` 的合并 + push。
 2. **没有 CD 流水线**。「自动部署」不存在，下次上线仍需手工跑 runbook 命令。`release-gate.yml` 只跑测试。
-3. **`status` 字段语义误导**（§10.1）。
-4. **`due_fact` target 粒度不足**（§10.2）。
+3. ~~**`status` 字段语义误导**（§10.1）。~~ **已处理**：`0890d48` 新增 `reportStatus` / `overallStatus`，已上生产 `9d793c9`，见 `docs/audit/OPS_REPORT_STATUS_2026-11-25.md`。
+4. ~~**`due_fact` target 粒度不足**（§10.2）。~~ **已处理**：`35168b1`，已上生产 `b9b5228`，见 `docs/audit/DUE_FACT_DIMENSIONS_2026-11-25.md`。
 5. **生产从未跑过 patrol**，`coverageGap` 恒为 `not_run`（§10.3）。
 6. **Caddyfile 的本地改动仍未提交**。`blog.waystoneai.online` 的反代块只存在于 VPS 磁盘上，不在仓库里。下次有人 `git checkout` 就会丢。5 个 `??` 备份/验证文件同理。
 7. **`/pass-rate/` 观测数据只有约 20 分钟**。见 §13。
@@ -556,9 +560,9 @@ docker logs deploy-web-1 2>&1 | grep 'plan A: one failure fails the page'
 
 1. **P1 — 把生产代码落到 `main`**：`git push origin chore/phase1-baseline:main`（或开 PR 合并），让 `origin/main` 与生产一致。这是治理问题，不是技术问题，但拖得越久越容易出事。
 2. **P1 — 等 24–48 小时收 `/pass-rate/` 观测数据**，再决定方案 A 是否切换。当前 0 个 5xx 是好消息，但样本只有 20 分钟。
-3. **P2 — 修 `due_fact` 的 target 粒度**（§10.2）。今日报告里 12 条动作有 8 条是重复文本，这份报告现在几乎无法指导行动。修法是 target 里带上 `examComponent`/`examLevelId`，或在同一 target 下聚合成「N 条事实」。
+3. ~~**P2 — 修 `due_fact` 的 target 粒度**（§10.2）。~~ **已完成**：`35168b1`（`docs/audit/DUE_FACT_DIMENSIONS_2026-11-25.md`），已上生产 `b9b5228`。
 4. **P2 — 把 Caddyfile 的博客 vhost 提交进仓库**，消除「线上配置不在版本控制里」这个隐患。
-5. **P3 — `status` 字段改名**（§10.1），或加独立的 `overallStatus`。
+5. ~~**P3 — `status` 字段改名**（§10.1），或加独立的 `overallStatus`。~~ **已完成**：`0890d48` 走「加 `overallStatus`」这条路（`docs/audit/OPS_REPORT_STATUS_2026-11-25.md`），已上生产 `9d793c9`。
 6. **P3 — 生产跑一次 patrol**，让 `coverageGap` 有真值。
 7. **P4 — 404 噪声过滤**（§10.4）。access log 的轮转经复核已确认配置正确、只是未到阈值，不再是待办；剩下的只有 36.8% 的扫描器 404 噪声。
 
