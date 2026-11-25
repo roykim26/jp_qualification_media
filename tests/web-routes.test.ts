@@ -62,10 +62,51 @@ function stubFact(slug: string) {
   };
 }
 
+/**
+ * A statistics fact, i.e. one of `historyNumericKeys`.
+ *
+ * The year-filter tests cannot reuse `stubFact()` above: with only a `fee`
+ * fact the view carries no history statistics, so `renderHistoryTables()`
+ * returns an empty string, `sectionEmpty` becomes true and *the base page*
+ * is marked `noindex` — for a reason that has nothing to do with `?year=`.
+ * Those tests would then "pass" the `?year=` assertion while proving nothing
+ * about the parameter.
+ */
+function historyFact(
+  slug: string,
+  examYear: number,
+  factKey: string,
+  displayValue: string,
+) {
+  return {
+    qualificationSlug: slug,
+    examLevelId: null,
+    examYear,
+    factKey,
+    valueType: 'text',
+    normalizedValue: displayValue,
+    displayValue,
+    status: 'approved',
+    riskLevel: 'medium',
+    sourceId: `source:${slug}:statistics`,
+    sourceSnapshotId: 'snapshot:official',
+    synthetic: false,
+    verifiedAt: '2026-08-11T00:00:00.000Z',
+    officialVerifiedAt: '2026-08-11T00:00:00.000Z',
+  };
+}
+
+/**
+ * Extra facts appended to every stubbed view.  The stub answers at request
+ * time, so a test sets this before calling `web.get()` and resets it in a
+ * `finally` — the same shape as `stubMode` above.
+ */
+let stubExtraFacts: ReturnType<typeof historyFact>[] = [];
+
 function stubView(slug: string) {
   const qualification =
     launchQualifications.find((entry) => entry.slug === slug) ?? itPassport;
-  const facts = stubMode === 'empty' ? [] : [stubFact(slug)];
+  const facts = stubMode === 'empty' ? [] : [stubFact(slug), ...stubExtraFacts];
   return {
     qualification,
     status: facts.length === 0 ? 'awaiting_official' : 'verified',
@@ -429,6 +470,138 @@ describe('/pass-rate/ index policy (G-02 / ADR 0002)', () => {
     } finally {
       await web.close();
     }
+  });
+});
+
+/**
+ * ADR 0002 §2: the `?year=` filter on `/shikaku/:slug/pass-rate/` is a
+ * parameter view of the same page, so it must stay `noindex` and canonicalise
+ * to the bare section URL — while the bare section URL itself stays indexable.
+ *
+ * `renderQualificationSectionPage` decides `noindex` from two independent
+ * inputs (`sectionEmpty` and `section === 'pass-rate' && year !== undefined`),
+ * which means a regression in either one can hide behind the other.  These
+ * cases pin both: the base page must have *neither* reason to be noindex, and
+ * each `?year=` variant must be noindex for the parameter alone — proven by
+ * `?year=9999`, which renders no cards at all yet still shows the history
+ * tables, so its noindex cannot be explained by an empty page.
+ */
+describe('/shikaku/:slug/pass-rate/ year filter (ADR 0002 §2)', () => {
+  // Statistics facts make `renderHistoryTables()` non-empty, which is what
+  // keeps the base page out of `sectionEmpty`.  The 2024 `passing_standard`
+  // is not a history key but *is* in `sectionConfig['pass-rate']
+  // .factKeyPrefixes`, so it is the one fact that appears as a card on the base
+  // page and disappears under `?year=2025` — that difference is the proof that
+  // the parameter reaches `sectionPageFacts()`.
+  const yearFilterFacts = () => [
+    historyFact('it-passport', 2024, 'pass_rate', '50.0%'),
+    historyFact('it-passport', 2025, 'pass_rate', '55.0%'),
+    historyFact('it-passport', 2024, 'passing_standard', '600点（2024年度）'),
+  ];
+
+  async function withYearFacts<T>(run: () => Promise<T>): Promise<T> {
+    stubExtraFacts = yearFilterFacts();
+    try {
+      return await run();
+    } finally {
+      stubExtraFacts = [];
+    }
+  }
+
+  it('keeps the bare section indexable and canonical to itself', async () => {
+    await withYearFacts(async () => {
+      const web = await startWeb({ siteOrigin: 'https://example.test' });
+      try {
+        const response = await web.get('/shikaku/it-passport/pass-rate/');
+        expect(response.status).toBe(200);
+        const html = await response.text();
+        expect(html).not.toContain('<meta name="robots" content="noindex');
+        expect(html).toContain(
+          '<link rel="canonical" href="https://example.test/shikaku/it-passport/pass-rate/"',
+        );
+        // The 2024 card proves the base page is the unscoped view.
+        expect(html).toContain('600点（2024年度）');
+      } finally {
+        await web.close();
+      }
+    });
+  });
+
+  it('marks ?year= noindex and canonical to the bare section', async () => {
+    await withYearFacts(async () => {
+      const web = await startWeb({ siteOrigin: 'https://example.test' });
+      try {
+        const response = await web.get(
+          '/shikaku/it-passport/pass-rate/?year=2025',
+        );
+        expect(response.status).toBe(200);
+        const html = await response.text();
+        expect(html).toContain('<meta name="robots" content="noindex,follow">');
+        expect(html).toContain(
+          '<link rel="canonical" href="https://example.test/shikaku/it-passport/pass-rate/"',
+        );
+        // Scoped to 2025, so the 2024 card is gone.
+        expect(html).not.toContain('600点（2024年度）');
+      } finally {
+        await web.close();
+      }
+    });
+  });
+
+  it('ignores a year that is not four digits', async () => {
+    // `server.ts` only accepts `^\d{4}$`; anything else has to behave exactly
+    // like the bare page rather than becoming a noindex duplicate of it.
+    await withYearFacts(async () => {
+      const web = await startWeb({ siteOrigin: 'https://example.test' });
+      try {
+        const response = await web.get(
+          '/shikaku/it-passport/pass-rate/?year=abc',
+        );
+        expect(response.status).toBe(200);
+        const html = await response.text();
+        expect(html).not.toContain('<meta name="robots" content="noindex');
+        expect(html).toContain('600点（2024年度）');
+      } finally {
+        await web.close();
+      }
+    });
+  });
+
+  it('marks the bare section noindex when it has nothing to show', async () => {
+    // The other reason `renderQualificationSectionPage` sets noindex is
+    // `sectionEmpty`.  Without this case, that half of the condition could
+    // decay to `false` and every other case here would still pass.
+    stubMode = 'empty';
+    const web = await startWeb({ siteOrigin: 'https://example.test' });
+    try {
+      const response = await web.get('/shikaku/it-passport/pass-rate/');
+      expect(response.status).toBe(200);
+      const html = await response.text();
+      expect(html).toContain('<meta name="robots" content="noindex,follow">');
+    } finally {
+      stubMode = 'ok';
+      await web.close();
+    }
+  });
+
+  it('marks an empty year noindex while still rendering the history tables', async () => {
+    await withYearFacts(async () => {
+      const web = await startWeb({ siteOrigin: 'https://example.test' });
+      try {
+        const response = await web.get(
+          '/shikaku/it-passport/pass-rate/?year=9999',
+        );
+        expect(response.status).toBe(200);
+        const html = await response.text();
+        expect(html).toContain('<meta name="robots" content="noindex,follow">');
+        expect(html).not.toContain('600点（2024年度）');
+        // Not an empty page: the history tables are rendered from every fact,
+        // not from the year-scoped card set.
+        expect(html).toContain('受験者数・合格者数・合格率の年次推移');
+      } finally {
+        await web.close();
+      }
+    });
   });
 });
 
