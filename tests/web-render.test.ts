@@ -260,6 +260,52 @@ describe('IT Passport public page rendering', () => {
     expect(passRate).toContain('/shikaku/it-passport/exam-content/');
     expect(passRate).toContain('/shikaku/it-passport/pass-rate/');
   });
+
+  it('windows pass-rate history tables and exposes a noindex full-history variant', () => {
+    const bookkeeping = launchQualifications.find(
+      (item) => item.slug === 'bookkeeping',
+    )!;
+    const facts: PublicFact[] = [];
+    for (let examYear = 1960; examYear <= 2026; examYear += 1) {
+      facts.push({
+        qualificationSlug: 'bookkeeping',
+        examLevelId: 'bookkeeping:1',
+        examYear,
+        factKey: 'pass_rate',
+        valueType: 'text',
+        normalizedValue: '10%',
+        displayValue: '10.0%',
+        status: 'approved',
+        riskLevel: 'high',
+        sourceId: 'source:bookkeeping:stats',
+        sourceSnapshotId: 'snapshot:bookkeeping:stats',
+        synthetic: false,
+        verifiedAt: '2026-08-11T00:00:00.000Z',
+      });
+    }
+    const view = {
+      qualification: bookkeeping,
+      status: 'verified' as const,
+      facts,
+      officialVerifiedAt: '2026-08-11T00:00:00.000Z',
+    };
+    const page = renderQualificationSectionPage(view, 'pass-rate');
+    expect(page).toContain('<th scope="row">2026年</th>');
+    expect(page).toContain('<th scope="row">2007年</th>');
+    expect(page).not.toContain('<th scope="row">2006年</th>');
+    expect(page).not.toContain('<th scope="row">1960年</th>');
+    expect(page).toContain('/shikaku/bookkeeping/pass-rate/?history=all');
+    expect(page).not.toContain('<meta name="robots" content="noindex,follow">');
+
+    const all = renderQualificationSectionPage(view, 'pass-rate', undefined, {
+      historyAllYears: true,
+    });
+    expect(all).toContain('<th scope="row">1960年</th>');
+    expect(all).toContain('<meta name="robots" content="noindex,follow">');
+    expect(all).toContain(
+      '<link rel="canonical" href="/shikaku/bookkeeping/pass-rate/">',
+    );
+  });
 });
 
 describe('shared qualification page rendering', () => {

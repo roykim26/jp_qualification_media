@@ -4,6 +4,7 @@ import {
   type ServerResponse,
 } from 'node:http';
 import { readFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import {
   launchSlugs,
   renderComparePage,
@@ -596,6 +597,37 @@ export function closeAfterResponseStarted(
   if (!res.writableEnded) res.end();
 }
 
+/**
+ * G-11: every HTML document gets a weak ETag over its body plus
+ * `max-age=0, must-revalidate`. Freshness is never assumed — the client must
+ * revalidate — but a revalidation that matches costs 0 bytes (304). The body
+ * is rendered before the status line is written, so a renderer that throws
+ * still reaches the catch below with a clean 502/503 instead of a truncated
+ * 200 (the `headersSent` guard remains for streams that fail mid-write).
+ */
+const HTML_CACHE_CONTROL = 'public, max-age=0, must-revalidate';
+
+function sendHtml(
+  req: IncomingMessage,
+  res: ServerResponse,
+  status: number,
+  html: string,
+  extraHeaders: Record<string, string> = {},
+): ServerResponse {
+  const etag = `W/"${createHash('sha256').update(html).digest('base64url').slice(0, 32)}"`;
+  if (status === 200 && req.headers['if-none-match'] === etag) {
+    res.writeHead(304, { etag, 'cache-control': HTML_CACHE_CONTROL });
+    return res.end();
+  }
+  res.writeHead(status, {
+    'content-type': 'text/html; charset=utf-8',
+    etag,
+    'cache-control': HTML_CACHE_CONTROL,
+    ...extraHeaders,
+  });
+  return res.end(html);
+}
+
 export async function handleRequest(
   req: IncomingMessage,
   res: ServerResponse,
@@ -721,13 +753,19 @@ export async function handleRequest(
           return { ...qualification, status: view.status, facts: view.facts };
         }),
       );
-      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
-      return res.end(renderQualificationDirectory(directoryItems, query));
+      return sendHtml(
+        req,
+        res,
+        200,
+        renderQualificationDirectory(directoryItems, query),
+      );
     }
     if (pathname === '/schedule' || pathname === '/schedule/') {
       const calendar = await readCalendar(url.searchParams);
-      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
-      return res.end(
+      return sendHtml(
+        req,
+        res,
+        200,
         renderSchedulePage(calendar.data, {
           year: url.searchParams.get('year') ?? undefined,
           qualification: url.searchParams.get('qualification') ?? undefined,
@@ -738,12 +776,15 @@ export async function handleRequest(
     }
     if (pathname === '/compare' || pathname === '/compare/') {
       const comparison = await readComparison(url.searchParams);
-      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
-      return res.end(renderComparePage(comparison.data, launchQualifications));
+      return sendHtml(
+        req,
+        res,
+        200,
+        renderComparePage(comparison.data, launchQualifications),
+      );
     }
     if (pathname === '/guide' || pathname === '/guide/') {
-      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
-      return res.end(renderGuideIndex(editorialGuideEntries()));
+      return sendHtml(req, res, 200, renderGuideIndex(editorialGuideEntries()));
     }
     if (pathname === '/pass-rate' || pathname === '/pass-rate/') {
       // Sprint 3A settled on plan A: one unusable qualification takes the whole
@@ -801,8 +842,10 @@ export async function handleRequest(
       // G-02 / ADR 0002 §2: whitelist the sort parameters and mark every
       // parameter variant noindex; the canonical stays on /pass-rate/.
       const query = parsePassRateIndexQuery(url.searchParams);
-      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
-      return res.end(
+      return sendHtml(
+        req,
+        res,
+        200,
         renderPassRateIndex(
           views.filter(({ view }) =>
             qualificationSectionHasContent(view, 'pass-rate'),
@@ -815,11 +858,12 @@ export async function handleRequest(
     if (aboutMatch) {
       const page = editorialAboutPage(aboutMatch[1]);
       if (!page) {
-        res.writeHead(404, { 'content-type': 'text/html; charset=utf-8' });
-        return res.end(renderNotFoundPage());
+        return sendHtml(req, res, 404, renderNotFoundPage());
       }
-      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
-      return res.end(
+      return sendHtml(
+        req,
+        res,
+        200,
         renderEditorialPage(page, 'about', `/about/${aboutMatch[1]}/`),
       );
     }
@@ -827,11 +871,12 @@ export async function handleRequest(
     if (comparisonGuideMatch) {
       const page = editorialComparisonPage(comparisonGuideMatch[1]);
       if (!page) {
-        res.writeHead(404, { 'content-type': 'text/html; charset=utf-8' });
-        return res.end(renderNotFoundPage());
+        return sendHtml(req, res, 404, renderNotFoundPage());
       }
-      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
-      return res.end(
+      return sendHtml(
+        req,
+        res,
+        200,
         renderEditorialPage(
           page,
           'comparison',
@@ -843,11 +888,12 @@ export async function handleRequest(
     if (guideMatch) {
       const page = editorialGuidePage(guideMatch[1]);
       if (!page) {
-        res.writeHead(404, { 'content-type': 'text/html; charset=utf-8' });
-        return res.end(renderNotFoundPage());
+        return sendHtml(req, res, 404, renderNotFoundPage());
       }
-      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
-      return res.end(
+      return sendHtml(
+        req,
+        res,
+        200,
         renderEditorialPage(page, 'guide', `/guide/${guideMatch[1]}/`),
       );
     }
@@ -855,8 +901,10 @@ export async function handleRequest(
       const qualification = url.searchParams.get('qualification') ?? undefined;
       const page = parseUpdatesPage(url.searchParams.get('page'));
       const updates = await readUpdates(url.searchParams, page);
-      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
-      return res.end(
+      return sendHtml(
+        req,
+        res,
+        200,
         renderUpdatesPage(updates.data, {
           filtered: Boolean(qualification),
           page,
@@ -897,12 +945,19 @@ export async function handleRequest(
           'fp',
         ].includes(slug)
       ) {
-        res.writeHead(404, { 'content-type': 'text/html; charset=utf-8' });
-        return res.end(renderNotFoundPage());
+        return sendHtml(req, res, 404, renderNotFoundPage());
       }
       const view = await readQualification(slug);
-      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
-      return res.end(renderQualificationSectionPage(view, section, year));
+      return sendHtml(
+        req,
+        res,
+        200,
+        renderQualificationSectionPage(view, section, year, {
+          historyAllYears:
+            section === 'pass-rate' &&
+            url.searchParams.get('history') === 'all',
+        }),
+      );
     }
     if (pathname === '/') {
       // The home page keeps its static entry points even when the API is
@@ -930,11 +985,14 @@ export async function handleRequest(
           factsBySlug[result.value.slug] = result.value.facts;
         }
       }
-      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
-      return res.end(renderHomePage(calendarEvents, updateEvents, factsBySlug));
+      return sendHtml(
+        req,
+        res,
+        200,
+        renderHomePage(calendarEvents, updateEvents, factsBySlug),
+      );
     }
-    res.writeHead(404, { 'content-type': 'text/html; charset=utf-8' });
-    return res.end(renderNotFoundPage());
+    return sendHtml(req, res, 404, renderNotFoundPage());
   } catch (error) {
     // The response may already be underway: every route writes its status
     // *before* rendering, so a render that throws (an upstream 200 whose body
@@ -953,14 +1011,11 @@ export async function handleRequest(
     // static routes (images, CSS, robots.txt, editorial pages, 404) never
     // fetch and therefore never land here.
     if (error instanceof UpstreamUnavailableError) {
-      res.writeHead(503, {
-        'content-type': 'text/html; charset=utf-8',
+      return sendHtml(req, res, 503, renderErrorPage(), {
         'retry-after': '60',
       });
-      return res.end(renderErrorPage());
     }
-    res.writeHead(502, { 'content-type': 'text/html; charset=utf-8' });
-    return res.end(renderErrorPage());
+    return sendHtml(req, res, 502, renderErrorPage());
   }
 }
 

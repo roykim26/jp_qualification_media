@@ -157,7 +157,7 @@ async function startWeb(
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   return {
-    get: (path: string) => fetch(`${baseUrl}${path}`),
+    get: (path: string, init?: RequestInit) => fetch(`${baseUrl}${path}`, init),
     close: () => new Promise<void>((resolve) => server.close(() => resolve())),
   };
 }
@@ -174,6 +174,29 @@ describe('web server upstream failure handling', () => {
       expect(html).not.toContain(
         '<meta name="robots" content="noindex,follow">',
       );
+    } finally {
+      await web.close();
+    }
+  });
+
+  it('negotiates HTML caching with a weak ETag and must-revalidate', async () => {
+    stubMode = 'ok';
+    const web = await startWeb(stubBaseUrl);
+    try {
+      const first = await web.get('/shikaku/it-passport/');
+      expect(first.status).toBe(200);
+      const etag = first.headers.get('etag');
+      expect(etag).toMatch(/^W\/".+"$/);
+      expect(first.headers.get('cache-control')).toBe(
+        'public, max-age=0, must-revalidate',
+      );
+      await first.text();
+      const second = await web.get('/shikaku/it-passport/', {
+        headers: { 'if-none-match': etag! },
+      });
+      expect(second.status).toBe(304);
+      expect(second.headers.get('content-type')).toBeNull();
+      expect(await second.text()).toBe('');
     } finally {
       await web.close();
     }

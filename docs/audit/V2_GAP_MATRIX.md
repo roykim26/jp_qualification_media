@@ -173,6 +173,7 @@
 - **改动文件范围**：`apps/web/src/server.ts`（HTML 加 `Cache-Control`/`ETag` 或至少 `Vary` 明确化）、`deploy/caddy/Caddyfile`（`encode zstd gzip` 是否加 brotli/zstd）、`apps/web/src/render.ts`（bookkeeping pass-rate 的表格分页/折叠）。
 - **风险**：**中**。①加 HTML 缓存会导致事实更新后用户看到旧页 → 需要短 TTL（如 `max-age=0, must-revalidate` + ETag），**这是产品决策**；②改 Caddyfile 属部署配置（本次禁止改，需单独授权）；③改表格呈现属 UI 变更，需视觉回归。
 - **不做什么**：**本次不改 Caddyfile、不改部署配置**。
+- **状态**：🟡 **代码侧已修复（2026-11-25 chore/phase1-baseline），Caddy 压缩待部署授权**。①`server.ts` 新增 `sendHtml()`：所有 HTML 文档（200/404/502/503）统一带弱 `ETag`（sha256 base64url）＋`Cache-Control: public, max-age=0, must-revalidate`，`If-None-Match` 命中回 304 空体——新鲜度不牺牲（必须回源校验），重复访问零字节。副作用（改善）：渲染抛错现在发生在 writeHead 之前，catch 能干净地回 502/503 而非截断 200；`headersSent` 防护保留。②`render.ts` 的 `renderHistoryTables` 增加 20 年窗口（默认），簿记 pass-rate 页行数约 60→20/表；新增 `?history=all` 变体（noindex、canonical 仍指基础页、含全部年度）；`verify-lib.mjs` 的 `?year=` 探针断言（年次推移标题、aria-current、noindex）在窗口下仍成立。测试：`web-server.test.ts` ETag/304 用例＋`web-render.test.ts` 窗口/变体用例，vitest 31 files/528 全绿。**待授权**：Caddyfile `encode` 加 brotli/zstd（不改代码，属部署配置，需单独批准）；像素级/慢链路复测需运行环境。
 
 ### G-12 conditional/post_event 的「不可见缺失」（P2，语义）
 

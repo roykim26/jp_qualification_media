@@ -195,6 +195,7 @@ export const webStyles = String.raw`
 .history-table-block + .history-table-block { margin-top: var(--space-8); }
 .history-table-block h3 { margin-bottom: var(--space-2); font-size: var(--font-size-lg); }
 .history-table__note { margin-bottom: var(--space-3); color: var(--color-muted); font-size: 13px; overflow-wrap: anywhere; }
+.history-more { margin-top: var(--space-4); color: var(--color-muted); font-size: var(--font-size-sm); }
 .history-table { min-width: 620px; font-variant-numeric: tabular-nums; }
 .history-table th, .history-table td { min-width: 92px; padding: var(--space-3); }
 .history-table tbody th { width: 82px; }

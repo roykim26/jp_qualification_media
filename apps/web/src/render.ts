@@ -1224,7 +1224,11 @@ function historyGroupDimensionLabel(groupKey: string): string {
     .join('・');
 }
 
-function renderHistoryTables(facts: PublicFact[], currentYear: number): string {
+function renderHistoryTables(
+  facts: PublicFact[],
+  currentYear: number,
+  options: { window?: number; allHref?: string } = {},
+): string {
   const groups = buildHistoryGroups(facts);
   if (!groups.size) return '';
   const notes = new Map<string, PublicFact[]>();
@@ -1233,8 +1237,26 @@ function renderHistoryTables(facts: PublicFact[], currentYear: number): string {
     const key = historyGroupKey(fact);
     notes.set(key, [...(notes.get(key) ?? []), fact]);
   }
-
-  const tables = [...groups.entries()]
+  // G-11: the bookkeeping tables carry ~60 years per level; the default page
+  // ships the recent window and links to a noindex full-history variant.
+  const oldestAllowed = options.window
+    ? currentYear - options.window + 1
+    : Number.NEGATIVE_INFINITY;
+  let hiddenYears = new Set<number>();
+  const windowed = new Map<string, Map<string, HistoryRow>>();
+  for (const [groupKey, rows] of groups) {
+    const visible = new Map<string, HistoryRow>();
+    for (const [rowKey, row] of rows) {
+      if (row.year >= oldestAllowed) visible.set(rowKey, row);
+      else hiddenYears.add(row.year);
+    }
+    windowed.set(groupKey, visible);
+  }
+  const moreLink =
+    hiddenYears.size && options.allHref
+      ? `<p class="history-more">直近${options.window}年以外（${hiddenYears.size}年度・〜${Math.min(...hiddenYears)}年）のデータは<a href="${escapeHtml(options.allHref)}">全年度表示ページ</a>に掲載しています。</p>`
+      : '';
+  const tables = [...windowed.entries()]
     .sort(([left], [right]) => compareHistoryGroup(left, right))
     .map(([groupKey, rows], groupIndex) =>
       renderHistoryTable(
@@ -1246,11 +1268,11 @@ function renderHistoryTables(facts: PublicFact[], currentYear: number): string {
       ),
     )
     .join('');
-  const rowCount = [...groups.values()].reduce(
+  const rowCount = [...windowed.values()].reduce(
     (total, rows) => total + rows.size,
     0,
   );
-  return `<section class="history-tables page-section" aria-labelledby="history-tables-heading"><div class="section-heading"><div><p class="eyebrow">年度別の公式統計</p><h2 id="history-tables-heading">受験者数・合格者数・合格率の年次推移</h2><p>公式が公表した表の値を、回（実施回）ごとに並べたものです。空欄「—」は公式表にその列がない期間で、値の補完はしていません。</p></div><p class="meta">${rowCount} 回・${groups.size} 表</p></div>${tables}</section>`;
+  return `<section class="history-tables page-section" aria-labelledby="history-tables-heading"><div class="section-heading"><div><p class="eyebrow">年度別の公式統計</p><h2 id="history-tables-heading">受験者数・合格者数・合格率の年次推移</h2><p>公式が公表した表の値を、回（実施回）ごとに並べたものです。空欄「—」は公式表にその列がない期間で、値の補完はしていません。</p></div><p class="meta">${rowCount} 回・${groups.size} 表</p></div>${tables}${moreLink}</section>`;
 }
 
 function renderVerificationHistory(facts: PublicFact[]): string {
@@ -1392,6 +1414,7 @@ export function renderQualificationSectionPage(
   view: PublicQualificationView,
   section: QualificationSection,
   year?: number,
+  options: { historyAllYears?: boolean } = {},
 ): string {
   const { qualification } = view;
   const sectionMeta = section === 'overview' ? null : sectionConfig[section];
@@ -1399,7 +1422,10 @@ export function renderQualificationSectionPage(
   const navigationYear = year ?? Math.max(...availableYears, 2026);
   const historyTables =
     section === 'pass-rate'
-      ? renderHistoryTables(view.facts, navigationYear)
+      ? renderHistoryTables(view.facts, navigationYear, {
+          window: options.historyAllYears ? undefined : 20,
+          allHref: `/shikaku/${qualification.slug}/pass-rate/?history=all`,
+        })
       : '';
   const factsForPage = sectionPageFacts(view, section, year);
   const sortedFacts = [...factsForPage].sort(
@@ -1604,7 +1630,10 @@ export function renderQualificationSectionPage(
     // The ?year= variant renders the same history tables as /pass-rate/ and only
     // swaps the card set, so it is a parameter filter per product-design 18.2.
     // Empty sections stay reachable from the subnav but must not be indexed.
-    noindex: sectionEmpty || (section === 'pass-rate' && year !== undefined),
+    noindex:
+      sectionEmpty ||
+      (section === 'pass-rate' &&
+        (year !== undefined || options.historyAllYears === true)),
     body,
   });
 }
