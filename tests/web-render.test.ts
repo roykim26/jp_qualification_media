@@ -346,6 +346,33 @@ describe('shared qualification page rendering', () => {
     expect(html).not.toContain('/shikaku/it-passport/application/');
   });
 
+  it('links qualification pages to their comparison guide', () => {
+    const takken = launchQualifications.find((item) => item.slug === 'takken')!;
+    const overview = renderQualificationPage({
+      qualification: takken,
+      status: 'verified',
+      facts: [],
+      officialVerifiedAt: null,
+    });
+    expect(overview).toContain(
+      '<a href="/compare/takken-vs-gyoseishoshi/">宅建と行政書士の違い</a>',
+    );
+    const fp = launchQualifications.find((item) => item.slug === 'fp')!;
+    const annual = renderQualificationSectionPage(
+      {
+        qualification: fp,
+        status: 'verified',
+        facts: [],
+        officialVerifiedAt: null,
+      },
+      'annual',
+      2026,
+    );
+    expect(annual).toContain(
+      '<a href="/compare/bookkeeping-vs-fp/">日商簿記とFP技能検定の違い</a>',
+    );
+  });
+
   it('hides the empty pass-rate tab from the qualification subnav', () => {
     const takken = launchQualifications.find((item) => item.slug === 'takken')!;
     const view = {

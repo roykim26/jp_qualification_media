@@ -787,6 +787,16 @@ export function editorialAboutPage(slug: string): EditorialPage | undefined {
 }
 
 export const editorialComparisonSlugs = Object.keys(comparisonPages);
+
+/** G-07: reverse lookup so qualification pages can link to their comparison guide. */
+export function comparisonGuidesForQualification(slug: string): {
+  slug: string;
+  title: string;
+}[] {
+  return Object.entries(comparisonPages)
+    .filter(([, page]) => (page.compareQuery ?? '').split(',').includes(slug))
+    .map(([pageSlug, page]) => ({ slug: pageSlug, title: page.title }));
+}
 export const editorialGuideSlugs = Object.keys(guidePages);
 export const editorialAboutSlugs = Object.keys(aboutPages);
 

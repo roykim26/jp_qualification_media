@@ -140,6 +140,7 @@
 - **影响**：页脚把 14 个页面抬到同一权重，专题内容页（指南/比较）只有 1–2 个内链指向 → 修订版 V2 §6 Phase 2 排序第 4 项「导航、内链或空状态」的直接命中项。
 - **改动文件范围**：`apps/web/src/render.ts`（资格详情页/年度页内增加指向对应专题的上下文链接）、`apps/web/src/layout.ts`（页脚是否保留 14 个全站链接）、`tests/web-render.test.ts`。
 - **风险**：**低–中**。改页脚会影响**所有页面**（51 个入链同时变化），必须一次性核对 `tests/web-render.test.ts`（2246 行主测）与 64 张截图回归；建议只「增加专题入链」而不「删页脚链接」，把风险控制在一侧。
+- **状态**：✅ **已按建议方案修复（2026-11-25 chore/phase1-baseline，只加不删）**。`editorial.ts` 新增 `comparisonGuidesForQualification(slug)`（按 `compareQuery` 反查）；`render.ts` 资格各页侧栏「関連ページ」之后新增「比較ガイド」面板，链向对应 `/compare/{slug}/` 专题。页脚 14 链接未动。每个专题因此获得 2 资格 × 5 类页面 = 10 个上下文入链（原先全站仅 1–2 个）。测试：`tests/web-render.test.ts` 新增 takken→宅建vs行政書士、fp 年度页→簿記vsFP 断言，vitest 31 files/526 用例全绿。
 
 ### G-08 点击目标普遍 18px 高（< WCAG 2.2 AA 24×24）（P1）
 

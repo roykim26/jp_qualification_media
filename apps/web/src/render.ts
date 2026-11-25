@@ -17,6 +17,7 @@ import {
   renderIcon,
 } from '../../../packages/ui/src/index.js';
 import {
+  comparisonGuidesForQualification,
   editorialComparisonSlugs,
   unofficialNotice,
   verifiedBadgeClarification,
@@ -1521,7 +1522,17 @@ export function renderQualificationSectionPage(
   const officialSiteCta = officialSite
     ? `<section class="sidebar-panel sidebar-panel--cta"><h2>公式サイト</h2><p class="meta">最新の日程・手数料・申込み方法は公式サイトでご確認ください。</p>${renderButtonLink({ href: officialSite.url, label: '公式サイトで確認', variant: 'official' })}</section>`
     : '';
-  const sidebar = `<aside class="detail-sidebar" aria-label="ページ情報"><section class="sidebar-panel"><h2>情報ステータス</h2>${status}<dl class="status-list"><div><dt>公式情報確認</dt><dd>${escapeHtml(formatVerifiedAt(view.officialVerifiedAt))}</dd></div><div><dt>このページの事実</dt><dd>${sortedFacts.length}件</dd></div></dl></section><section class="sidebar-panel"><h2>年度を選ぶ</h2><div class="year-links">${yearLinks}</div></section><section class="sidebar-panel"><h2>関連ページ</h2><nav class="sidebar-links" aria-label="関連ページ">${relatedLinks}</nav></section>${officialSiteCta}</aside>`;
+  // G-07: contextual inbound links so comparison guides are not orphans of one.
+  const comparisonGuides = comparisonGuidesForQualification(qualification.slug);
+  const comparisonGuidePanel = comparisonGuides.length
+    ? `<section class="sidebar-panel"><h2>比較ガイド</h2><nav class="sidebar-links" aria-label="関連する比較ガイド">${comparisonGuides
+        .map(
+          (guide) =>
+            `<a href="/compare/${escapeHtml(guide.slug)}/">${escapeHtml(guide.title)}</a>`,
+        )
+        .join('')}</nav></section>`
+    : '';
+  const sidebar = `<aside class="detail-sidebar" aria-label="ページ情報"><section class="sidebar-panel"><h2>情報ステータス</h2>${status}<dl class="status-list"><div><dt>公式情報確認</dt><dd>${escapeHtml(formatVerifiedAt(view.officialVerifiedAt))}</dd></div><div><dt>このページの事実</dt><dd>${sortedFacts.length}件</dd></div></dl></section><section class="sidebar-panel"><h2>年度を選ぶ</h2><div class="year-links">${yearLinks}</div></section><section class="sidebar-panel"><h2>関連ページ</h2><nav class="sidebar-links" aria-label="関連ページ">${relatedLinks}</nav></section>${comparisonGuidePanel}${officialSiteCta}</aside>`;
   const interpretationNote =
     section === 'pass-rate'
       ? `<aside class="alert alert--info interpretation-note"><div><h2 class="alert__title">数値の見方</h2><p>過去の合格率は集団の実績であり、個人の合格可能性を示すものではありません。年度、級、実施区分と統計の母数をあわせて確認してください。</p></div></aside>`
