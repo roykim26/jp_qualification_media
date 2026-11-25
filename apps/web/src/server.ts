@@ -873,6 +873,20 @@ export async function handleRequest(
         : undefined;
       const requestedYear =
         routePart === 'pass-rate' ? url.searchParams.get('year') : null;
+      // ADR 0002 §2: "?year= 与 ?sort=／?order= 一律不收". The route honours
+      // exactly one parameter — ?year= with four digits on the pass-rate
+      // section — so a variant is "any query parameter this route does not
+      // honour". That is exactly two ways to be a variant, and both are needed:
+      // an unknown key (?sort=, ?order=, ?foo=), and a year that is not four
+      // digits. `requestedYear` is null on every other section, so a ?year=
+      // there fails the second test on its own — spelling that out as a third
+      // clause would be unreachable code, which is what the mutation run said.
+      // A repeated year key needs no clause either: `get()` honours the first
+      // value, so the page is scoped and already noindex through `year`.
+      // Canonical already points at the clean URL, but canonical is a hint and
+      // the meta tag is the instruction.
+      const parameterVariant =
+        url.searchParams.size > 0 && !/^\d{4}$/.test(requestedYear ?? '');
       const year =
         annualYear ??
         (/^\d{4}$/.test(requestedYear ?? '')
@@ -902,7 +916,9 @@ export async function handleRequest(
       }
       const view = await readQualification(slug);
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
-      return res.end(renderQualificationSectionPage(view, section, year));
+      return res.end(
+        renderQualificationSectionPage(view, section, year, parameterVariant),
+      );
     }
     if (pathname === '/') {
       // The home page keeps its static entry points even when the API is

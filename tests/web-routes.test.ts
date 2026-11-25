@@ -548,9 +548,12 @@ describe('/shikaku/:slug/pass-rate/ year filter (ADR 0002 §2)', () => {
     });
   });
 
-  it('ignores a year that is not four digits', async () => {
-    // `server.ts` only accepts `^\d{4}$`; anything else has to behave exactly
-    // like the bare page rather than becoming a noindex duplicate of it.
+  it('renders the bare page for a year that is not four digits, but keeps it out of the index', async () => {
+    // `server.ts` only honours `^\d{4}$`. Anything else renders exactly the
+    // bare page, which is what makes it a parameter variant of the bare page:
+    // same bytes, second URL. ADR 0002 §1 criterion 2 says the parameter
+    // version of identical content is always noindex,follow, so the fact that
+    // the value is ignored is the reason to mark it, not a reason to skip it.
     await withYearFacts(async () => {
       const web = await startWeb({ siteOrigin: 'https://example.test' });
       try {
@@ -559,7 +562,11 @@ describe('/shikaku/:slug/pass-rate/ year filter (ADR 0002 §2)', () => {
         );
         expect(response.status).toBe(200);
         const html = await response.text();
-        expect(html).not.toContain('<meta name="robots" content="noindex');
+        expect(html).toContain('<meta name="robots" content="noindex,follow">');
+        expect(html).toContain(
+          '<link rel="canonical" href="https://example.test/shikaku/it-passport/pass-rate/"',
+        );
+        // Ignored, not honoured: the 2024 card is still on the page.
         expect(html).toContain('600点（2024年度）');
       } finally {
         await web.close();
@@ -598,6 +605,122 @@ describe('/shikaku/:slug/pass-rate/ year filter (ADR 0002 §2)', () => {
         // Not an empty page: the history tables are rendered from every fact,
         // not from the year-scoped card set.
         expect(html).toContain('受験者数・合格者数・合格率の年次推移');
+      } finally {
+        await web.close();
+      }
+    });
+  });
+});
+
+describe('section parameter variants stay out of the index (ADR 0002 §2)', () => {
+  // The route honours exactly one parameter: ?year= with four digits on the
+  // pass-rate section. Everything else renders byte-for-byte the same page as
+  // the clean URL, so those URLs are parameter variants of it and ADR 0002 §1
+  // criterion 2 requires noindex,follow. Canonical already pointed at the clean
+  // URL; these cases pin the meta tag that actually instructs the crawler.
+  const variantFacts = () => [
+    historyFact('it-passport', 2024, 'pass_rate', '50.0%'),
+    historyFact('it-passport', 2025, 'pass_rate', '55.0%'),
+    historyFact('it-passport', 2024, 'passing_standard', '600点（2024年度）'),
+  ];
+
+  async function withVariantFacts<T>(run: () => Promise<T>): Promise<T> {
+    stubExtraFacts = variantFacts();
+    try {
+      return await run();
+    } finally {
+      stubExtraFacts = [];
+    }
+  }
+
+  const variantQueries = [
+    '?sort=fee',
+    '?order=desc',
+    '?sort=fee&order=asc',
+    '?foo=bar',
+  ];
+
+  for (const query of variantQueries) {
+    it(`marks ${query} noindex while rendering the bare page`, async () => {
+      await withVariantFacts(async () => {
+        const web = await startWeb({ siteOrigin: 'https://example.test' });
+        try {
+          const bare = await web.get('/shikaku/it-passport/pass-rate/');
+          const bareHtml = await bare.text();
+          const response = await web.get(
+            `/shikaku/it-passport/pass-rate/${query}`,
+          );
+          expect(response.status).toBe(200);
+          const html = await response.text();
+          expect(html).toContain(
+            '<meta name="robots" content="noindex,follow">',
+          );
+          expect(html).toContain(
+            '<link rel="canonical" href="https://example.test/shikaku/it-passport/pass-rate/"',
+          );
+          // Nothing here is a filter: the 2024 card the bare page shows is
+          // still on the page. This is the difference from ?year=2025, which
+          // drops it.
+          expect(html).toContain('600点（2024年度）');
+          // `layout.ts` blanks the structured data whenever a page is noindex,
+          // so the variant is the bare page plus the robots meta minus its
+          // JSON-LD block. Those two differences are the design; everything
+          // else has to be identical, which is what makes this a parameter
+          // variant rather than a filter.
+          expect(bareHtml).toContain('application/ld+json');
+          expect(html).not.toContain('application/ld+json');
+          const withoutSeoHead = (page: string) =>
+            page
+              .replace(/<meta name="robots" content="[^"]*">/g, '')
+              .replace(
+                /<script type="application\/ld\+json">.*?<\/script>/s,
+                '',
+              );
+          expect(withoutSeoHead(html)).toBe(withoutSeoHead(bareHtml));
+        } finally {
+          await web.close();
+        }
+      });
+    });
+  }
+
+  it('marks a repeated year key noindex even though one of the values is honoured', async () => {
+    // `get()` returns the first value, so the page *is* scoped — but the URL is
+    // still a duplicate of the single-parameter one, and only one canonical
+    // form may be indexable.
+    await withVariantFacts(async () => {
+      const web = await startWeb({ siteOrigin: 'https://example.test' });
+      try {
+        const response = await web.get(
+          '/shikaku/it-passport/pass-rate/?year=2025&year=2026',
+        );
+        expect(response.status).toBe(200);
+        const html = await response.text();
+        expect(html).toContain('<meta name="robots" content="noindex,follow">');
+        expect(html).toContain(
+          '<link rel="canonical" href="https://example.test/shikaku/it-passport/pass-rate/"',
+        );
+      } finally {
+        await web.close();
+      }
+    });
+  });
+
+  it('marks ?year= noindex on a section that ignores the year', async () => {
+    await withVariantFacts(async () => {
+      const web = await startWeb({ siteOrigin: 'https://example.test' });
+      try {
+        const bare = await web.get('/shikaku/it-passport/application/');
+        expect(bare.status).toBe(200);
+        expect(await bare.text()).not.toContain(
+          '<meta name="robots" content="noindex',
+        );
+        const response = await web.get(
+          '/shikaku/it-passport/application/?year=2025',
+        );
+        expect(response.status).toBe(200);
+        const html = await response.text();
+        expect(html).toContain('<meta name="robots" content="noindex,follow">');
       } finally {
         await web.close();
       }

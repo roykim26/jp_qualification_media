@@ -57,6 +57,7 @@ class FPFactCandidate:
     synthetic: bool = True
     evidence_text: str | None = None
     value_type: str = "text"
+    exam_year: int | None = None
 
 
 @dataclass(frozen=True)
@@ -103,8 +104,11 @@ def extract_candidates(snapshot: FPSnapshot) -> tuple[list[FPFactCandidate], tup
     if snapshot.source_id == "source:fp:jafp-2-3-outline":
         candidates.extend(_extract_jafp_2_3(snapshot, soup))
         candidates.extend(_extract_jafp_2_3_application_rule(snapshot, soup))
+    elif snapshot.source_id == "source:fp:jafp-1-outline":
+        candidates.extend(_extract_jafp_1_outline(snapshot, soup))
     elif snapshot.source_id == "source:fp:jafp-schedule":
         candidates.extend(_extract_jafp_2_3_schedule(snapshot, soup))
+        candidates.extend(_extract_jafp_1_practical_2027(snapshot, soup))
     elif snapshot.source_id == "source:fp:kinzai-1-academic":
         candidates.extend(_extract_kinzai_1_academic(snapshot, soup))
     elif snapshot.source_id == "source:fp:kinzai-1-practical":
@@ -118,8 +122,8 @@ def extract_candidates(snapshot: FPSnapshot) -> tuple[list[FPFactCandidate], tup
     return candidates, tuple(issues)
 
 
-def _candidate(snapshot: FPSnapshot, key: str, value: str, display: str, provider: str, level: str, component: str, mode: str, value_type: str = "text", evidence: str | None = None) -> FPFactCandidate:
-    return FPFactCandidate(key, value, display, snapshot.source_id, snapshot.content_hash, provider, f"fp:{level}", component, mode, synthetic=snapshot.synthetic, evidence_text=evidence or display, value_type=value_type)
+def _candidate(snapshot: FPSnapshot, key: str, value: str, display: str, provider: str, level: str, component: str, mode: str, value_type: str = "text", evidence: str | None = None, exam_year: int | None = None) -> FPFactCandidate:
+    return FPFactCandidate(key, value, display, snapshot.source_id, snapshot.content_hash, provider, f"fp:{level}", component, mode, synthetic=snapshot.synthetic, evidence_text=evidence or display, value_type=value_type, exam_year=exam_year)
 
 
 def _digits(value: str) -> str:
@@ -219,50 +223,188 @@ def _extract_jafp_2_3_application_rule(snapshot: FPSnapshot, soup: BeautifulSoup
 
 
 def _extract_jafp_2_3_schedule(snapshot: FPSnapshot, soup: BeautifulSoup) -> list[FPFactCandidate]:
-    heading = next((node for node in soup.select("h3") if "2級・3級FP技能検定" in node.get_text(" ", strip=True) and "CBT試験" in node.get_text(" ", strip=True)), None)
-    table = heading.find_next("table") if heading else None
-    if not table:
-        return []
-    rows = table.select("tr")[1:]
-    exam_dates: list[str] = []
-    result_dates: list[str] = []
-    evidence: list[str] = []
-    for row in rows:
-        cells = [cell.get_text(" ", strip=True) for cell in row.select("td")]
-        if len(cells) < 2:
-            continue
-        period, result = cells[0], cells[1]
-        period_match = re.search(
-            r"(202[67])年([0-9０-９]+)月([0-9０-９]+)日\s*～\s*(?:(202[67])年)?([0-9０-９]+)月([0-9０-９]+)日",
-            period,
-        )
-        if not period_match:
-            continue
-        start_year, start_month, start_day, end_year, end_month, end_day = period_match.groups()
-        end_year = end_year or start_year
-        normalized_period = [
-            f"{start_year}-{int(_digits(start_month)):02d}-{int(_digits(start_day)):02d}",
-            f"{end_year}-{int(_digits(end_month)):02d}-{int(_digits(end_day)):02d}",
-        ]
-        exam_dates.extend(normalized_period)
-        result_match = re.search(r"([0-9０-９]+)月([0-9０-９]+)日", result)
-        if result_match:
-            result_month, result_day = (int(_digits(value)) for value in result_match.groups())
-            result_year = int(start_year) + (result_month < int(_digits(start_month)))
-            result_dates.append(f"{result_year}-{result_month:02d}-{result_day:02d}")
-        evidence.append(" / ".join(cells))
-    if not exam_dates or not result_dates:
-        return []
-    evidence_text = "\n".join(evidence)
+    """Read every 年度 section the page publishes, tagging each fact with its year.
+
+    The 2027 section's table ships with unclosed <tr> tags, so html.parser nests
+    later rows inside the first row's cells.  Walking direct tr/td children and
+    taking only the first period match per cell keeps each row's own period.
+    """
     result: list[FPFactCandidate] = []
-    for level in ("2", "3"):
-        for component in ("academic", "practical:asset-design"):
-            result.extend([
-                _candidate(snapshot, "exam_dates", ",".join(exam_dates), "、".join(exam_dates), "jafp", level, component, "cbt", "json", evidence_text),
-                _candidate(snapshot, "exam_schedule", ",".join(exam_dates), " / ".join(exam_dates), "jafp", level, component, "cbt", evidence=evidence_text),
-                _candidate(snapshot, "result_date", ",".join(result_dates), "、".join(result_dates), "jafp", level, component, "cbt", "json", evidence_text),
+    for year_heading in soup.select("h2"):
+        year_match = re.fullmatch(r"(202[6-9])年度\s*試験日程", year_heading.get_text(" ", strip=True))
+        if not year_match:
+            continue
+        year = int(year_match.group(1))
+        heading = next(
+            (node for node in year_heading.find_all_next("h3")
+             if node.find_previous("h2") is year_heading
+             and "2級・3級FP技能検定" in node.get_text(" ", strip=True)
+             and "CBT試験" in node.get_text(" ", strip=True)),
+            None,
+        )
+        table = heading.find_next("table") if heading else None
+        if table is None or table.find_previous("h3") is not heading:
+            continue
+        period_pattern = re.compile(
+            rf"({year}|{year + 1})年([0-9０-９]+)月([0-9０-９]+)日\s*～\s*(?:({year}|{year + 1})年)?([0-9０-９]+)月([0-9０-９]+)日"
+        )
+        exam_dates: list[str] = []
+        result_dates: list[str] = []
+        evidence: list[str] = []
+        for row in table.select("tr")[1:]:
+            cells = [cell.get_text(" ", strip=True) for cell in row.find_all("td", recursive=False)]
+            if len(cells) < 2:
+                continue
+            period_match = period_pattern.search(cells[0])
+            if not period_match:
+                continue
+            start_year, start_month, start_day, end_year, end_month, end_day = period_match.groups()
+            end_year = end_year or start_year
+            exam_dates.extend([
+                f"{start_year}-{int(_digits(start_month)):02d}-{int(_digits(start_day)):02d}",
+                f"{end_year}-{int(_digits(end_month)):02d}-{int(_digits(end_day)):02d}",
             ])
+            result_match = re.search(r"([0-9０-９]+)月([0-9０-９]+)日", cells[1])
+            if result_match:
+                result_month, result_day = (int(_digits(value)) for value in result_match.groups())
+                result_year = int(start_year) + (result_month < int(_digits(start_month)))
+                result_dates.append(f"{result_year}-{result_month:02d}-{result_day:02d}")
+            evidence.append(" / ".join(cells[:2]))
+        if not exam_dates or not result_dates:
+            continue
+        evidence_text = "\n".join(evidence)
+        for level in ("2", "3"):
+            for component in ("academic", "practical:asset-design"):
+                result.extend([
+                    _candidate(snapshot, "exam_dates", ",".join(exam_dates), "、".join(exam_dates), "jafp", level, component, "cbt", "json", evidence_text, exam_year=year),
+                    _candidate(snapshot, "exam_schedule", ",".join(exam_dates), " / ".join(exam_dates), "jafp", level, component, "cbt", evidence=evidence_text, exam_year=year),
+                    _candidate(snapshot, "result_date", ",".join(result_dates), "、".join(result_dates), "jafp", level, component, "cbt", "json", evidence_text, exam_year=year),
+                ])
     return result
+
+
+def _extract_jafp_1_outline(snapshot: FPSnapshot, soup: BeautifulSoup) -> list[FPFactCandidate]:
+    """Fill the jafp 1級実技（資産設計提案業務）PBT dimension from its own 要綱.
+
+    The page documents a single dated session (e.g. 2026年9月); the year is read
+    from that heading so a recapture of a later 要綱 retags every fact.  Each
+    field is anchored to its printed evidence; a missing anchor skips only its
+    own field, and a page without the 要綱 heading yields nothing so the ingest
+    fails safe with structure_changed instead of guessing.
+    """
+    heading = None
+    year_match = None
+    for node in soup.select("p"):
+        year_match = re.fullmatch(r"(202[0-9])年([0-9０-９]+)月\s*1級FP技能検定試験要綱", node.get_text(" ", strip=True))
+        if year_match:
+            heading = node
+            break
+    if heading is None or year_match is None:
+        return []
+    year = int(_digits(year_match.group(1)))
+    scope = ("jafp", "1", "practical:asset-design", "pbt")
+    result: list[FPFactCandidate] = []
+
+    def paragraphs(section_id: str) -> list[str]:
+        # The section bodies live in the div that follows the h2 anchor, so the
+        # paragraphs are walked until the next h2 instead of selected inside it.
+        heading = soup.select_one(f"#{section_id}")
+        if heading is None:
+            return []
+        texts: list[str] = []
+        node = heading.find_next("p")
+        while node is not None and node.find_previous("h2") is heading:
+            texts.append(node.get_text(" ", strip=True))
+            node = node.find_next("p")
+        return texts
+
+    time_text = next((text for text in paragraphs("Section02") if re.search(r"（([0-9０-９]+)分）", text)), "")
+    minutes_match = re.search(r"（([0-9０-９]+)分）", time_text) if time_text else None
+    if minutes_match:
+        minutes = _digits(minutes_match.group(1))
+        result.append(_candidate(snapshot, "exam_time", minutes, f"{minutes}分", *scope, "integer", time_text, exam_year=year))
+
+    specs_section = soup.select_one("#Section03")
+    specs_table = specs_section.find_next("table") if specs_section else None
+    for row in specs_table.select("tr") if specs_table else []:
+        cells = [cell.get_text(" ", strip=True) for cell in row.find_all(["th", "td"], recursive=False)]
+        if len(cells) != 5 or cells[0] != "1級" or cells[1] != "実技":
+            continue
+        _, _, form, count, passing = cells
+        evidence = " / ".join(cells)
+        if "筆記" in form:
+            result.append(_candidate(snapshot, "exam_method", "PBT", "PBT", *scope, evidence=evidence, exam_year=year))
+        result.append(_candidate(snapshot, "question_format", form, form, *scope, evidence=evidence, exam_year=year))
+        count_match = re.search(r"([0-9０-９]+)問", count)
+        if count_match:
+            result.append(_candidate(snapshot, "question_count", _digits(count_match.group(1)), count, *scope, "integer", evidence, exam_year=year))
+        result.append(_candidate(snapshot, "passing_standard", passing, passing, *scope, evidence=evidence, exam_year=year))
+        break
+
+    eligibility_paragraphs = paragraphs("Section05")
+    intro = next((text for text in eligibility_paragraphs if text.startswith("下記")), "")
+    items = [text for text in eligibility_paragraphs if re.match(r"[1-5]）", text)]
+    if items:
+        evidence = " / ".join([intro, *items] if intro else items)
+        result.append(_candidate(snapshot, "eligibility", evidence, evidence, *scope, evidence=evidence, exam_year=year))
+
+    fee_text = next((text for text in paragraphs("Section08") if "受検手数料は、" in text), "")
+    fee_match = re.search(r"受検手数料は、([0-9,，０-９]+)円（非課税）", fee_text) if fee_text else None
+    if fee_match:
+        amount = re.sub(r"\D", "", fee_match.group(1))
+        result.append(_candidate(snapshot, "fee", amount, f"{int(amount):,}円（非課税）", *scope, "money", fee_text, exam_year=year))
+    return result
+
+
+def _extract_jafp_1_practical_2027(snapshot: FPSnapshot, soup: BeautifulSoup) -> list[FPFactCandidate]:
+    """jafp publishes its own 1級実技（資産設計提案業務）window per 年度.
+
+    Only the 2027 section is contracted here: the 2026 row's 合格発表日 (11/12)
+    disagrees with the approved kinzai 2026 fact (10/30) and needs an owner
+    decision before it may enter the queue.  The page prints no reception
+    times, so the window stays date-only rather than inventing a clock time.
+    """
+    year_heading = next((node for node in soup.select("h2") if re.fullmatch(r"2027年度\s*試験日程", node.get_text(" ", strip=True))), None)
+    if not year_heading:
+        return []
+    heading = next(
+        (node for node in year_heading.find_all_next("h3")
+         if node.find_previous("h2") is year_heading
+         and "1級FP技能検定" in node.get_text(" ", strip=True)
+         and "実技試験（資産設計提案業務）" in node.get_text(" ", strip=True)),
+        None,
+    )
+    table = heading.find_next("table") if heading else None
+    if table is None or table.find_previous("h3") is not heading:
+        return []
+    rows = table.select("tr")
+    if len(rows) != 2:
+        return []
+    headers = [cell.get_text(" ", strip=True) for cell in rows[0].find_all(["th", "td"], recursive=False)]
+    cells = [cell.get_text(" ", strip=True) for cell in rows[1].find_all("td", recursive=False)]
+    if headers[:3] != ["試験日", "受検申請期間", "合格発表日"] or len(cells) < 3:
+        return []
+    exam_match = re.fullmatch(r"2027年([0-9０-９]+)月([0-9０-９]+)日（日）", cells[0])
+    window_match = re.fullmatch(r"([0-9０-９]+)/([0-9０-９]+)～([0-9０-９]+)/([0-9０-９]+)", cells[1])
+    result_match = re.fullmatch(r"([0-9０-９]+)月([0-9０-９]+)日", cells[2])
+    if not (exam_match and window_match and result_match):
+        return []
+    exam_month, exam_day = (int(_digits(value)) for value in exam_match.groups())
+    open_month, open_day, close_month, close_day = (int(_digits(value)) for value in window_match.groups())
+    result_month, result_day = (int(_digits(value)) for value in result_match.groups())
+    exam_date = f"2027-{exam_month:02d}-{exam_day:02d}"
+    application_open = f"2027-{open_month:02d}-{open_day:02d}"
+    application_deadline = f"2027-{close_month:02d}-{close_day:02d}"
+    result_date = f"{2027 + (result_month < exam_month)}-{result_month:02d}-{result_day:02d}"
+    evidence = " / ".join([*headers[:3], *cells[:3]])
+    scope = ("jafp", "1", "practical:asset-design", "pbt")
+    return [
+        _candidate(snapshot, "exam_dates", exam_date, exam_date, *scope, "json", evidence, exam_year=2027),
+        _candidate(snapshot, "exam_schedule", exam_date, exam_date, *scope, evidence=evidence, exam_year=2027),
+        _candidate(snapshot, "application_open", application_open, application_open, *scope, "json", evidence, exam_year=2027),
+        _candidate(snapshot, "application_deadline", application_deadline, application_deadline, *scope, "json", evidence, exam_year=2027),
+        _candidate(snapshot, "result_date", result_date, result_date, *scope, "json", evidence, exam_year=2027),
+    ]
 
 
 def _extract_kinzai_1_academic(snapshot: FPSnapshot, soup: BeautifulSoup) -> list[FPFactCandidate]:

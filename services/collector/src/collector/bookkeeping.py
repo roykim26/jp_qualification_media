@@ -18,6 +18,7 @@ BOOKKEEPING_SOURCES = {
     "source:bookkeeping:home": ("https://www.kentei.ne.jp/bookkeeping", "official_exam_information"),
     "source:bookkeeping:network": ("https://www.kentei.ne.jp/33013", "official_network_exam_information"),
     "source:bookkeeping:calendar-2026": ("https://www.kentei.ne.jp/calendar_2026", "official_exam_calendar"),
+    "source:bookkeeping:calendar-2027": ("https://www.kentei.ne.jp/calendar_2027", "official_exam_calendar"),
     "source:bookkeeping:class1-exam": ("https://www.kentei.ne.jp/bookkeeping/class1/exam", "official_level_exam_information"),
     "source:bookkeeping:class2-exam": ("https://www.kentei.ne.jp/bookkeeping/class2/exam", "official_level_exam_information"),
     "source:bookkeeping:class1": ("https://www.kentei.ne.jp/bookkeeping/class1", "official_level_information"),
@@ -147,6 +148,8 @@ def extract_candidates(snapshot: BookkeepingSnapshot) -> tuple[list[BookkeepingF
         candidates.extend(_extract_network(snapshot, soup))
     elif snapshot.source_id == "source:bookkeeping:calendar-2026":
         candidates.extend(_extract_calendar(snapshot, soup))
+    elif snapshot.source_id == "source:bookkeeping:calendar-2027":
+        candidates.extend(_extract_calendar_2027(snapshot, soup))
     elif snapshot.source_id in {"source:bookkeeping:class1-exam", "source:bookkeeping:class2-exam"}:
         candidates.extend(_extract_level_exam(snapshot, soup))
     elif snapshot.source_id == "source:bookkeeping:class3-exam":
@@ -268,6 +271,52 @@ def _extract_calendar(snapshot: BookkeepingSnapshot, soup: BeautifulSoup) -> lis
         result.append(_candidate(snapshot, "exam_dates", ",".join(applicable), "、".join(applicable), level, "unified", "json"))
         result.append(_candidate(snapshot, "fee", fee, f"{level}級 {int(fee):,}円（税込）", level, "unified", "money"))
     return result
+
+
+def _extract_calendar_2027(snapshot: BookkeepingSnapshot, soup: BeautifulSoup) -> list[BookkeepingFactCandidate]:
+    """Read each sitting's printed 級 range instead of assuming row order.
+
+    The 178th sitting (2028-02-27) belongs to 2027年度 and is 2〜3級 only, so
+    level 1 must not inherit it.  Fees are unchanged from 2026 and stay
+    constants verified against the page's 受験料 column.
+    """
+    heading = next((h for h in soup.select("h2") if "簿記 1級~3級（統一試験）" in h.get_text(" ", strip=True)), None)
+    if not heading:
+        return []
+    table = heading.find_next("table")
+    if not table:
+        return []
+    sittings: list[tuple[str, int, int]] = []
+    container = table.find("tbody", recursive=False) or table
+    for row in container.find_all("tr", recursive=False):
+        cells = [cell.get_text(" ", strip=True) for cell in row.find_all("td", recursive=False)]
+        if len(cells) < 2:
+            continue
+        date_match = re.search(r"(202[78])年([0-9０-９]+)月([0-9０-９]+)日", cells[0])
+        levels_match = re.search(r"([0-9０-９])〜([0-9０-９])級", cells[1])
+        if not date_match or not levels_match:
+            continue
+        year, month, day = (int(normalize("NFKC", value)) for value in date_match.groups())
+        low, high = (int(normalize("NFKC", value)) for value in levels_match.groups())
+        sittings.append((f"{year}-{month:02d}-{day:02d}", low, high))
+    if not sittings:
+        return []
+    result: list[BookkeepingFactCandidate] = []
+    for level, fee in (("1", "8800"), ("2", "5500"), ("3", "3300")):
+        applicable = [date for date, low, high in sittings if low <= int(level) <= high]
+        if not applicable:
+            continue
+        result.append(_candidate_with_year(snapshot, "exam_dates", ",".join(applicable), "、".join(applicable), level, "unified", "json", 2027))
+        result.append(_candidate_with_year(snapshot, "fee", fee, f"{level}級 {int(fee):,}円（税込）", level, "unified", "money", 2027))
+    return result
+
+
+def _candidate_with_year(snapshot: BookkeepingSnapshot, key: str, value: str, display: str, level: str, mode: str, value_type: str, year: int) -> BookkeepingFactCandidate:
+    return BookkeepingFactCandidate(
+        key, value, display, snapshot.source_id, snapshot.content_hash,
+        f"bookkeeping:{level}", mode, synthetic=snapshot.synthetic,
+        evidence_text=display, value_type=value_type, exam_year=year,
+    )
 
 
 def _extract_level_exam(snapshot: BookkeepingSnapshot, soup: BeautifulSoup) -> list[BookkeepingFactCandidate]:

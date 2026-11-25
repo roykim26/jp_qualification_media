@@ -43,6 +43,34 @@ const componentFieldSuffixes = {
   question_format: 'format',
 };
 
+// Stable fields do not change by exam year: an approved fact at any year covers
+// the coverage year. Only genuinely per-year fields (exam dates, schedule,
+// result/application windows) must be dated to the coverage year. Keep in step
+// with services/api/src/public-view.ts.
+const yearAgnosticFactKeys = new Set([
+  'eligibility',
+  'exam_method',
+  'exam_subjects',
+  'exam_time',
+  'question_count',
+  'question_format',
+  'passing_standard',
+  'scoring_method',
+  'application_method',
+  'practical_subject',
+  'interview_count',
+  'fee',
+  'statistics_methodology',
+]);
+
+function isYearAgnosticFact(factKey) {
+  return (
+    factKey.endsWith('_rule') ||
+    factKey.startsWith('exam_subject_') ||
+    yearAgnosticFactKeys.has(factKey)
+  );
+}
+
 function satisfiesCoverageField(fact, field, dimensions = {}) {
   if (field === 'source_url')
     return Boolean(fact.sourceUrl) && fact.provenanceStatus === 'verified';
@@ -82,13 +110,21 @@ export function evaluateCoverage(slug, facts, examYear) {
       )
     )
       continue;
+    const inDimensions = (fact) =>
+      matchesCoverageDimensions(fact, requirement.dimensions);
+    // A conditional scope is assessed only once it has a fact dated to the
+    // coverage year; year-agnostic facts alone must not drag an unpublished
+    // future year into the gate.
+    const presentThisYear = facts.some(
+      (fact) => fact.examYear === examYear && inDimensions(fact),
+    );
+    if (requirement.requiredLevel === 'conditional' && !presentThisYear)
+      continue;
     const scoped = facts.filter(
       (fact) =>
-        fact.examYear === examYear &&
-        matchesCoverageDimensions(fact, requirement.dimensions),
+        (fact.examYear === examYear || isYearAgnosticFact(fact.factKey)) &&
+        inDimensions(fact),
     );
-    if (requirement.requiredLevel === 'conditional' && scoped.length === 0)
-      continue;
     for (const field of requirement.fields) {
       if (
         !scoped.some((fact) =>
@@ -386,6 +422,33 @@ export async function verifyQualification(
     webPages.push({
       path: `/shikaku/bookkeeping/pass-rate/?year=${probeYear}`,
       status: yearResponse.status,
+    });
+    // ADR 0002 §2: only "?year= with four digits" is honoured on this route.
+    // ?sort= renders exactly the bare section, so it is a parameter variant of
+    // it and must be noindex with the canonical still on the bare section.
+    const sectionSortedResponse = await waitFor(
+      `http://127.0.0.1:${runtime.webPort}/shikaku/bookkeeping/pass-rate/?sort=pass_rate&order=desc`,
+    );
+    const sectionSortedHtml = await sectionSortedResponse.text();
+    if (
+      !sectionSortedHtml.includes(
+        '<meta name="robots" content="noindex,follow">',
+      )
+    )
+      errors.push(
+        'Web section pass-rate/?sort= parameter page not marked noindex',
+      );
+    if (
+      !/<link rel="canonical" href="[^"]*\/shikaku\/bookkeeping\/pass-rate\/">/.test(
+        sectionSortedHtml,
+      )
+    )
+      errors.push(
+        'Web section pass-rate/?sort= canonical is not the bare section',
+      );
+    webPages.push({
+      path: '/shikaku/bookkeeping/pass-rate/?sort=pass_rate&order=desc',
+      status: sectionSortedResponse.status,
     });
   }
   // G-02 / ADR 0002 §2: the /pass-rate/ table is indexable, but every

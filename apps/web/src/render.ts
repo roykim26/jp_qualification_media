@@ -1382,6 +1382,7 @@ export function renderQualificationSectionPage(
   view: PublicQualificationView,
   section: QualificationSection,
   year?: number,
+  parameterVariant = false,
 ): string {
   const { qualification } = view;
   const sectionMeta = section === 'overview' ? null : sectionConfig[section];
@@ -1562,10 +1563,21 @@ export function renderQualificationSectionPage(
       navigationYear,
     ),
     canonicalPath,
-    // The ?year= variant renders the same history tables as /pass-rate/ and only
-    // swaps the card set, so it is a parameter filter per product-design 18.2.
-    // Empty sections stay reachable from the subnav but must not be indexed.
-    noindex: sectionEmpty || (section === 'pass-rate' && year !== undefined),
+    // Two independent reasons a section page must not be indexed.
+    //
+    // 1. It is empty: the subnav still links it, but a page with nothing on it
+    //    must not be the thing a search engine lands on.
+    // 2. It is a parameter variant: ADR 0002 §2 says "?year= 与 ?sort=／?order=
+    //    一律不收" and §1 criterion 2 says a parameter version of the same
+    //    content is always noindex,follow. The route only consumes ?year= on
+    //    the pass-rate section, so every other query string — ?sort=, ?order=,
+    //    ?foo=bar, and ?year= on a section that ignores it — renders exactly
+    //    the same bytes as the clean URL. Canonical already points at the clean
+    //    URL, but canonical is a hint; the meta tag is the instruction.
+    noindex:
+      sectionEmpty ||
+      (section === 'pass-rate' && year !== undefined) ||
+      parameterVariant,
     body,
   });
 }

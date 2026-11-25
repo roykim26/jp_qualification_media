@@ -23,12 +23,12 @@
     },
     {
       "slug": "bookkeeping",
-      "expectedFacts": 863,
+      "expectedFacts": 869,
       "pageContains": "日商簿記"
     },
     {
       "slug": "fp",
-      "expectedFacts": 75,
+      "expectedFacts": 92,
       "pageContains": "FP技能検定"
     }
   ]
