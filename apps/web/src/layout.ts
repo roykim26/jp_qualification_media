@@ -66,7 +66,7 @@ function analyticsSnippet(): string {
 }
 
 function renderCookieBanner(): string {
-  return `<section class="cookie-banner" data-cookie-banner role="region" aria-label="Cookieの利用に関するお知らせ" hidden><div class="container cookie-banner__inner"><p class="cookie-banner__text">当サイトでは、利用状況の把握のためにGoogle Analytics 4を利用します。「同意する」を選ぶと、Cookie等により閲覧情報がGoogleへ外部送信されます。送信される情報と利用目的は<a href="/about/privacy/">プライバシーポリシー</a>をご確認ください。</p><div class="cookie-banner__actions"><button type="button" class="button button--primary" data-cookie-accept>同意する</button><button type="button" class="button button--secondary" data-cookie-decline>同意しない</button></div></div></section>`;
+  return `<section class="cookie-banner" data-cookie-banner role="region" aria-label="Cookieの利用に関するお知らせ" hidden><div class="container cookie-banner__inner"><p class="cookie-banner__text">当サイトでは、利用状況の把握のためにGoogle Analytics 4を利用します。「同意する」を選ぶと、Cookie等により閲覧情報がGoogleへ外部送信されます。送信される情報と利用目的は<a href="/about/privacy/">プライバシーポリシー</a>をご確認ください。</p><p class="cookie-banner__text cookie-banner__text--compact">当サイトは利用状況の把握のため、Cookie等を用いて閲覧情報をGoogleへ送信します。詳細は<a href="/about/privacy/">プライバシーポリシー</a>をご確認ください。</p><div class="cookie-banner__actions"><button type="button" class="button button--primary" data-cookie-accept>同意する</button><button type="button" class="button button--secondary" data-cookie-decline>同意しない</button></div></div></section>`;
 }
 
 function renderOpenGraph(input: DocumentInput, pageUrl?: string): string {

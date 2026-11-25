@@ -190,6 +190,21 @@ describe('shared UI foundation', () => {
     expect(webStyles).not.toContain('width: 18px; height: 18px');
   });
 
+  it('keeps the mobile cookie banner compact so it covers under 12% of the viewport', () => {
+    expect(webStyles).toContain(
+      '.cookie-banner__text--compact { display: none; }',
+    );
+    expect(webStyles).toContain(
+      '.cookie-banner__inner { flex-direction: column; align-items: stretch; gap: var(--space-2); padding-block: var(--space-1); }',
+    );
+    expect(webStyles).toContain(
+      '.cookie-banner__text--compact { display: block; font-size: 13px; line-height: 1.55; }',
+    );
+    expect(webStyles).toContain(
+      '.cookie-banner__actions .button { flex: 1 1 0; min-height: 40px; padding-block: var(--space-1); }',
+    );
+  });
+
   it('offers popular page exits on the 404 page', () => {
     const notFound = renderNotFoundPage();
     expect(notFound).toContain('<span class="not-found__code">404</span>');

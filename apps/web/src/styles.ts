@@ -486,14 +486,18 @@ export const webStyles = String.raw`
 .cookie-banner[hidden] { display: none; }
 .cookie-banner__inner { display: flex; align-items: center; gap: var(--space-6); padding-block: var(--space-4); }
 .cookie-banner__text { flex: 1 1 auto; margin: 0; font-size: 14px; line-height: 1.7; }
+.cookie-banner__text--compact { display: none; }
 .cookie-banner__actions { display: flex; flex: 0 0 auto; gap: var(--space-2); }
 .footer-link-button { display: inline-flex; min-height: 24px; align-items: center; padding: 0; border: 0; background: transparent; color: var(--color-muted); font-size: 14px; text-align: left; cursor: pointer; }
 .footer-link-button:hover { color: var(--color-primary); text-decoration: underline; }
 .schedule-event .meta a, .update-card .meta a, .compare-entry .meta a, .fact details p a, .history-value details a { display: inline-flex; min-height: 24px; align-items: center; }
 @media (max-width: 767px) {
   .cookie-banner { bottom: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom)); }
-  .cookie-banner__inner { flex-direction: column; align-items: stretch; gap: var(--space-3); }
-  .cookie-banner__actions .button { flex: 1 1 0; }
+  .cookie-banner__inner { flex-direction: column; align-items: stretch; gap: var(--space-2); padding-block: var(--space-1); }
+  .cookie-banner__text { display: none; }
+  .cookie-banner__text--compact { display: block; font-size: 13px; line-height: 1.55; }
+  .cookie-banner__actions { gap: var(--space-2); }
+  .cookie-banner__actions .button { flex: 1 1 0; min-height: 40px; padding-block: var(--space-1); }
 }
 
 /* Print: keep the facts, sources, and confirmation dates; drop the chrome. */

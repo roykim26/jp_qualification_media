@@ -154,6 +154,7 @@
 - **影响**：首次访问的移动用户首屏可用面积减少约四分之一；属修订版 V2 §6 Phase 2 排序第 5 项「移动端可访问性和布局问题」。
 - **改动文件范围**：`apps/web/src/layout.ts`（`renderCookieBanner` 的文案长度/结构，`:66-68`）、`packages/ui/src/index.ts`（`.cookie-banner` 移动端布局）、`apps/web/src/assets.ts`（criticalCss 同步）、`tests/web-render.test.ts`（已有「keeps the mailbox out of the global footer」类断言，注意不要破坏同意/拒绝路径的既有断言）。
 - **风险**：**中**。**不得改动同意/拒绝逻辑**（`sqc-analytics-consent` 的 granted/denied 分支、`data-cookie-accept`/`data-cookie-decline`、footer `data-cookie-settings` 重置路径），只改视觉；`layout.ts:263` 的「无 GA ID 不渲染横幅」行为也必须保留。改文案会牵动 `tests/web-render.test.ts` 的文案断言。
+- **状态**：✅ **已修复（2026-11-25 chore/phase1-baseline）**。`layout.ts` 的 `renderCookieBanner` 新增 `.cookie-banner__text--compact` 紧凑文案（桌面隐藏、移动显示，完整文案桌面保留）；`styles.ts` 移动端（≤767px）横幅改 `padding-block: space-1`＋gap space-2＋13px/1.55 紧凑文案＋按钮 `min-height: 40px`，估算高度约 96px（390×832 ≈ 11.5%、360×800 ≈ 12.0%）。同意/拒绝逻辑、`data-cookie-*` 钩子、无 GA ID 不渲染门控均未触碰；`.cookie-banner` 不在 `criticalCss` 快照内，无双维护点问题。门禁：`tests/ui-foundation.test.ts`＋`tests/web-render.test.ts` 各新增断言，vitest 31 files/525 用例全绿。**遗留**：像素级验证需 `scripts/visual_smoke.py` 在有运行环境时复测。
 
 ### G-10 除首页外 7 个数据页 + sitemap 无降级：任一 API 抛错即整页 502（P1）
 

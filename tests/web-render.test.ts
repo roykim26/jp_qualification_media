@@ -1353,6 +1353,8 @@ describe('shared qualification page rendering', () => {
       expect(html).toContain('data-cookie-settings');
       expect(html).toContain('sqc-analytics-consent');
       expect(html).toContain('同意しない');
+      expect(html).toContain('cookie-banner__text--compact');
+      expect(html).toContain('Cookie等を用いて閲覧情報をGoogleへ送信します');
       expect(html).not.toContain(
         '<script async src="https://www.googletagmanager.com',
       );
