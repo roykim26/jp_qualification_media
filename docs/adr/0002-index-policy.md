@@ -13,28 +13,28 @@
 
 ## 2. 现行判定表（2026-11-24 按 `01b86dd` 现取）
 
-| URL 形态                                         | 索引    | 依据                                                                                            |
-| ------------------------------------------------ | ------- | ----------------------------------------------------------------------------------------------- |
-| `/`                                              | 可索引  | 固定入口                                                                                        |
-| `/shikaku/`（无 `?q=`）                          | 可索引  | `render.ts` 目录页                                                                              |
-| `/shikaku/?q=…`                                  | noindex | `render.ts:1674`：搜索参数变体                                                                  |
-| `/shikaku/{slug}/`（概要）                       | 可索引  | 有事实时                                                                                        |
-| `/shikaku/{slug}/{year}/`（年度）                | 可索引  | 该年度有事实时；**无事实的空壳页仍返回 200 但 `noindex`**（`render.ts:1561` 的 `sectionEmpty`） |
-| `/shikaku/{slug}/application/`、`/exam-content/` | 可索引  | 该栏目有内容时                                                                                  |
-| `/shikaku/{slug}/pass-rate/`                     | 可索引  | 有任一历史统计时（`qualificationSectionHasContent`，`render.ts:1321-1333`）                     |
-| `/shikaku/{slug}/pass-rate/?year=YYYY`           | noindex | `render.ts:1561` 第二项：参数筛选变体（product-design 18.2）                                    |
-| `/schedule/`（无筛选）                           | 可索引  | 主导航入口                                                                                      |
-| `/schedule/?…`（任一筛选）                       | noindex | `render.ts:1989` `noindex: filtered`                                                            |
-| `/compare/`（未选资格）                          | 可索引  | `render.ts:2119` 仅在 `selectedCount>0` 时 noindex                                              |
-| `/compare/?…`（已选 ≥1）                         | noindex | 同上                                                                                            |
-| `/pass-rate/`                                    | 可索引  | 有历史统计时；**必须仍在 sitemap 内**（`evaluateSitemapRoutes` 要求 indexable ⇔ listed）        |
-| `/pass-rate/?sort=…&order=…`                     | noindex | **本 ADR 新定**：参数变体（G-02），canonical 指 `/pass-rate/`；**2026-11-24 已实现**（§3.1）    |
-| `/updates/`                                      | 可索引  | `render.ts:2519` 仅在 `filtered \|\| page>1` 时 noindex                                         |
-| `/updates/?page=N`（N>1）与任一筛选              | noindex | 同上                                                                                            |
-| `/guide/`、`/guide/{slug}`                       | 可索引  | 编辑内容                                                                                        |
-| `/about/{slug}`（9 页）                          | 可索引  | 编辑内容                                                                                        |
-| `/sitemap.xml`、`/robots.txt`                    | 不适用  | 机器文件                                                                                        |
-| 错误页、404                                      | noindex | `render.ts:2528`、`:2674`                                                                       |
+| URL 形态                                         | 索引    | 依据                                                                                                                  |
+| ------------------------------------------------ | ------- | --------------------------------------------------------------------------------------------------------------------- |
+| `/`                                              | 可索引  | 固定入口                                                                                                              |
+| `/shikaku/`（无 `?q=`）                          | 可索引  | `render.ts` 目录页                                                                                                    |
+| `/shikaku/?q=…`                                  | noindex | `render.ts:1674`：搜索参数变体                                                                                        |
+| `/shikaku/{slug}/`（概要）                       | 可索引  | 有事实时                                                                                                              |
+| `/shikaku/{slug}/{year}/`（年度）                | 可索引  | 该年度有事实时；**无事实的空壳页仍返回 200 但 `noindex`，canonical 指 `/shikaku/{slug}/`**（G-03，2026-11-25 已实施） |
+| `/shikaku/{slug}/application/`、`/exam-content/` | 可索引  | 该栏目有内容时                                                                                                        |
+| `/shikaku/{slug}/pass-rate/`                     | 可索引  | 有任一历史统计时（`qualificationSectionHasContent`，`render.ts:1321-1333`）                                           |
+| `/shikaku/{slug}/pass-rate/?year=YYYY`           | noindex | `render.ts:1561` 第二项：参数筛选变体（product-design 18.2）                                                          |
+| `/schedule/`（无筛选）                           | 可索引  | 主导航入口                                                                                                            |
+| `/schedule/?…`（任一筛选）                       | noindex | `render.ts:1989` `noindex: filtered`                                                                                  |
+| `/compare/`（未选资格）                          | 可索引  | `render.ts:2119` 仅在 `selectedCount>0` 时 noindex                                                                    |
+| `/compare/?…`（已选 ≥1）                         | noindex | 同上                                                                                                                  |
+| `/pass-rate/`                                    | 可索引  | 有历史统计时；**必须仍在 sitemap 内**（`evaluateSitemapRoutes` 要求 indexable ⇔ listed）                              |
+| `/pass-rate/?sort=…&order=…`                     | noindex | **本 ADR 新定**：参数变体（G-02），canonical 指 `/pass-rate/`；**2026-11-24 已实现**（§3.1）                          |
+| `/updates/`                                      | 可索引  | `render.ts:2519` 仅在 `filtered \|\| page>1` 时 noindex                                                               |
+| `/updates/?page=N`（N>1）与任一筛选              | noindex | 同上                                                                                                                  |
+| `/guide/`、`/guide/{slug}`                       | 可索引  | 编辑内容                                                                                                              |
+| `/about/{slug}`（9 页）                          | 可索引  | 编辑内容                                                                                                              |
+| `/sitemap.xml`、`/robots.txt`                    | 不适用  | 机器文件                                                                                                              |
+| 错误页、404                                      | noindex | `render.ts:2528`、`:2674`                                                                                             |
 
 **`?year=` 与 `?sort=`／`?order=` 一律不收**：`scripts/verify-lib.mjs` 的 `evaluateSitemapRoutes` 用 `/\?(?:year|sort|order)=/` 匹配 sitemap 里的参数变体并直接报 `Sitemap lists a parameter-filtered page`；`verifyQualification` 另有针对 bookkeeping `pass-rate/?year=` 必须含 noindex 的断言，以及 `/pass-rate/`（可索引）与 `/pass-rate/?sort=`（noindex）的成对探针。
 
@@ -44,6 +44,7 @@
    - **已实施（2026-11-24 Sprint 1，G-02）**：`apps/web/src/render.ts` 新增 `parsePassRateIndexQuery(params)`（白名单 `passRateSortKeys`、`order` 只认 `desc`、`noindex: sort !== null || order !== null`）；`renderPassRateIndex` 的 `PassRateIndexOptions` 增 `noindex`，仅在带参时透传给 `renderPublicDocument`。`apps/web/src/server.ts` 的 `/pass-rate/` 路由改走该解析函数。
    - **未实施部分（故意留下）**：`/pass-rate/` **空表** 仍可索引。加 `noindex` 会让它从 sitemap 消失或触发 indexable↔listed 断言冲突，属于 G-06「薄页/空表 sitemap 准入」的范畴，需要单独拍板后再做。
 2. **年度空壳页保留 200 + `noindex`，canonical 从自指改指 `/shikaku/{slug}/`**。现状 `render.ts:1519-1524` 的 `canonicalPath` 只按请求的 `year` 拼，不校验该年有没有事实，于是 `/2025/`、`/2027/`、`/2030/` 这类空壳页既 200 又 canonical 自指。选这个方案而不是 301／404：纯元数据改动、零 URL 行为风险；301 会让搜「2027 年日程」的用户落到概要页，404 太激进。
+   - **已实施（2026-11-25，G-03）**：`render.ts` 的 `canonicalPath` 在 `annual` 且 `qualificationSectionHasContent(view, 'annual', year)` 为假时输出 `/shikaku/{slug}/`；有内容的年度仍自指。`tests/web-render.test.ts` 的年度 2025 用例断言同步翻转。
 3. **9 组无尾斜杠 URL 不做 301**。先只查 canonical 是否已归一（`canonicalHref()` 生成的都是带尾斜杠版），canonical 已归一就说明重复风险已被缓解；加 301 改的是 URL 行为，风险远高于改 canonical。
 
 ## 4. 明确不做的

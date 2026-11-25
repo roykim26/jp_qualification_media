@@ -153,3 +153,37 @@ Why：审核人 ID 放进 URL 就可被任意 `<img src=…>`、浏览器历史�
 6. FP 入库链已于 2026-10-10 同口径对齐（`capture_record()` 四重校验、写 `capture_runs` 与 `snapshots` 全溯源列、写 `source_checks`），但**只到代码与用例层**，端到端仍卡在采集报告缺失，且此前把范围记小了：磁盘上没有报告记录的取证快照是 **6 个、共 75 条候选**（不是「那 4 个／53 条」），入库入口 `INGEST_SOURCES`（`ingest_fp.py`）于 2026-10-11 从 4 个来源扩到全部 6 个＝75 条（此前 `jafp-schedule` 12 ＋ `kinzai-schedule-2026` 10 这 22 条有事实、有 `approved` 候选，却没有已提交的入库入口；0016 迁移只登记来源、不写候选），解析不出契约字段的其余 7 个来源刻意留在 mapping 之外并由 pytest 用例锁住划分。2026-10-11 只读预演给出三条判据：① 这 75 条候选 id 全部已是 `approved`，且与库里 6 条真实快照行逐条相符；FP 的 75 条现行事实 **0 条挂在 `ci://` 夹具快照上**，那 39 条夹具候选只是历史 revision，`npm run audit:provenance` 对 FP 报 blocked 0（全库 blocked 4 全在 takken）⇒ 夹具残留不承重。② 已批准候选重跑按 `WHERE status='pending_review'` 不改值（临时表实测 rowcount＝0），但 `snapshots` 是**无条件** `DO UPDATE` ⇒ 即使哈希不变也会把抓取时刻改写成新值，属需项目所有者定性的副作用。③ 要拿到新报告必须授权一次抓取；候选 id 内嵌 `content_hash`，**某页哈希一变该页候选全变成新的 `pending_review`** ⇒ 门禁 `pending_official != 0` 硬失败，且暴露量仍集中在单页（`jafp-2-3-outline` 36 条＝映射内 75 条的 48%）。抓取入口 `capture_registered_sources(source_ids=None)` 默认覆盖 13 个 `FP_SOURCES`，超出 `docs/work-package-e-live-capture-authorization.md` 登记的 9 个 FP 来源，而该单注明已于 2026-09-08 执行完毕 ⇒ 重抓需一张新授权单，并用 `source_ids` 收紧到 `INGEST_SOURCES` 那 6 个来源。另因固定文件名原地覆盖，承载这 75 条事实的 6 个 HTML 已按 `<sha256>.html` 固化到 `var/official-snapshots/fp-preserved/`（本机专有、`var/` 不入库）：「文件字节与 `content_hash` 不符」在门禁与审计里都测不出来，只能靠这份副本。详见 `docs/fp-source-contract.md` 已知剩余项 1／2／4 与 `docs/stage-log.md` 2026-10-11 节。
 7. 采集报告的「按 `source_id` 合并」已于 2026-10-10 收口：共享模块 `collector/capture_report.py` 现由**六条采集链全部共用**，含此前整份覆盖的基本情報 `capture_fundamental_it.py` 与宅建 `capture_takken.py`（后者的 `directly-cited-capture-report.json`、`directly-cited-document-capture-report.json` 两份报告各自独立合并）。宅建的 `capture_directly_cited_sources()` 支持只跑部分 `source_id`，此前一次局部运行会把其余来源的报告记录抹掉、让磁盘上仍然存在的快照在入库链看来「无报告」，这一条已被用例锁住。快照本身是内容寻址文件名，从未被覆盖，丢的一直只有报告。
 8. `sources` 本机与 CI 空库的计数差**曾是设计，不是漏登记**（2026-10-11 只读核查后定口径；2026-10-12 `0018_bookkeeping_statistics_sources.sql` 给两侧各加 7 条 ⇒ 本机 47／CI 空库 45，差值 2 条）：多出的 2 条 `source:fp:jafp-2-3-application-outline-pdf` 与 `source:fp:kinzai-fp-faq` 由 `scripts/backfill-fp-provenance.mjs` 在本机 `INSERT`，承载的是 capture-only 证据——`services/collector/src/collector/capture_fp.py` 明确注释它们「has not been registered as an ingestion source」，collector 侧另用 `capture-only:fp:*` 前缀的 id，且脚本写入库的 id 是 `source:fp:*`，两套命名本就分叉；它们的非合成快照 `object_key` 指向 `.gitignore` 里的 `var/official-snapshots/fp/…`，CI 夹具不含这些行，所以补成迁移只会在 CI 造出两条「`active` 但永远取不到快照」的来源。**2026-11-11 现态：该差值已不存在**——本机库按 CI 夹具 dump 重建后叠加迁移 `0000–0027`，本机 52＝CI 空库 52（CI seed 现取 bound 52），那 2 条 backfill 行已不在本机库；`kinzai-fp-faq` 的 capture-only 入口仍在 `capture_fp.py` 的 `DIRECTLY_CITED_CAPTURE_SOURCES`，将随工作包 I 的 D4 退役。全仓触及 `sources` 的 SQL 一律从 `candidate_facts`／`snapshots` 侧 join 过去（`scripts/verify-lib.mjs`、`scripts/audit-approved-provenance.mjs`、`scripts/update-release-baseline.mjs`、`services/api/src/public-facts.ts`、`services/api/src/public-updates.ts`、`apps/admin/src/server.ts`），没有按来源全表计数的读取方，测试与 CI 也没有来源条数断言 ⇒ 计数差不影响门禁、API、admin 与 baseline 计数。**不要为了数字对齐去补登记迁移**（`0027` 登记 `statistics-fe` 是巡检检出未登记来源、号主拍板的独立决定，不属此例）。
+
+## 12. 四档语义与用户可见缺失原因的映射（2026-11-25，G-12 收口，ADR 0003）
+
+门禁的 `requiredLevel` 五档（§2）与公开页「缺失原因」的 6 个 `MissingReason`（`services/api/src/public-view.ts:25-31`）是**两套词表**，读者必须知道哪一档在用户面是可见的、哪一档永远不可见。
+
+| 档位／状态                  | 门禁 `evaluateCoverage` | 运行时 `buildPublicQualificationView` 镜像 | 用户可见性                                                                  |
+| --------------------------- | ----------------------- | ------------------------------------------ | --------------------------------------------------------------------------- |
+| `required`                  | 无条件参与，缺一即 gap  | 同左（`:130-143` 不跳过）                  | 缺失时按归因显示 4 种原因之一（见下表）                                     |
+| `conditional`（维度命中）   | 参与                    | 参与                                       | 同上                                                                        |
+| `conditional`（维度未命中） | **整条跳过**（§3）      | **整条跳过**（`:142-143`）                 | **不可见**——「不可见缺失」，门禁与页面都不报，属产品覆盖欠账（工作包 F 类） |
+| `not_applicable`            | 跳过                    | 跳过（`:131-136`）                         | 不可见；`対象外` 标签为**预留**（见下）                                     |
+| `post_event`                | 跳过                    | 跳过                                       | 不可见；考后字段永不进公开页门禁与归因                                      |
+| `optional`                  | 跳过（契约未使用）      | 跳过                                       | 不可见                                                                      |
+
+字段缺失时的归因优先级（`public-view.ts:167-173`，自上而下短路）与公开文案（`apps/web/src/render.ts` 的 `missingReasonLabels`）：
+
+| `MissingReason`  | 触发条件                                                                                      | 用户可见文案     | 是否计入 `blockingMissing`        |
+| ---------------- | --------------------------------------------------------------------------------------------- | ---------------- | --------------------------------- |
+| `pending_review` | 该字段有 `pending_review` 候选（`pendingFacts` 命中同年度同维度）                             | 公式情報確認中   | 是（除非 `announcedOnly`）        |
+| `mapping_error`  | scoped 事实里存在后缀式命名（`*_time`／`*_question_count`／`*_format`）但不满足前缀匹配（§4） | 表示処理を確認中 | 是（除非 `announcedOnly`）        |
+| `not_announced`  | requirement 带 `only_when_officially_published` 条件                                          | 公式発表待ち     | **否**（`:174`，不计入 blocking） |
+| `not_collected`  | 以上皆非的默认归因                                                                            | 公式情報を収集中 | 是（除非 `announcedOnly`）        |
+| `not_applicable` | **当前无赋值路径**，仅类型声明＋文案预留                                                      | 対象外           | —                                 |
+| `stale_source`   | **当前无赋值路径**，仅类型声明＋文案预留                                                      | 情報の再確認中   | —                                 |
+
+页面兜底：字段前缀匹配不到任何 reason 时显示 `公開できる公式情報はありません`（`render.ts` 的 `missingMessage`）。
+
+由此得到三条「门禁绿灯**不能**证明」的结论（`docs/audit/V2_GAP_MATRIX.md` §2.1）：
+
+1. 未命中维度的 `conditional` 字段是否真的不适用——门禁与页面都无法区分「条件不适用」与「维度没采集」；
+2. `post_event` 的 6 条考后字段是否有数据；
+3. 用户看到的归因是否符合直觉——`mapping_error`／`pending_review` 是工程／流程术语，公开面已按上表软化措辞，但语义仍是内部口径。
+
+**维护规则**：新增 `MissingReason` 赋值路径或改归因优先级，必须同步改本表、`missingReasonLabels` 与 `tests/`（`web-render` 的 missing reason 用例），并先过 ADR 0003 的判据。
