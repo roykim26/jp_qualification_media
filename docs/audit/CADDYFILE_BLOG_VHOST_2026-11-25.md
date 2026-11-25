@@ -2,20 +2,22 @@
 
 ## 0. Git 基线
 
-| 项              | 值                                                                                  |
-| --------------- | ----------------------------------------------------------------------------------- |
-| 分支            | `chore/phase1-baseline`                                                             |
-| 执行前 HEAD     | `6bd0285`                                                                           |
-| 本轮内容 commit | `2a21622`                                                                           |
-| 生产运行版本    | `9d793c9`（本轮改动尚未部署；但**线上 Caddyfile 的实际内容已被本仓库覆盖**，见 §2） |
+| 项              | 值                                             |
+| --------------- | ---------------------------------------------- |
+| 分支            | `chore/phase1-baseline`                        |
+| 执行前 HEAD     | `6bd0285`                                      |
+| 本轮内容 commit | `2a21622`                                      |
+| 生产运行版本    | `693a9ec`（本轮改动**已部署并验证**，见 §6.1） |
 
-本报告是一次两段式提交的第一段。第二段会把上面的内容 commit 回填成真实 hash（现在表里填的就是回填后的结果）。
+本报告是一次两段式提交的第一段（`2a21622`），第二段 `693a9ec` 回填了这个 hash。之后又补了一次订正提交 `<CORRECTION_SHA>`：部署验证（§6.1）、被实测推翻的两条结论（§4.3、§7.3）、以及新增的两条未处理项。
 
 ## 1. 结论
 
 线上 `deploy/caddy/Caddyfile` 里有一段 `blog.waystoneai.online` 反代，是 2026-11-21 手工加到 VPS 上的，**从未进入 git**。这意味着任何一次「从仓库重建部署目录」的操作都会让博客域名直接掉线，而且不会有任何报错——Caddy 只是少了一个 site block。
 
-本轮把这段配置连同说明它来历的注释一起写进 `deploy/caddy/Caddyfile`，并加 6 条回归测试锁住它。**没有改任何线上文件，没有重启任何容器，没有触碰 `deploy/docker-compose.prod.yml`。**
+本轮把这段配置连同说明它来历的注释一起写进 `deploy/caddy/Caddyfile`，并加 6 条回归测试锁住它。改动随后 FF 部署到生产（§6.1），线上文件与仓库逐字节一致。
+
+**没有改 `deploy/docker-compose.prod.yml`，没有重启任何容器**（原因见 §7.3：只加注释，适配出的 JSON 与改动前完全相同，不需要 reload）。
 
 ## 2. 事实核对（全部来自生产机只读命令）
 
@@ -74,6 +76,28 @@ docker run --rm -v "$PWD/deploy/caddy:/etc/caddy:ro" caddy:2-alpine \
 
 → `Valid configuration`，退出码 0。用的是与生产同一个镜像 tag `caddy:2-alpine`。
 
+### 4.3 更正：博客域名的安全头其实有**两层**
+
+我最初在报告草稿里写「博客域名这 5 条安全头由 Caddyfile 施加」。部署后用 `curl -sI https://blog.waystoneai.online/` 核对，发现实际响应与 Caddyfile 里写的**不完全一致**：
+
+| 头                          | Caddyfile 里写的                           | 线上实际返回                                                                      |
+| --------------------------- | ------------------------------------------ | --------------------------------------------------------------------------------- |
+| `Strict-Transport-Security` | `max-age=31536000; includeSubDomains`      | `max-age=31536000`（**少了 `includeSubDomains`**）                                |
+| `Permissions-Policy`        | `camera=(), microphone=(), geolocation=()` | `camera=(), microphone=(), geolocation=(), payment=()`（**多一个 `payment=()`**） |
+| 其余 3 条                   | —                                          | 与 Caddyfile 一致                                                                 |
+
+原因不在 Caddyfile，而在 **`blog` 容器的 nginx 自己也加了一套**：
+
+```bash
+docker exec blog grep -n -i 'add_header' /etc/nginx/conf.d/default.conf
+```
+
+→ `X-Content-Type-Options`、`X-Frame-Options`、`Referrer-Policy`、`Permissions-Policy`（带 `payment=()`）、`Content-Security-Policy` 各一条 `add_header … always`。
+
+所以博客域名的响应头是 **Caddy 的 site block 与 nginx 的 `add_header` 叠加**的结果：相同的头出现两次（`curl -sI` 里能看到成对的行），而 HSTS 与 Permissions-Policy 因为重复头合并规则，看上去像是 nginx 那一版赢了。
+
+**本轮只锁 Caddyfile 那一层**——测试读的是文本文件，不是线上响应。两层不一致是既有状态，不是本轮引入，记在 §7 未处理里。
+
 ## 5. 回归测试
 
 新增 `tests/caddyfile-blog-vhost.test.ts`（6 条用例）。它把两个部署文件当文本读——仓库里没有 Caddy 解析器，而这里要防的失败（某个 block 悄悄消失）在文本上就看得见。
@@ -120,12 +144,57 @@ docker run --rm -v "$PWD/deploy/caddy:/etc/caddy:ro" caddy:2-alpine \
 
 本轮没有改运行时源码，因此没有重跑 `test:python` / `verify:all` / `smoke:docker` —— 这三项与 Caddyfile 文本无关，且上一轮（`9d793c9`）刚全绿。
 
+### 6.1 部署与生产验证
+
+部署脚本 `var/vps-deploy-caddyfile.sh`（97 行 POSIX sh）经 `base64 -d > /root/deploy-caddyfile.sh` 送到 VPS，`bash /root/deploy-caddyfile.sh </dev/null` 执行，日志 `/root/jpqm-caddyfile-.log`。
+
+**这一步有个必须解决的矛盾**：VPS 上 `deploy/caddy/Caddyfile` 是**已修改的 tracked 文件**（那 22 行博客块），而本次提交改的正是同一个文件 —— `git merge --ff-only` 会因为本地修改而拒绝。做法是：
+
+1. `cp` 到 `/root/jpqm-manual-backup/Caddyfile.live.20261125-082455`（SHA 与原线上一致 `30224cbc…620be`）；
+2. `git checkout -- deploy/caddy/Caddyfile` **只这一个文件**（不是 `git checkout -- .`）；
+3. 再 `git merge --ff-only`。
+
+| 检查项                        | 结果                                                                                                       |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| 合并                          | `Updating 9d793c9..693a9ec`，**5 files changed, 309 insertions(+), 6 deletions(-)**，`MERGE_EXIT=0`        |
+| 部署后 HEAD                   | `693a9ece6e07a03c1a6cd639443448b7ce719082`                                                                 |
+| 线上文件 SHA                  | `b6599e8233b70d030655b8407d95613872ecaf86084cf2b40abf4941490836ca` = 本地 `EXPECTED_SHA` → `SHA_MATCH=yes` |
+| 字节数 / 博客块 / 主站块      | `1954` / `BLOG_VHOST_POST=1` / `MAIN_VHOST_POST=1`                                                         |
+| 容器内 `/etc/caddy/Caddyfile` | SHA 与磁盘**相同**（`DISK_SHA == CTR_SHA`）                                                                |
+| `caddy validate`（容器内）    | `Valid configuration`，`VALIDATE_EXIT=0`                                                                   |
+| 容器                          | `api` / `web` Up healthy、`caddy` Up、`db` Up 11 days                                                      |
+| 8 个公网端点                  | 全 **200**；`/ready` 仍 **404**（符合 3D 决策）                                                            |
+| 博客域名                      | `https://blog.waystoneai.online/` **200**、`/rss.xml` **200**                                              |
+| `var/readiness/last-status`   | `ready\n0`                                                                                                 |
+| 工作树                        | 只剩 5 个既有 `??` 备份/验证文件                                                                           |
+
+**改动前后适配出的 JSON 完全相同**——这是「不需要 reload」的直接证据：
+
+```bash
+# 线上备份版（改前）
+caddy adapt --config /old/Caddyfile --adapter caddyfile  → 3053 字节
+# 仓库新版（改后）
+caddy adapt --config /new/Caddyfile --adapter caddyfile  → 3053 字节
+diff → ADAPTED_IDENTICAL=yes
+```
+
+**踩坑**：`ssh "... > /root/x-$(date +%Y%m%d-%H%M%S).log"` 里的 `$(date …)` 会被 **PowerShell 先解析**（报 `Get-Date : 无法绑定参数"Date"`），日志文件名变成 `/root/jpqm-caddyfile-.log`。VPS 命令里的 `$()` 要么放进单引号 here-string，要么在远端脚本内部计算。
+
 ## 7. 未处理
 
 1. **`blog` 容器仍未纳入 compose。** 它有自己的构建产物与 nginx 配置，纳入 compose 需要先决定这些文件放哪（仓库？还是继续留在宿主机？），超出本轮「把线上路由进版本控制」的范围。
 2. **三个 `Caddyfile.bak*` 与两个搜索引擎验证文件仍是未跟踪状态**（`deploy/Caddyfile.bak-20261113`、`deploy/caddy/Caddyfile.bak`、`deploy/caddy/Caddyfile.bak.`、`deploy/BingSiteAuth.xml`、`deploy/googlea01c41ed599c5311.html`）。它们与 Caddyfile 里内联的 4 个 `handle` 内容完全一致，是冗余副本，不是缺件。删或留需要 Owner 定。
-3. **部署后 Caddy 会自动 reload。** `caddy run` 默认 `--watch`，bind mount 的文件一变就重新加载。本次改动只加注释、生效配置不变，所以 reload 是安全的；但下一次真改这个文件时要记得线上会立刻生效，没有「先合并、稍后生效」的窗口。
-4. `format:check` 的 glob 不含 `Caddyfile`，所以这个文件没有自动格式化。Caddyfile 的格式靠 `caddy fmt`，本轮没有引入。
+3. **部署后 Caddy 不会自动 reload。** 这条我在草稿里写反了：当时写的是「`caddy run` 默认 `--watch`，文件一变就重新加载」。实测 `docker inspect deploy-caddy-1 --format '{{json .Config.Cmd}}'` → `["caddy","run","--config","/etc/caddy/Caddyfile","--adapter","caddyfile"]`，**没有 `--watch`**；`docker logs deploy-caddy-1 | grep -ci reload` = **0**；容器 `StartedAt=2026-11-25T00:04:52Z` 早于文件 mtime `08:24:55`。所以：
+
+   - 改这个文件**不会**影响正在跑的 Caddy，必须 `docker exec deploy-caddy-1 caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile` 或重启容器才生效；
+   - 本次**不需要** reload，因为 `caddy adapt` 出来的 JSON 逐字节相同（§6.1）；
+   - 反过来说，这也意味着「合并进仓库」与「线上生效」是两件事，下一次真改配置时必须显式 reload —— 这比「自动生效」更需要小心，不是更省心。
+
+   教训：判断某个机制生效/失效前，先确认它的触发条件是否满足。本轮与之前 caddy 日志轮转那次误判是同一类错误。
+
+4. **博客域名的安全头有两层且不一致**（§4.3）：Caddyfile 一层、`blog` 容器 nginx 的 `add_header` 一层，HSTS 与 Permissions-Policy 两处写法不同。本轮只锁 Caddyfile 那一层，要统一得改 nginx 配置，属于另一件事。
+5. **VPS 上 tracked 文件的本地修改与提交冲突**：这次靠「先备份、再 `git checkout -- <单文件>`、再 merge」解决。这类冲突以后还会出现（只要有人直接改线上配置），部署脚本应该把这一步做成固定动作而不是临场处理。
+6. `format:check` 的 glob 不含 `Caddyfile`，所以这个文件没有自动格式化。Caddyfile 的格式靠 `caddy fmt`，本轮没有引入。
 
 ## 8. 风险
 
@@ -134,6 +203,8 @@ docker run --rm -v "$PWD/deploy/caddy:/etc/caddy:ro" caddy:2-alpine \
 | 注释与实际不符（比如以后 `blog` 进了 compose） | 误导后来的人              | 测试断言 compose 里没有 `blog:` 服务，加了就红 |
 | 线上 Caddyfile 之后又被手工改动                | 仓库与线上再次分叉        | 测试锁住当前内容；下次部署前比对 sha256        |
 | `core.autocrlf=true` 导致换行符抖动            | `git diff` 出现整文件改动 | 脚本断言 `crCount === 0`，仓库里是 LF          |
+| 有人以为改完文件就生效，忘了 reload            | 线上配置与仓库悄悄分叉    | §7.3 写明必须显式 reload；部署时比对容器内 SHA |
+| 博客域名两层安全头不一致                       | 安全策略与预期有偏差      | §4.3 记录实况；统一需改 nginx，另立任务        |
 
 ## 9. 下一步建议
 
@@ -141,8 +212,9 @@ docker run --rm -v "$PWD/deploy/caddy:/etc/caddy:ro" caddy:2-alpine \
 - **P2** 把三条连库断言用到 `scripts/audit-mvp.mjs` 与 `scripts/check-staleness.mjs`。
 - **P2** 决定三个 `Caddyfile.bak*` 与两个验证文件的去留。
 - **P3** 生产跑一次 patrol，消掉 `coverageGap: not_run`。
+- **P3** 统一博客域名的两层安全头（§4.3），或至少决定「以 Caddy 为准」并删掉 nginx 那套。
 - **P3** 3K 报告 §11 的 P6：`apps/web/src/render.ts` 解引用与 `isQualificationView` 的同步机制。
 
 ## 10. 停止声明
 
-本轮只做「把线上 Caddyfile 的博客 vhost 写进仓库 + 加回归测试」这一件事。没有部署，没有重启容器，没有改 compose，没有碰任何别的待办。到此停止。
+本轮只做「把线上 Caddyfile 的博客 vhost 写进仓库 + 加回归测试 + 部署验证」这一件事。没有改 compose，没有重启容器（也不需要），没有碰任何别的待办。到此停止。
