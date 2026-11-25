@@ -172,9 +172,12 @@ PARSED_HASCRITICAL=true
 ## 9. 下一步建议
 
 - **P1**：把 `chore/phase1-baseline` 落到 `main`（需 Owner 授权 merge）。
-- **P2**：把 `verify-staleness-query.mjs` 的三条连库断言用到 `audit-mvp.mjs` / `check-staleness.mjs`。
+- ~~**P2**：把 `verify-staleness-query.mjs` 的三条连库断言用到 `audit-mvp.mjs` /
+  `check-staleness.mjs`~~ **已完成**：抽成 `scripts/query-shape-lib.mjs` 后接入三个脚本，
+  见 `docs/audit/QUERY_SHAPE_GUARD_2026-11-25.md`（`7c3c0ef`）。
 - **P3**：生产跑一次 patrol，消掉 `coverageGap: not_run`。
-- **P4**：等 24–48h 收 `/pass-rate/` 部署后观测；提交 Caddyfile 博客 vhost 进仓库；404 噪声过滤。
+- ~~**P4**：提交 Caddyfile 博客 vhost 进仓库~~（已完成，`2a21622` + `693a9ec` 上生产）；
+  等 24–48h 收 `/pass-rate/` 部署后观测（目前只有约 20 分钟，见部署报告 §13）；404 噪声过滤。
 
 ## 10. 停止声明
 

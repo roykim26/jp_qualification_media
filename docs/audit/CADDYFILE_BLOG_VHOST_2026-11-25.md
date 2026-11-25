@@ -209,7 +209,9 @@ diff → ADAPTED_IDENTICAL=yes
 ## 9. 下一步建议
 
 - **P1** 把 `chore/phase1-baseline` 落到 `main`（需 Owner 授权 merge）——这是「生产代码不在主干」这条风险的根。
-- **P2** 把三条连库断言用到 `scripts/audit-mvp.mjs` 与 `scripts/check-staleness.mjs`。
+- **P2** ~~把三条连库断言用到 `scripts/audit-mvp.mjs` 与 `scripts/check-staleness.mjs`~~
+  **已完成**：抽成 `scripts/query-shape-lib.mjs` 后接入三个脚本，见
+  `docs/audit/QUERY_SHAPE_GUARD_2026-11-25.md`（`7c3c0ef`）。
 - **P2** 决定三个 `Caddyfile.bak*` 与两个验证文件的去留。
 - **P3** 生产跑一次 patrol，消掉 `coverageGap: not_run`。
 - **P3** 统一博客域名的两层安全头（§4.3），或至少决定「以 Caddy 为准」并删掉 nginx 那套。

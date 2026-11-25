@@ -369,11 +369,14 @@ markdown 的「今日需处理」与「到期事实（前 20）」两处都已�
   否则生产永远是手工 FF 的游离状态。
 - ~~**P2**：给 `release-gate.yml` 加一条连库的 `STALENESS_QUERY` 测试~~ **已完成**：
   `scripts/verify-staleness-query.mjs` 已进 `release:check`（§5.6）。
-- **P2（新）**：把 §5.6 的三条断言也用到 `/ready` 之外的其他连库脚本上 ——
-  `scripts/verify-api-readonly.mjs` 已连库，但 `audit-mvp.mjs` / `check-staleness.mjs`
-  仍然只做文本或纯函数层面的检查。
+- ~~**P2（新）**：把 §5.6 的三条断言也用到 `/ready` 之外的其他连库脚本上~~
+  **已完成**：`scripts/query-shape-lib.mjs` 把断言抽成共享模块，`audit-mvp.mjs`（20 列）
+  与 `check-staleness.mjs`（6 维度列 + target 唯一）都已接入，
+  `verify-staleness-query.mjs` 改为复用。详见
+  `docs/audit/QUERY_SHAPE_GUARD_2026-11-25.md`（`7c3c0ef`）。
 - **P3**：处理部署报告 §10.1 的 `status` 语义问题（把「报告生成成功」与
-  「有 critical」拆成两个字段）。
+  「有 critical」拆成两个字段）。~~已完成~~：`reportStatus` / `overallStatus` 两字段，
+  见 `docs/audit/OPS_REPORT_STATUS_2026-11-25.md`。
 - **P4**：生产跑一次 patrol，消掉 `coverageGap: not_run`。
 
 ## 10. 停止声明
