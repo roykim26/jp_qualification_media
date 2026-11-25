@@ -111,4 +111,4 @@
 1. 783 条历史候选：**不落库**（维持建议）。
 2. class3-exam 5 条：已入库并全部批准（`facts` 1007→1012）。
 3. 缺口一、缺口二：已实现（admin「确认无变化」动作 + `dueSources` 改看 `source_checks.checked_at`），并已把 24 条 `same` + 2 条 `same_text` 共 26 条复核落账。
-4. takken 2 条 `payment_deadline_rule` + it-passport 1 条 `application_change_deadline_rule`：仍待人工确认，当前 `dueFacts` 只剩这 3 条。
+4. takken 2 条 `payment_deadline_rule` + it-passport 1 条 `application_change_deadline_rule`：当时因来源页缺原文无法机验，2026-11-25 15:5x 已人工确认并落账（takken 证据为令和8年度官方 PDF 試験案内，it-passport 为 JITEC FAQ 原文），`dueFacts` 归零；证据与后续缺口见 `docs/audit/REVERIFICATION_2026-11-25.md` 第 7、8 节。

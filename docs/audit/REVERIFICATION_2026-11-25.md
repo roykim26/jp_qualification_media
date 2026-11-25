@@ -66,7 +66,22 @@
 - 数据：26 条复核 revision 的 `facts.current_revision_id` 若需回退，指回原 revision；不建议重建历史。
 - class3-exam 5 条：如判错，按 `scripts/rollback-fact.ts` 走撤回流程，不要直接删行。
 
-## 7. 遗留
+## 7. 三条「无法机验」的人工确认（2026-11-25 15:5x CST）
 
-- takken 2 条、it-passport 1 条仍需人工确认（页面改版或抽取器缺失）。
-- takken 的 2 条若要机验，需要给 takken 补支付时限的抽取字段。
+当晚用后台 `/admin/reverify/<资格>` 的「确认无变化」把这三条落账（`verified_by=operator`，`verification_note` 附证据 URL 与原文），核对结论如下：
+
+| 事实                                                | 证据来源                                                                                                                                 | 官方原文                                                                                                    | 判定                          |
+| --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- | ----------------------------- |
+| takken `payment_deadline_rule`（convenience_store） | [令和8年度 インターネット申込試験案内（PDF）](https://www.retio.or.jp/wp-content/uploads/2026/05/R8インターネット申込試験案内.pdf) §2(3) | 「払込期限 申込入力完了日から４日目又は令和８年8月1日（土）のうち、いずれか早い方の期日の午後11時59分まで」 | 与已批准值一致                |
+| takken `payment_deadline_rule`（pay_easy）          | 同上                                                                                                                                     | 「…の期日の利用可能ATM稼働時間まで」                                                                        | 与已批准值一致                |
+| it-passport `application_change_deadline_rule`      | [JITEC FAQ](https://www3.jitec.ipa.go.jp/JitesCbt/html/reference/faq.html)                                                               | 「受験日の3日前まででしたら、申込内容の変更（試験会場、受験日、試験開始時間）が可能です。」                 | 语义与 `P3D_BEFORE_EXAM` 一致 |
+
+为什么此前机验失败：takken 的注册来源是 HTML 页 `/exam/`（`source:takken:retio-exam`），期限条款只写在同机构发布的 **PDF 試験案内** 里，HTML 页已不再载明，所以「全文搜不到」不等于事实消失；it-passport 的句子只存在于 FAQ 自然语言，`it_passport.extract_candidates` 要求页面显式声明 fact 字段，故永远拿不到结构化候选。
+
+落账后 `staleness.summary`：`approvedFacts 1012 / dueFacts 0 / sourcesBehindOnSnapshot 0`，`dueSources []`，日检 `overallStatus ok`。
+
+## 8. 遗留
+
+- **takken 的 PDF 虽然已注册，但改动不会落库**：`services/collector/src/collector/capture_takken.py:36-41` 已把 `https://www.retio.or.jp/wp-content/uploads/2026/05/R8インターネット申込試験案内.pdf` 注册为 `capture-only:takken:2026-internet-application-guide`，patrol 会抓它并算 hash；但 `patrol_record.py` 只写数据库 `sources` 表里已注册的 id，capture-only 来源被计入 `skipped_unregistered` → **PDF 改版目前不会产生任何可查询的信号**。下次到期（约 2027-02）仍只能人工比对。
+  建议二选一：①给 capture-only 来源落一张变更检测表（或允许 `source_checks` 引用未注册来源）；②给 takken 补 PDF 抽取，把「払込期限」变成结构化候选。
+- **it-passport 无 declared fact 字段**：FAQ 类表述无法结构化，靠人工/文本匹配；若要机验需扩展 `it_passport` 的抽取适配器。
