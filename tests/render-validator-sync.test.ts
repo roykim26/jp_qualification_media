@@ -33,11 +33,35 @@ const serverSource = readFileSync(
   'utf8',
 );
 
-/** The text between the braces of `function <name>(...)` in `source`. */
+/**
+ * The text between the braces of `function <name>(...)` in `source`.
+ *
+ * The parameter list is skipped first, by counting parentheses. Without that,
+ * a default parameter written as `query: SchedulePageQuery = {}` puts a `{`
+ * before the real body and the slice starts inside the signature -- which is
+ * how the sibling routes below (`renderSchedulePage`, `renderUpdatesPage`) are
+ * declared.
+ */
 function functionBody(source: string, name: string): string {
   const start = source.indexOf(`function ${name}(`);
   if (start < 0) throw new Error(`${name}() not found`);
-  const open = source.indexOf('{', start);
+  const parametersOpen = source.indexOf('(', start);
+  let parametersDepth = 0;
+  let parametersClose = -1;
+  for (let index = parametersOpen; index < source.length; index += 1) {
+    const character = source[index];
+    if (character === '(') parametersDepth += 1;
+    else if (character === ')') {
+      parametersDepth -= 1;
+      if (parametersDepth === 0) {
+        parametersClose = index;
+        break;
+      }
+    }
+  }
+  if (parametersClose < 0)
+    throw new Error(`${name}() has unbalanced parameters`);
+  const open = source.indexOf('{', parametersClose);
   if (open < 0) throw new Error(`${name}() has no body`);
   let depth = 0;
   for (let index = open; index < source.length; index += 1) {
@@ -169,4 +193,213 @@ describe('renderer / validator field agreement', () => {
       ]),
     );
   });
+});
+
+/**
+ * The three sibling routes (`/schedule/`, `/compare/`, `/updates/`) have the
+ * same arrangement: a validator in `server.ts` guards a body the renderer then
+ * dereferences. The gap there was found by hand in
+ * `docs/audit/SIBLING_ROUTE_SHAPE_GAPS_2026-11-25.md` -- three fields were
+ * exempted with a reason that turned out to be wrong, and each one was a
+ * blank page in production. This block is what makes the next one show up as a
+ * build failure instead.
+ *
+ * Each gate pairs one renderer function with the one validator that guards its
+ * input, and exempts fields *per route*, because the same upstream field can
+ * need different checks on pages that read it differently: `examYear` is
+ * checked on `/schedule/` (a bad value is silently filtered out of the date
+ * window) and exempt on `/compare/` and `/updates/` (it degrades to a visible
+ * label). A single global allow-list would have to pick one answer and would
+ * be wrong on two of the three pages.
+ */
+interface RouteGate {
+  /** Renderer function in `render.ts` that reads the shape. */
+  renderer: string;
+  /** Validator in `server.ts` that guards the same shape. */
+  validator: string;
+  /** Identifier the renderer reads fields off. */
+  entity: string;
+  /** Parameter name the validator inspects (differs for helpers). */
+  validated: string;
+  /** Exempted fields, each with the reason a bad value degrades visibly. */
+  allow: Record<string, string>;
+  /** Fields known to be checked; guards the extraction against going empty. */
+  pinned: string[];
+}
+
+const routeGates: RouteGate[] = [
+  {
+    renderer: 'renderSchedulePage',
+    validator: 'isCalendarEnvelope',
+    entity: 'event',
+    validated: 'event',
+    allow: {
+      deliveryMode:
+        'optional in the schema; only ever passed to .filter(Boolean) and String() in the qualification label',
+      examComponent:
+        'optional in the schema; only ever passed to .filter(Boolean) and String() in the qualification label',
+      examLevelId:
+        'nullable in the schema; only ever passed to .filter(Boolean) and String() in the qualification label',
+      examYear:
+        'renders a literal `null年` in the year filter, the row label and the ICS link; measured 200 with the full page',
+      id: 'only feeds encodeURIComponent() in the ICS link',
+      providerId:
+        'optional in the schema; only ever passed to .filter(Boolean) and String() in the qualification label',
+      startValue:
+        'fed to formatFactDisplayValue(), which stringifies whatever it is given',
+      verifiedAt: 'renders as 未確認 through formatVerifiedAt()',
+    },
+    pinned: ['type', 'label', 'factKey', 'dateValue', 'qualification'],
+  },
+  {
+    // The qualification the schedule groups by is the upstream one, so it must
+    // carry a usable identity: `renderSchedulePage()` reads `.slug` and
+    // `.officialNameJa` off it.
+    renderer: 'renderSchedulePage',
+    validator: 'hasQualificationIdentity',
+    entity: 'qualification',
+    validated: 'value',
+    allow: {},
+    pinned: ['slug', 'officialNameJa'],
+  },
+  {
+    renderer: 'renderComparePage',
+    validator: 'isComparisonEnvelope',
+    entity: 'entry',
+    validated: 'entry',
+    allow: {
+      deliveryMode:
+        'optional in the schema; passed to the dimension object as `?? null` and to formatFactDisplayValue(), which stringifies',
+      examComponent:
+        'optional in the schema; passed to the dimension object as `?? null` and to formatFactDisplayValue(), which stringifies',
+      examLevelId:
+        'nullable in the schema; passed to the dimension object as `?? null` and to formatFactDisplayValue(), which stringifies',
+      examSession:
+        'nullable in the schema; passed to the dimension object as `?? null` and to formatFactDisplayValue(), which stringifies',
+      examYear:
+        'printed as `適用年度: ${entry.examYear}年`, degrading to a visible `null年`; rejecting the whole table over one year label is the worse trade',
+      paymentMethod:
+        'optional in the schema; passed to the dimension object as `?? null` and to formatFactDisplayValue(), which stringifies',
+      providerId:
+        'optional in the schema; passed to the dimension object as `?? null` and to formatFactDisplayValue(), which stringifies',
+    },
+    pinned: ['factKey', 'value', 'sourceUrl'],
+  },
+  {
+    renderer: 'renderComparePage',
+    validator: 'isComparisonEnvelope',
+    entity: 'row',
+    validated: 'row',
+    allow: {},
+    pinned: ['label', 'cells'],
+  },
+  {
+    renderer: 'renderComparePage',
+    validator: 'isComparisonEnvelope',
+    entity: 'cell',
+    validated: 'cell',
+    allow: {
+      missingReason:
+        'only rendered as text when the cell has no entries; measured 200 with the full page',
+    },
+    pinned: ['entries'],
+  },
+  {
+    // Same entity name as the schedule's, but a different source: on
+    // `/compare/` the `qualification` reads are split between the local
+    // `allQualifications` list (which supplies `aliasesJa` and `category` to
+    // the selector) and the comparison's own copy (which supplies `slug` and
+    // `officialNameJa` to the table header). Only the latter comes from
+    // upstream, and only those two fields are pinned here. A textual check
+    // cannot tell the two apart, so a future read of `aliasesJa` off the
+    // *upstream* copy would slip through -- recorded as an open item in the
+    // report rather than papered over.
+    renderer: 'renderComparePage',
+    validator: 'hasQualificationIdentity',
+    entity: 'qualification',
+    validated: 'value',
+    allow: {
+      aliasesJa:
+        'read from the local allQualifications list, not from the comparison copy',
+      category:
+        'read from the local allQualifications list, not from the comparison copy',
+    },
+    pinned: ['slug', 'officialNameJa'],
+  },
+  {
+    renderer: 'renderUpdatesPage',
+    validator: 'isUpdatesEnvelope',
+    entity: 'event',
+    validated: 'event',
+    allow: {
+      eventType:
+        'only ever becomes part of the batch key, never markup; measured 200 with the full page',
+      examYear:
+        'only ever becomes part of the batch key, never markup; measured 200 with the full page',
+    },
+    pinned: [
+      'eventLabel',
+      'factKey',
+      'factLabel',
+      'qualification',
+      'affectedPages',
+    ],
+  },
+];
+
+function routeProblems(gate: RouteGate) {
+  const rendered = unguardedReads(
+    functionBody(renderSource, gate.renderer),
+    gate.entity,
+  );
+  const checked = unguardedReads(
+    functionBody(serverSource, gate.validator),
+    gate.validated,
+  );
+  return {
+    rendered,
+    checked,
+    unchecked: [...rendered]
+      .filter((field) => !checked.has(field))
+      .filter((field) => !(field in gate.allow))
+      .sort(),
+    stale: Object.keys(gate.allow)
+      .filter((field) => !rendered.has(field))
+      .sort(),
+    redundant: Object.keys(gate.allow)
+      .filter((field) => checked.has(field))
+      .sort(),
+  };
+}
+
+describe('sibling route field agreement', () => {
+  for (const gate of routeGates) {
+    const label = `${gate.renderer} / ${gate.validator} / ${gate.entity}`;
+
+    it(`checks every field ${label} dereferences`, () => {
+      expect(routeProblems(gate).unchecked).toEqual([]);
+    });
+
+    it(`every allow-listed field for ${label} is still read`, () => {
+      // Keeps an exemption from outliving the read it excused: if the renderer
+      // stops touching the field, the reason on the list is now a lie about
+      // code that no longer exists.
+      expect(routeProblems(gate).stale).toEqual([]);
+    });
+
+    it(`every allow-listed field for ${label} is unchecked, not merely excused`, () => {
+      // If the validator starts checking one of these, the exemption hides the
+      // real reason the field is safe. Fail so it gets deleted.
+      expect(routeProblems(gate).redundant).toEqual([]);
+    });
+
+    it(`reads ${gate.validator} rather than an empty body`, () => {
+      // A comparison between two empty sets always passes. Pin fields we know
+      // the validator checks, so a renamed function or an unparseable body
+      // fails here instead of turning the assertion above into a tautology.
+      expect([...routeProblems(gate).checked]).toEqual(
+        expect.arrayContaining(gate.pinned),
+      );
+    });
+  }
 });

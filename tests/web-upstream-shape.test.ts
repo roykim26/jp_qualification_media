@@ -70,6 +70,7 @@ type BodyMode =
   | 'updates-numeric-fact-label'
   | 'updates-object-fact-label'
   | 'updates-null-fact-label'
+  | 'updates-empty-qualification'
   | 'updates-null-qualification-slug'
   | 'compare-null-row-label'
   | 'compare-null-cells'
@@ -332,6 +333,7 @@ function bodyFor(url: string): string {
     case 'updates-numeric-fact-label':
     case 'updates-object-fact-label':
     case 'updates-null-fact-label':
+    case 'updates-empty-qualification':
     case 'updates-null-qualification-slug': {
       // Sprint 3M, measured. `/updates/` reads `eventLabel`, `factKey`,
       // `newValue` through `escapeHtml()`, and `factKey` again through
@@ -361,6 +363,7 @@ function bodyFor(url: string): string {
       if (bodyMode === 'updates-numeric-fact-label') event.factLabel = 123;
       if (bodyMode === 'updates-object-fact-label') event.factLabel = { a: 1 };
       if (bodyMode === 'updates-null-fact-label') event.factLabel = null;
+      if (bodyMode === 'updates-empty-qualification') event.qualification = {};
       if (bodyMode === 'updates-null-qualification-slug')
         event.qualification = { ...itPassport, slug: null };
       return JSON.stringify({
@@ -837,6 +840,23 @@ describe('web server rejects unusable upstream bodies', () => {
     // measured: null and '' return 200 with the full page, a number, object or
     // array return 200 with an empty body.
     bodyMode = 'updates-null-fact-label';
+    const web = await startWeb();
+    try {
+      const response = await web.get('/updates/');
+      expect(response.status).toBe(200);
+      expect((await response.text()).length).toBeGreaterThan(1000);
+    } finally {
+      await web.close();
+    }
+  });
+
+  it('keeps /updates/ 200 when the qualification carries no fields at all', async () => {
+    // `{}` is a record, so the validator accepts it and the renderer draws a
+    // dead `/shikaku/undefined/undefined/` link -- ugly, but 200 with the full
+    // page, measured. This case is what separates "is an object" from a looser
+    // check like `qualification?.slug !== undefined`: that one rejects `{}` and
+    // would turn this page into a 503, and no other test here would notice.
+    bodyMode = 'updates-empty-qualification';
     const web = await startWeb();
     try {
       const response = await web.get('/updates/');
