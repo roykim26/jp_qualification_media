@@ -2297,3 +2297,100 @@ describe('B4 ended-schedule state and B5 home timeline dedup', () => {
     expect(html).not.toContain('<span class="badge badge--info">');
   });
 });
+
+describe('P0 trust fixes from the 2026-11-25 audit', () => {
+  const takken = launchQualifications.find((item) => item.slug === 'takken')!;
+  const itPassport = launchQualifications.find(
+    (item) => item.slug === 'it-passport',
+  )!;
+
+  const pastOpenFact = {
+    qualificationSlug: 'it-passport' as const,
+    examLevelId: null,
+    examYear: 2026,
+    factKey: 'application_open_2026_may_sessions',
+    valueType: 'datetime' as const,
+    normalizedValue: '2026-03-24T21:30:00+09:00',
+    displayValue: '2026年3月24日21:30以降',
+    status: 'approved' as const,
+    riskLevel: 'high' as const,
+    sourceId: 'source:it-passport:jitec-application',
+    sourceSnapshotId: 'snapshot:official',
+    synthetic: false,
+    verifiedAt: '2026-01-01T00:00:00.000Z',
+    officialVerifiedAt: '2026-10-13T00:00:00.000Z',
+    provenanceStatus: 'verified' as const,
+    sourceUrl: 'https://www.ipa.go.jp/shiken/ubm/it-passport/application.html',
+  };
+
+  it('never marks a past CBT 申込開始 as ended on schedule or fact cards', () => {
+    const event: PublicCalendarEvent = {
+      id: 'it-passport:2026:application_open_2026_may_sessions::::',
+      type: 'application_open',
+      label: '申込開始',
+      qualification: itPassport,
+      examYear: 2026,
+      displayValue: '2026年3月24日21:30以降',
+      dateValue: '2026-03-24',
+      startValue: '2026-03-24T21:30:00+09:00',
+      factKey: 'application_open_2026_may_sessions',
+      verifiedAt: '2026-10-13T00:00:00.000Z',
+      sequence: 0,
+    };
+    const schedule = renderSchedulePage([event], { range: 'all' });
+    expect(schedule).not.toContain('schedule-event--ended');
+    expect(schedule).not.toContain('badge--info">終了');
+    const card = renderQualificationSectionPage(
+      {
+        qualification: itPassport,
+        status: 'verified',
+        officialVerifiedAt: '2026-10-13T00:00:00.000Z',
+        facts: [pastOpenFact],
+      },
+      'application',
+      2026,
+    );
+    expect(card).not.toContain('<span class="badge badge--info">終了</span>');
+    expect(card).not.toContain('この日程は終了しています');
+  });
+
+  it('labels past-only exam dates 前回試験日, not a past 次回試験日', () => {
+    const pastExam = {
+      ...pastOpenFact,
+      qualificationSlug: 'takken' as const,
+      factKey: 'exam_date',
+      valueType: 'date' as const,
+      normalizedValue: '2026-10-18',
+      displayValue: '2026年10月18日',
+      sourceId: 'source:takken:retio-exam',
+    };
+    const home = renderHomePage([], [], { takken: [pastExam] });
+    expect(home).toContain('前回試験日');
+    expect(home).not.toContain('次回試験日');
+    expect(home).toContain('2026年10月18日');
+  });
+
+  it('schedule confirmation date uses provenance time, never the placeholder', () => {
+    const base: PublicCalendarEvent = {
+      id: 'takken:2026:exam_date::::',
+      type: 'exam_date',
+      label: '試験日',
+      qualification: takken,
+      examYear: 2026,
+      displayValue: '2026年10月18日',
+      dateValue: '2026-10-18',
+      startValue: null,
+      factKey: 'exam_date',
+      verifiedAt: '',
+      sequence: 0,
+    };
+    const missing = renderSchedulePage([base], { range: 'all' });
+    expect(missing).toContain('確認記録未移行');
+    expect(missing).not.toContain('2026年1月1日');
+    const confirmed = renderSchedulePage(
+      [{ ...base, verifiedAt: '2026-10-13T00:00:00.000Z' }],
+      { range: 'all' },
+    );
+    expect(confirmed).toContain('公式確認: 2026年10月13日');
+  });
+});

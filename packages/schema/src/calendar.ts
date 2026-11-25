@@ -117,7 +117,9 @@ export function buildPublicCalendarEvents(
         deliveryMode: fact.deliveryMode,
         paymentMethod: fact.paymentMethod,
         factKey: fact.factKey,
-        verifiedAt: fact.verifiedAt,
+        // Same provenance-gated confirmation timestamp as detail pages; the raw
+        // revision verified_at carries placeholder dates and must not surface.
+        verifiedAt: fact.officialVerifiedAt ?? '',
         sourceUrl: fact.sourceUrl,
         sequence: fact.sequence ?? 0,
       });

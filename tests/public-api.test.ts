@@ -523,3 +523,34 @@ describe('public qualification read path', () => {
     expect(response.statusCode).toBe(404);
   });
 });
+
+describe('calendar confirmation provenance (2026-11-25 audit)', () => {
+  it('uses officialVerifiedAt, not the placeholder revision verifiedAt', () => {
+    const base = {
+      qualificationSlug: 'takken' as const,
+      examLevelId: null,
+      examYear: 2026,
+      factKey: 'exam_date',
+      valueType: 'date' as const,
+      normalizedValue: '2026-10-18',
+      displayValue: '2026年10月18日',
+      status: 'approved' as const,
+      riskLevel: 'high' as const,
+      sourceId: 'source:takken:retio-exam',
+      sourceSnapshotId: 'snapshot:real',
+      synthetic: false,
+      verifiedAt: '2026-01-01T00:00:00.000Z',
+    };
+    const confirmed = buildPublicCalendarEvents(launchQualifications, [
+      {
+        ...base,
+        officialVerifiedAt: '2026-10-13T00:00:00.000Z',
+        provenanceStatus: 'verified',
+        sourceUrl: 'https://www.retio.or.jp/exam/',
+      },
+    ]);
+    expect(confirmed[0].verifiedAt).toBe('2026-10-13T00:00:00.000Z');
+    const unproven = buildPublicCalendarEvents(launchQualifications, [base]);
+    expect(unproven[0].verifiedAt).toBe('');
+  });
+});

@@ -42,7 +42,7 @@ export async function readPublicUpdates(
       f.fact_key, f.exam_year,
       previous.display_value AS previous_value,
       newer.display_value AS new_value,
-      newer.verified_at,
+      latest_review.created_at AS reviewed_at,
       src.canonical_url AS source_url
     FROM change_events e
     JOIN facts f ON f.id = e.fact_id
@@ -51,6 +51,11 @@ export async function readPublicUpdates(
     JOIN candidate_facts new_candidate ON new_candidate.id = newer.candidate_fact_id
     JOIN sources src ON src.id = new_candidate.source_id
     LEFT JOIN fact_revisions previous ON previous.id = e.previous_revision_id
+    LEFT JOIN LATERAL (
+      SELECT created_at FROM reviews r
+      WHERE r.candidate_fact_id = new_candidate.id
+      ORDER BY created_at DESC, r.id DESC LIMIT 1
+    ) latest_review ON true
     WHERE newer.status = 'approved'
       ${qualificationSlug ? 'AND q.slug = $1' : ''}
     ORDER BY e.created_at DESC, q.slug, f.fact_key, e.id
@@ -79,7 +84,11 @@ export async function readPublicUpdates(
       affectedPages: row.affected_pages,
       sourceUrl: row.source_url,
       createdAt: new Date(row.created_at).toISOString(),
-      verifiedAt: new Date(row.verified_at).toISOString(),
+      // Same provenance-gated confirmation timestamp as detail/schedule; the
+      // raw revision verified_at carries placeholder dates.
+      verifiedAt: row.reviewed_at
+        ? new Date(row.reviewed_at).toISOString()
+        : '',
     })),
     hasMore: result.rows.length > limit,
   };

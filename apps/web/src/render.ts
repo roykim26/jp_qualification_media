@@ -680,6 +680,13 @@ function renderFactSource(fact: PublicFact): string {
 // never qualify.
 function factScheduleEnded(fact: PublicFact, today: string): boolean {
   if (!isDateFactKey(fact.factKey)) return false;
+  // An opening's start date passing does not close the window; closure is
+  // carried by application_deadline, so 申込開始 must never read 終了.
+  if (
+    fact.factKey.startsWith('application_open') ||
+    fact.factKey.startsWith('application_start')
+  )
+    return false;
   const normalized = fact.normalizedValue;
   if (typeof normalized !== 'string') return false;
   const parts = normalized
@@ -1578,11 +1585,11 @@ function directoryHighlights(facts: PublicFact[]) {
       .filter(({ fact }) => fact.examYear === latestYear)
       .sort((left, right) => left.date.localeCompare(right.date));
     const today = tokyoToday();
-    const chosen =
-      sorted.find(({ date }) => date >= today) ?? sorted[sorted.length - 1];
+    const future = sorted.find(({ date }) => date >= today);
+    const chosen = future ?? sorted[sorted.length - 1];
     if (chosen) {
       highlights.push({
-        label: '次回試験日',
+        label: future ? '次回試験日' : '前回試験日',
         value: formatCalendarDate(chosen.date),
       });
     }
@@ -1833,7 +1840,9 @@ export function renderSchedulePage(
           icon: 'calendar',
         })
       : '';
-    const ended = Boolean(event.dateValue && event.dateValue < today);
+    const ended =
+      event.type !== 'application_open' &&
+      Boolean(event.dateValue && event.dateValue < today);
     const value = formatFactDisplayValue({
       factKey: event.factKey,
       displayValue: event.displayValue,
@@ -1846,7 +1855,7 @@ export function renderSchedulePage(
             .map((part) => `<li>${escapeHtml(part)}</li>`)
             .join('')}</ul></details>`
         : `<p class="schedule-event__value">${escapeHtml(value)}</p>`;
-    return `<article class="schedule-event schedule-event--${event.type}${ended ? ' schedule-event--ended' : ''}"><time datetime="${escapeHtml(event.dateValue ?? '')}">${escapeHtml(formatCalendarDate(event.dateValue))}</time><div><div class="schedule-event__heading"><span class="schedule-event__type">${escapeHtml(eventTone[event.type])}</span>${ended ? renderBadge('終了', 'info') : ''}<h2><a href="/shikaku/${escapeHtml(event.qualification.slug)}/${event.examYear}/">${escapeHtml(event.qualification.officialNameJa)}</a></h2></div>${valueBlock}${ended ? `<p class="meta">${escapeHtml(endedGuidance[event.type])}</p>` : ''}${dimensionChips ? `<div class="dimensions">${dimensionChips}</div>` : ''}<p class="meta">${event.examYear}年 / ${escapeHtml(event.label)} / 公式確認: ${escapeHtml(formatVerifiedAt(event.verifiedAt))} / ${source}</p>${eventIcs ? `<div class="schedule-event__actions">${eventIcs}</div>` : ''}</div></article>`;
+    return `<article class="schedule-event schedule-event--${event.type}${ended ? ' schedule-event--ended' : ''}"><time datetime="${escapeHtml(event.dateValue ?? '')}">${escapeHtml(formatCalendarDate(event.dateValue))}</time><div><div class="schedule-event__heading"><span class="schedule-event__type">${escapeHtml(eventTone[event.type])}</span>${ended ? renderBadge('終了', 'info') : ''}<h2><a href="/shikaku/${escapeHtml(event.qualification.slug)}/${event.examYear}/">${escapeHtml(event.qualification.officialNameJa)}</a></h2></div>${valueBlock}${ended ? `<p class="meta">${escapeHtml(endedGuidance[event.type])}</p>` : ''}${dimensionChips ? `<div class="dimensions">${dimensionChips}</div>` : ''}<p class="meta">${event.examYear}年 / ${escapeHtml(event.label)} / ${event.verifiedAt ? `公式確認: ${escapeHtml(formatVerifiedAt(event.verifiedAt))}` : '確認記録未移行'} / ${source}</p>${eventIcs ? `<div class="schedule-event__actions">${eventIcs}</div>` : ''}</div></article>`;
   };
   const renderCompactEvent = (entry: MergedScheduleEvent): string => {
     const { event } = entry;
@@ -2469,7 +2478,7 @@ export function renderUpdatesPage(
           `<tr><th scope="row">${escapeHtml(row.label)}</th><td>${row.before ? escapeHtml(row.before) : '<span class="update-changes__empty">未登録</span>'}</td><td>${escapeHtml(row.after)}</td></tr>`,
       )
       .join('');
-    return `<article class="update-card"><div class="update-card__header"><div><p class="eyebrow">${escapeHtml(first.eventLabel)}</p><h2><a href="${escapeHtml(targetHref)}">${escapeHtml(title)}</a></h2></div><time datetime="${escapeHtml(first.createdAt.slice(0, 10))}">${escapeHtml(formatVerifiedDay(first.createdAt))}</time></div><table class="update-changes"><caption class="visually-hidden">${escapeHtml(title)}の変更前後</caption><thead><tr><th scope="col">項目</th><th scope="col">変更前</th><th scope="col">変更後</th></tr></thead><tbody>${rowsHtml}</tbody></table><div class="tag-row">${affectedPages}</div><p class="meta">${first.examYear}年度 / 公式確認: ${escapeHtml(formatVerifiedAt(first.verifiedAt))} / ${source}</p></article>`;
+    return `<article class="update-card"><div class="update-card__header"><div><p class="eyebrow">${escapeHtml(first.eventLabel)}</p><h2><a href="${escapeHtml(targetHref)}">${escapeHtml(title)}</a></h2></div><time datetime="${escapeHtml(first.createdAt.slice(0, 10))}">${escapeHtml(formatVerifiedDay(first.createdAt))}</time></div><table class="update-changes"><caption class="visually-hidden">${escapeHtml(title)}の変更前後</caption><thead><tr><th scope="col">項目</th><th scope="col">変更前</th><th scope="col">変更後</th></tr></thead><tbody>${rowsHtml}</tbody></table><div class="tag-row">${affectedPages}</div><p class="meta">${first.examYear}年度 / ${first.verifiedAt ? `公式確認: ${escapeHtml(formatVerifiedAt(first.verifiedAt))}` : '確認記録未移行'} / ${source}</p></article>`;
   };
   const groups: { label: string; items: PublicUpdateEvent[] }[] = [];
   const indexByLabel = new Map<string, number>();
