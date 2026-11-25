@@ -1533,7 +1533,9 @@ export function renderQualificationSectionPage(
     section === 'overview'
       ? `/shikaku/${qualification.slug}/`
       : section === 'annual'
-        ? `/shikaku/${qualification.slug}/${year}/`
+        ? year && !qualificationSectionHasContent(view, 'annual', year)
+          ? `/shikaku/${qualification.slug}/`
+          : `/shikaku/${qualification.slug}/${year}/`
         : `/shikaku/${qualification.slug}/${section}/`;
   return renderPublicDocument({
     title:

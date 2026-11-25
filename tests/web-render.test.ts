@@ -1532,7 +1532,7 @@ describe('bookkeeping history statistics tables', () => {
     const annual = renderQualificationSectionPage(view, 'annual', 2025);
     expect(annual).toContain('<meta name="robots" content="noindex,follow">');
     expect(annual).toContain(
-      '<link rel="canonical" href="/shikaku/bookkeeping/2025/">',
+      '<link rel="canonical" href="/shikaku/bookkeeping/">',
     );
   });
 
