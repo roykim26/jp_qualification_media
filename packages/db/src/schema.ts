@@ -240,6 +240,10 @@ export const factRevisions = pgTable(
     validFrom: timestamp('valid_from', { withTimezone: true }).notNull(),
     validTo: timestamp('valid_to', { withTimezone: true }),
     verifiedAt: timestamp('verified_at', { withTimezone: true }).notNull(),
+    // Set only when a reviewer re-confirmed an unchanged value; ordinary
+    // approvals leave both empty and rely on the candidate review trail.
+    verifiedBy: text('verified_by'),
+    verificationNote: text('verification_note'),
     idempotencyKey: text('idempotency_key').notNull(),
   },
   (t) => [uniqueIndex('revision_idempotency_idx').on(t.idempotencyKey)],

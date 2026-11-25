@@ -154,19 +154,19 @@ DATABASE_URL="postgresql://qualification_dev:qualification_dev@127.0.0.1:5432/qu
 
 输出字段（`status` 为 `ok` 时）：
 
-| 字段                              | 含义                                                                                      |
-| --------------------------------- | ----------------------------------------------------------------------------------------- |
-| `status`                          | `ok`＝已连库并检查完成；`not_run`＝未设 `DATABASE_URL`；`error`＝查询失败                 |
-| `checkedAt`                       | 本次检查时刻（UTC ISO 格式）                                                              |
-| `referenceYear`                   | 当前 JST 年份，用于判断哪些事实算「历年」                                                 |
-| `windowsDays`                     | 本次使用的过期窗口：`fee` 90、`eligibility` 180、`annual` 365、`sourceLink` 7（单位：天） |
-| `summary.approvedFacts`           | 命中口径的已批准非合成事实总数（含被跳过的历年记录）                                      |
-| `summary.historicalSkipped`       | `exam_year` 小于 `referenceYear` 而被跳过的条数                                           |
-| `summary.checked`                 | 实际参与过期判断的条数（＝ `approvedFacts` − `historicalSkipped`）                        |
-| `summary.dueFacts`                | 超过窗口的事实条数，等于 `dueFacts` 数组长度                                              |
-| `summary.sourcesBehindOnSnapshot` | 最近快照超过 7 天、或从未抓取的来源数，等于 `dueSources` 数组长度                         |
-| `dueFacts[]`                      | 过期事实明细，见下                                                                        |
-| `dueSources[]`                    | 快照滞后的来源明细，见下                                                                  |
+| 字段                              | 含义                                                                                                                                                            |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `status`                          | `ok`＝已连库并检查完成；`not_run`＝未设 `DATABASE_URL`；`error`＝查询失败                                                                                       |
+| `checkedAt`                       | 本次检查时刻（UTC ISO 格式）                                                                                                                                    |
+| `referenceYear`                   | 当前 JST 年份，用于判断哪些事实算「历年」                                                                                                                       |
+| `windowsDays`                     | 本次使用的过期窗口：`fee` 90、`eligibility` 180、`annual` 365、`sourceLink` 7（单位：天）                                                                       |
+| `summary.approvedFacts`           | 命中口径的已批准非合成事实总数（含被跳过的历年记录）                                                                                                            |
+| `summary.historicalSkipped`       | `exam_year` 小于 `referenceYear` 而被跳过的条数                                                                                                                 |
+| `summary.checked`                 | 实际参与过期判断的条数（＝ `approvedFacts` − `historicalSkipped`）                                                                                              |
+| `summary.dueFacts`                | 超过窗口的事实条数，等于 `dueFacts` 数组长度                                                                                                                    |
+| `summary.sourcesBehindOnSnapshot` | 最近一次抓取超过 7 天、或从未抓取的来源数，等于 `dueSources` 数组长度（抓取时间优先取 `source_checks.checked_at`，没有检查记录时回退 `snapshots.retrieved_at`） |
+| `dueFacts[]`                      | 过期事实明细，见下                                                                                                                                              |
+| `dueSources[]`                    | 抓取滞后的来源明细，见下                                                                                                                                        |
 
 `dueFacts` 每项：`factId`、`qualification`（资格 slug）、`examYear`、`factKey`、`displayValue`（当前展示值）、`verifiedAt`、`ageDays`（距今天数）、`windowDays`（该字段的窗口）、`reason`（`fee` / `eligibility` / `statistics` / `annual`）。数组按 `ageDays ÷ windowDays` 从大到小排序，超期比例最高的排最前。
 
@@ -202,7 +202,7 @@ DATABASE_URL="postgresql://qualification_dev:qualification_dev@127.0.0.1:5432/qu
 - 事实年龄从 `verified_at` 起算，按整天向下取整；严格大于窗口才算过期，恰好等于窗口不算；`verified_at` 为空的事实不判过期。
 - 费用类（`fee`、`fee_*`、`payment_method`、`payment_deadline_rule`）90 天；报考资格类（`eligibility`、`eligibility_*`、`application_rule`、`application_change_deadline_rule`）180 天；统计类（`pass_rate`、`pass_rate_*`、`applicants`、`examinees`、`passed`、`statistics_methodology`）365 天，输出里 `reason` 记作 `statistics`；其余所有字段默认 365 天，`reason` 记作 `annual`。
 - `exam_year` 小于当前 JST 年份的记录整条跳过：不计入 `dueFacts`，其来源也不参与 `dueSources` 判定。
-- 来源按该来源最近一条快照的 `retrieved_at` 判断，没有快照或超过 7 天就进 `dueSources`；同一来源只出一行。
+- 来源按该来源最近一次抓取判断（优先 `source_checks` 的最近一条 `checked_at`，缺失时回退 `snapshots.retrieved_at`），没有抓取记录或超过 7 天就进 `dueSources`；同一来源只出一行。巡检落库只给 `changed` 的来源写快照，所以不能用快照时间代表「抓过没有」。
 - 统计口径只包含 `facts`、当前 revision、`candidate_facts` 三者均为 `approved` 且候选 `synthetic=false` 的事实。这三层过滤与公开 API 相同，但脚本**不**要求 `source_snapshot_id` 非空，也不把快照是否 `ci://` 或 synthetic 计入，所以条数可能略多于公开页面上可见的事实。
 
 无库时的预期输出（本机未设 `DATABASE_URL`，2026-11-09 实测）：
@@ -224,6 +224,30 @@ EXIT=0。这是「本机没有库」时的正常形态，不代表检查失败�
 - 不触发采集。不调用采集器，也不发任何外部 HTTP 请求；`canonicalUrl` 只是从库里原样打印出来的字符串。
 - 不参与门禁。结果不进 `release:check`；即使有到期项也仍以 EXIT=0 结束（只有连上库后查询失败才是 EXIT=1），到期项要不要处理由人工判断。
 - 「过期」只是时间阈值，不等于内容已错。是否真需要改，仍以对应 `docs/<qualification>-source-contract.md` 和官方原文为准。
+
+## 到期事实复核（re-verification）
+
+`data:staleness` 报出的到期事实，若今天官网内容与已批准值一致，用 admin 的「确认无变化」把这次复核落账。否则事实会一直到期，而唯一能刷新 `verified_at` 的路径是「再产一条候选并批准」——值没变时根本产不出候选。
+
+前置迁移：`packages/db/migrations/0031_fact_reverification.sql`（`fact_revisions.verified_by` / `verification_note`，已在 2026-11-25 应用到生产）。
+
+本机起 admin（`DATABASE_URL` 指本地库，或经 SSH 隧道指生产库 127.0.0.1:15432）：
+
+```powershell
+$env:DATABASE_URL="postgresql://qualification_prod:<pw>@127.0.0.1:15432/qualification_media"; $env:ADMIN_REVIEWER_ID="<复核人>"; pnpm dev:admin
+```
+
+打开 `http://127.0.0.1:3001/reverify/<slug>?reviewer=<复核人>`（slug 与 `/review/<slug>` 相同：`bookkeeping` / `fp` / `gyoseishoshi` / `takken` / `it-passport` / `fundamental-it-engineer`），只看**超过窗口**的当期事实；逐条填复核理由后点「确认无变化」。
+
+机制：追加一条复用当前 candidate 的 `approved` revision（`normalized_value` / `display_value` 原样沿用，`verified_at=now`，`verified_by` / `verification_note` 记录复核人与理由），并把 `facts.current_revision_id` 指过去。
+
+- **不写 `change_events`**：内容没变，不应出现在「更新」列表。
+- **不改 candidate、不写 review**：provenance 审计要求最新一条 review 是 approve，同值复核不产生新的审核决策。
+- 只对超过窗口的事实生效；窗口内调用返回 400。
+- 同一天同一事实重复提交幂等：`idempotency_key=reverify:<factId>:<JST 日期>`，已存在且已是当前 revision 时直接返回 200。
+- 复核后 `data:staleness` 的 `dueFacts` 应减少；`sourcesBehindOnSnapshot` 与「内容是否变化」解耦（口径见上一节）。
+
+判据：打开页面能看到到期卡片；提交后 `fact_revisions` 多一条 `verified_by` 非空、`verification_note` 有内容的同值 revision；`data:staleness` 的 `dueFacts` 下降。
 
 ## 来源巡检与落库（patrol）
 

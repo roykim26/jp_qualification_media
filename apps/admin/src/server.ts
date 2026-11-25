@@ -254,6 +254,227 @@ async function reviewCandidate(
   }
 }
 
+// Mirrors scripts/staleness-lib.mjs.  The admin process does not import that
+// file (it is an .mjs outside the app's TS project), so the window table is
+// duplicated here and a unit test keeps the two in sync via the staleness lib's
+// own tests.
+const windowsDays = { fee: 90, eligibility: 180, annual: 365 } as const;
+const feeFactKeys = new Set(['fee', 'payment_method', 'payment_deadline_rule']);
+const eligibilityFactKeys = new Set([
+  'eligibility',
+  'application_rule',
+  'application_change_deadline_rule',
+]);
+const statisticsFactKeys = new Set([
+  'pass_rate',
+  'applicants',
+  'examinees',
+  'passed',
+  'statistics_methodology',
+]);
+
+function factWindowDays(factKey: string): number {
+  if (feeFactKeys.has(factKey) || factKey.startsWith('fee_'))
+    return windowsDays.fee;
+  if (eligibilityFactKeys.has(factKey) || factKey.startsWith('eligibility_'))
+    return windowsDays.eligibility;
+  // Statistics and annual facts both use the 365-day window in staleness-lib.
+  return windowsDays.annual;
+}
+
+function ageInDays(timestamp: unknown): number | null {
+  const time = new Date(String(timestamp ?? '')).getTime();
+  if (!Number.isFinite(time)) return null;
+  return Math.floor((Date.now() - time) / 86_400_000);
+}
+
+function jstYear(): number {
+  return Number(
+    new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Tokyo',
+      year: 'numeric',
+    }).format(new Date()),
+  );
+}
+
+function jstDate(): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Tokyo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
+}
+
+async function listDueFacts(
+  qualificationId: string,
+): Promise<Array<Record<string, unknown>>> {
+  if (!databaseUrl)
+    throw new Error('DATABASE_URL is required for the local review queue');
+  const pool = new Pool({
+    connectionString: databaseUrl,
+    connectionTimeoutMillis: 5000,
+  });
+  try {
+    const result = await pool.query(
+      `SELECT f.id AS fact_id, f.exam_year, f.fact_key, f.provider_id, f.exam_level_id,
+        f.exam_component, f.delivery_mode, f.payment_method, f.exam_session,
+        fr.display_value, fr.verified_at, fr.verified_by,
+        s.content_hash AS snapshot_hash, src.canonical_url
+       FROM facts f
+       JOIN fact_revisions fr ON fr.id=f.current_revision_id
+       JOIN candidate_facts c ON c.id=fr.candidate_fact_id
+       JOIN snapshots s ON s.id=c.source_snapshot_id
+       JOIN sources src ON src.id=c.source_id
+       WHERE f.status='approved' AND fr.status='approved' AND c.status='approved'
+         AND c.synthetic=false AND f.qualification_id=$1
+       ORDER BY f.fact_key, f.exam_level_id`,
+      [qualificationId],
+    );
+    const year = jstYear();
+    return result.rows.filter((row) => {
+      if (Number(row.exam_year) < year) return false;
+      const age = ageInDays(row.verified_at);
+      return age !== null && age > factWindowDays(String(row.fact_key));
+    });
+  } finally {
+    await pool.end();
+  }
+}
+
+function duePage(
+  rows: Array<Record<string, unknown>>,
+  qualificationTitle: string,
+): string {
+  const cards = rows
+    .map(
+      (row) => `
+    <article class="card review-card" data-id="${escapeHtml(row.fact_id)}">
+      <h2>${escapeHtml(row.fact_key)} · ${escapeHtml(row.exam_year)}</h2>
+      <p class="review-meta"><span><b>级别：</b>${escapeHtml(row.exam_level_id || '共通')}</span><span><b>实施方式：</b>${escapeHtml(row.delivery_mode || '未指定')}</span><span><b>支付方式：</b>${escapeHtml(row.payment_method || '未指定')}</span><span><b>确认于：</b>${escapeHtml(row.verified_at)}</span></p>
+      <p><b>已批准值：</b>${escapeHtml(row.display_value)}</p>
+      <p class="review-source"><b>官方来源：</b><a href="${escapeHtml(row.canonical_url)}" target="_blank" rel="noreferrer">${escapeHtml(row.canonical_url)}</a></p>
+      <div class="field"><label for="reason-${escapeHtml(row.fact_id)}">复核理由</label><textarea id="reason-${escapeHtml(row.fact_id)}" placeholder="例如：今日官网原文与批准值逐字一致，仅确认无变化" aria-describedby="help-${escapeHtml(row.fact_id)}" required></textarea><p id="help-${escapeHtml(row.fact_id)}" class="field__help">确认无变化会追加一条同值修订并记录复核人，不改变公开值。</p><p class="field__error" aria-live="polite"></p></div>
+      <div class="review-actions">
+        <button type="button" data-decision="reverify">确认无变化</button>
+      </div>
+      <output aria-live="polite" aria-atomic="true"></output>
+    </article>`,
+    )
+    .join('');
+  return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${qualificationTitle}到期复核</title><style>${uiStyles}${adminStyles}</style></head><body><main class="admin-shell"><header class="admin-header"><div><p class="eyebrow">到期事实复核</p><h1>${qualificationTitle}待复核事实</h1><p>这些事实超过复核窗口但内容未变。确认无变化会追加一条同值修订（verified_at=now），公开值不变。</p></div><p class="badge badge--info">待复核：${rows.length} 条</p></header><section class="admin-list" aria-label="待复核事实">
+   ${cards || '<div class="feedback feedback--empty"><div><h2>当前没有到期事实</h2><p>所有已批准事实都在复核窗口内。</p></div></div>'}</section></main>
+  <script>
+  for (const card of document.querySelectorAll('.review-card')) for (const button of card.querySelectorAll('button')) button.onclick = async () => {
+    const textarea = card.querySelector('textarea');
+    const error = card.querySelector('.field__error');
+    const output = card.querySelector('output');
+    const reason = textarea.value.trim();
+    error.textContent = '';
+    if (!reason) { error.textContent = '请填写复核理由。'; textarea.focus(); return; }
+    if (!confirm('将记录「确认无变化」，是否继续？')) return;
+    const reviewer = prompt('复核人 ID');
+    if (!reviewer) { output.textContent = '操作已取消。'; return; }
+    const buttons = card.querySelectorAll('button');
+    for (const item of buttons) item.disabled = true;
+    const originalLabel = button.textContent;
+    button.textContent = '处理中…';
+    output.textContent = '正在记录复核结果。';
+    try {
+      const response = await fetch('/internal/reverifications/' + encodeURIComponent(card.dataset.id), { method:'POST', headers:{'content-type':'application/json','x-reviewer-id':reviewer}, body:JSON.stringify({reason}) });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'request failed');
+      output.textContent = '已记录：确认无变化';
+      setTimeout(() => card.remove(), 500);
+    } catch {
+      output.textContent = '保存失败。输入内容已保留，请重试。';
+      for (const item of buttons) item.disabled = false;
+      button.textContent = originalLabel;
+    }
+  };
+  </script></body></html>`;
+}
+
+/**
+ * Append a same-value revision for a due fact.  The revision reuses the current
+ * candidate so provenance (source, snapshot, evidence, approve review) stays
+ * intact; only verified_at / verified_by / verification_note change.  A unique
+ * idempotency key per fact per JST day makes double-clicks harmless.
+ */
+async function reverifyFact(factId: string, reason: string): Promise<string> {
+  if (!databaseUrl)
+    throw new Error('DATABASE_URL is required for the local review queue');
+  if (!reason.trim()) throw new Error('verification reason required');
+  const pool = new Pool({
+    connectionString: databaseUrl,
+    connectionTimeoutMillis: 5000,
+  });
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const current = await client.query(
+      `SELECT f.id, f.exam_year, f.fact_key, f.current_revision_id,
+              fr.candidate_fact_id, fr.normalized_value, fr.display_value, fr.verified_at
+       FROM facts f JOIN fact_revisions fr ON fr.id=f.current_revision_id
+       WHERE f.id=$1 AND f.status='approved' FOR UPDATE`,
+      [factId],
+    );
+    if (!current.rowCount) throw new Error('approved fact not found');
+    const row = current.rows[0];
+    const date = jstDate();
+    const revisionId = `revision:reverify:${factId}:${date}`;
+    const idempotencyKey = `reverify:${factId}:${date}`;
+    // A second click (or a retry after a timeout) must not turn into an error:
+    // if today's re-verification is already the current revision, return it.
+    const existing = await client.query(
+      'SELECT id FROM fact_revisions WHERE idempotency_key=$1',
+      [idempotencyKey],
+    );
+    if (existing.rowCount && existing.rows[0].id === row.current_revision_id) {
+      await client.query('COMMIT');
+      return existing.rows[0].id as string;
+    }
+    const age = ageInDays(row.verified_at);
+    if (age === null || age <= factWindowDays(String(row.fact_key)))
+      throw new Error('fact is still inside its verification window');
+    const inserted = await client.query(
+      `INSERT INTO fact_revisions
+        (id,candidate_fact_id,status,normalized_value,display_value,valid_from,verified_at,idempotency_key,verified_by,verification_note)
+       VALUES ($1,$2,'approved',$3::jsonb,$4,now(),now(),$5,$6,$7)
+       ON CONFLICT (idempotency_key) DO NOTHING`,
+      [
+        revisionId,
+        row.candidate_fact_id,
+        JSON.stringify(row.normalized_value),
+        row.display_value,
+        idempotencyKey,
+        reviewerId,
+        reason,
+      ],
+    );
+    let effectiveId = revisionId;
+    if (!inserted.rowCount) {
+      const raced = await client.query(
+        'SELECT id FROM fact_revisions WHERE idempotency_key=$1',
+        [idempotencyKey],
+      );
+      effectiveId = raced.rows[0].id as string;
+    }
+    await client.query(
+      'UPDATE facts SET current_revision_id=$1,status=$2 WHERE id=$3',
+      [effectiveId, 'approved', factId],
+    );
+    await client.query('COMMIT');
+    return effectiveId;
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+    await pool.end();
+  }
+}
+
 async function retractCiCurrentFact(
   rejectedCandidateId: string,
   reason: string,
@@ -361,6 +582,32 @@ const server = createServer(async (req, res) => {
         title: 'FP技能検定',
       },
     };
+    const reverifyRoutes = Object.fromEntries(
+      Object.entries(reviewRoutes).map(([path, route]) => [
+        path.replace('/review/', '/reverify/'),
+        route,
+      ]),
+    );
+    const reverifyRoute = req.url
+      ? reverifyRoutes[req.url.split('?')[0]]
+      : undefined;
+    if (req.method === 'GET' && reverifyRoute) {
+      if (!authorizedRead(req))
+        return send(
+          res,
+          401,
+          'reviewer authentication required',
+          'text/plain; charset=utf-8',
+        );
+      return send(
+        res,
+        200,
+        duePage(
+          await listDueFacts(reverifyRoute.qualificationId),
+          reverifyRoute.title,
+        ),
+      );
+    }
     const route = req.url ? reviewRoutes[req.url.split('?')[0]] : undefined;
     if (req.method === 'GET' && route) {
       if (!authorizedRead(req))
@@ -418,6 +665,31 @@ const server = createServer(async (req, res) => {
         res,
         200,
         JSON.stringify({ id, status: 'superseded' }),
+        'application/json',
+      );
+    }
+    if (
+      req.method === 'POST' &&
+      req.url?.startsWith('/internal/reverifications/')
+    ) {
+      if (!authorizedWrite(req))
+        return send(
+          res,
+          401,
+          JSON.stringify({ error: 'reviewer authentication required' }),
+          'application/json',
+        );
+      const id = decodeURIComponent(
+        req.url.slice('/internal/reverifications/'.length),
+      );
+      let body = '';
+      for await (const chunk of req) body += chunk;
+      const input = JSON.parse(body) as { reason?: string };
+      const revisionId = await reverifyFact(id, input.reason ?? '');
+      return send(
+        res,
+        200,
+        JSON.stringify({ id, status: 'reverified', revisionId }),
         'application/json',
       );
     }

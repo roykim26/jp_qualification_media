@@ -148,9 +148,14 @@ def ingest_snapshot(database_url: str, source_id: str, snapshot_path: str | Path
                 ON CONFLICT (source_id,content_hash) DO UPDATE SET
                   object_key=EXCLUDED.object_key,synthetic=EXCLUDED.synthetic,retrieved_at=EXCLUDED.retrieved_at,
                   capture_run_id=EXCLUDED.capture_run_id,original_url=EXCLUDED.original_url,final_url=EXCLUDED.final_url,
-                  http_status=EXCLUDED.http_status,retrieved_at_jst=EXCLUDED.retrieved_at_jst,collector_version=EXCLUDED.collector_version""",
+                  http_status=EXCLUDED.http_status,retrieved_at_jst=EXCLUDED.retrieved_at_jst,collector_version=EXCLUDED.collector_version
+                RETURNING id""",
                 (snapshot_id, source_id, snapshot.content_hash, str(path), captured_at, capture_run_id,
                  record["url"], record["url"], record["status_code"], captured_at))
+            # The same page may already have been recorded under another id (patrol
+            # writes snapshot:patrol:<source>:<hash>); keep the existing row and use
+            # its id, otherwise the source_checks FK below points at no row.
+            snapshot_id = cursor.fetchone()[0]
             cursor.execute("""INSERT INTO source_checks
                 (id,source_id,capture_run_id,snapshot_id,checked_at,status,http_status,message)
                 VALUES (%s,%s,%s,%s,%s,'changed',%s,'Captured official page; candidate staging is pending review.')

@@ -63,12 +63,23 @@ export const STALENESS_QUERY = `
       q.slug AS qualification_slug,
       src.id AS source_id,
       src.canonical_url,
-      latest_snapshot.retrieved_at AS last_snapshot_at
+      -- "Behind on snapshot" must mean "we did not fetch this source lately",
+      -- not "its content did not change lately".  patrol_record only stores a
+      -- snapshot row when the hash changes, so a stable page would age forever;
+      -- source_checks is written on every run and is the better freshness clock.
+      COALESCE(latest_check.checked_at, latest_snapshot.retrieved_at) AS last_snapshot_at
     FROM facts f
     JOIN fact_revisions fr ON fr.id=f.current_revision_id
     JOIN candidate_facts c ON c.id=fr.candidate_fact_id
     JOIN qualifications q ON q.id=f.qualification_id
     JOIN sources src ON src.id=c.source_id
+    LEFT JOIN LATERAL (
+      SELECT checked_at
+      FROM source_checks sc
+      WHERE sc.source_id=src.id
+      ORDER BY checked_at DESC, id DESC
+      LIMIT 1
+    ) latest_check ON true
     LEFT JOIN LATERAL (
       SELECT retrieved_at
       FROM snapshots s
