@@ -125,6 +125,67 @@ export async function readApprovedFacts(
   }));
 }
 
+/**
+ * Fields needed by `directoryHighlights()` on the homepage.
+ * This is a subset of PublicFact — only the fields that the homepage
+ * actually reads when rendering qualification cards.
+ */
+export type SummaryFact = {
+  factKey: string;
+  examYear: number;
+  displayValue: string;
+  normalizedValue: unknown;
+  examLevelId?: string | null;
+  deliveryMode?: string | null;
+};
+
+/**
+ * Lightweight read for the homepage qualification summary cards.
+ *
+ * The homepage's `directoryHighlights()` only needs exam_date, fee, and
+ * pass_rate facts — about 3-5 rows per qualification. This query skips
+ * the correlated subquery for `sequence` and the LEFT JOIN LATERAL for
+ * provenance, reducing the bookkeeping payload from 1.2MB/1646 rows to
+ * ~5KB/5 rows.
+ */
+export async function readSummaryFacts(
+  databaseUrl?: string,
+  qualificationSlug?: string,
+): Promise<SummaryFact[]> {
+  const configuredUrl = resolveDatabaseUrl(databaseUrl, process.env.NODE_ENV);
+  if (!configuredUrl) return [];
+  const result = await databasePool(configuredUrl).query(
+    `
+    SELECT c.fact_key, c.exam_year, fr.display_value, fr.normalized_value,
+      c.exam_level_id, c.delivery_mode
+    FROM facts f
+    JOIN fact_revisions fr ON fr.id = f.current_revision_id
+    JOIN candidate_facts c ON c.id = fr.candidate_fact_id
+    JOIN qualifications q ON q.id = f.qualification_id
+    WHERE f.status = 'approved'
+      AND fr.status = 'approved'
+      AND c.status = 'approved'
+      AND c.synthetic = false
+      AND (
+        c.fact_key IN ('exam_date', 'exam_schedule', 'fee')
+        OR c.fact_key LIKE '%\\_fee'
+        OR c.fact_key LIKE 'pass\\_rate%'
+      )
+      ${qualificationSlug ? 'AND q.slug = $1' : ''}
+    ORDER BY q.slug, c.exam_year, c.fact_key
+  `,
+    qualificationSlug ? [qualificationSlug] : [],
+  );
+  return result.rows.map((row) => ({
+    factKey: row.fact_key,
+    examYear: row.exam_year,
+    displayValue: row.display_value,
+    normalizedValue: row.normalized_value,
+    examLevelId: row.exam_level_id,
+    deliveryMode: row.delivery_mode,
+  }));
+}
+
 export type PendingFactCoverage = Pick<
   PublicFact,
   | 'qualificationSlug'

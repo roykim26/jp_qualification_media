@@ -19,7 +19,11 @@ import {
 import { config } from '../../../packages/config/src/index.js';
 import { TakkenPipeline } from './takken.js';
 import { DatabaseNotConfiguredError } from './database-config.js';
-import { readApprovedFacts, readPendingFactCoverage } from './public-facts.js';
+import {
+  readApprovedFacts,
+  readPendingFactCoverage,
+  readSummaryFacts,
+} from './public-facts.js';
 import { readPublicUpdates } from './public-updates.js';
 import { buildPublicQualificationView } from './public-view.js';
 import { checkDatabaseReadiness } from './database-ready.js';
@@ -261,13 +265,24 @@ app.get('/api/v1/qualifications/takken', async () => {
     await readPendingFactCoverage(config.apiDatabaseUrl, 'takken'),
   );
 });
-app.get<{ Params: { slug: string } }>(
+app.get<{ Params: { slug: string }; Querystring: { summary?: string } }>(
   '/api/v1/qualifications/:slug',
   async (request, reply) => {
     const qualification = launchQualifications.find(
       (item) => item.slug === request.params.slug,
     );
     if (!qualification) return reply.code(404).send({ error: 'not found' });
+    // ?summary=1 returns only the fields needed by the homepage's
+    // directoryHighlights(). This reduces the bookkeeping payload from
+    // 1.2MB (1646 facts) to ~5KB (5 facts), and eliminates the correlated
+    // subquery for `sequence` and the LEFT JOIN LATERAL for provenance.
+    if (request.query.summary === '1') {
+      const facts = await readSummaryFacts(
+        config.apiDatabaseUrl,
+        qualification.slug,
+      );
+      return { qualification, facts, summary: true };
+    }
     const facts = await readApprovedFacts(
       config.apiDatabaseUrl,
       qualification.slug,

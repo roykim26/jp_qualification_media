@@ -522,6 +522,32 @@ describe('public qualification read path', () => {
     });
     expect(response.statusCode).toBe(404);
   });
+
+  it('serves a lightweight summary view when ?summary=1', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/v1/qualifications/it-passport?summary=1',
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(body.summary).toBe(true);
+    expect(body.qualification).toMatchObject({ slug: 'it-passport' });
+    expect(Array.isArray(body.facts)).toBe(true);
+    // Summary facts have only the fields directoryHighlights() reads.
+    for (const fact of body.facts) {
+      expect(typeof fact.factKey).toBe('string');
+      expect(typeof fact.examYear).toBe('number');
+      expect(typeof fact.displayValue).toBe('string');
+    }
+  });
+
+  it('returns 404 for an unknown qualification even with ?summary=1', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/v1/qualifications/not-a-qualification?summary=1',
+    });
+    expect(response.statusCode).toBe(404);
+  });
 });
 
 describe('calendar confirmation provenance (2026-11-25 audit)', () => {

@@ -78,6 +78,26 @@ function stubView() {
   };
 }
 
+/** Summary view returned when the homepage requests ?summary=1. */
+function stubSummaryView() {
+  const facts =
+    stubMode === 'empty'
+      ? []
+      : [
+          {
+            factKey: 'fee',
+            examYear: 2025,
+            displayValue: '7,500円（税込）',
+            normalizedValue: '7,500円',
+          },
+        ];
+  return {
+    qualification: itPassport,
+    facts,
+    summary: true,
+  };
+}
+
 beforeAll(async () => {
   stubServer = createServer((req, res) => {
     if (stubMode === 'hang') {
@@ -93,7 +113,12 @@ beforeAll(async () => {
     }
     if (req.url?.startsWith('/api/v1/qualifications/')) {
       res.writeHead(200, { 'content-type': 'application/json' });
-      res.end(JSON.stringify(stubView()));
+      // The homepage uses ?summary=1 to fetch a lightweight view.
+      if (req.url.includes('summary=1')) {
+        res.end(JSON.stringify(stubSummaryView()));
+      } else {
+        res.end(JSON.stringify(stubView()));
+      }
       return;
     }
     if (req.url?.startsWith('/api/v1/calendar')) {
@@ -355,6 +380,22 @@ describe('web server upstream failure handling', () => {
     try {
       const response = await web.get('/');
       expect(response.status).toBe(200);
+    } finally {
+      await web.close();
+    }
+  });
+
+  it('renders the home page using the lightweight summary view', async () => {
+    // The homepage fetches qualification summaries with ?summary=1 to avoid
+    // pulling 1.2MB of bookkeeping facts just to render 2 highlights per card.
+    stubMode = 'ok';
+    const web = await startWeb(stubBaseUrl);
+    try {
+      const response = await web.get('/');
+      expect(response.status).toBe(200);
+      const html = await response.text();
+      // The summary view includes fee, which directoryHighlights() renders.
+      expect(html).toContain('7,500円');
     } finally {
       await web.close();
     }

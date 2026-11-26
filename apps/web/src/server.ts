@@ -467,6 +467,62 @@ async function readQualification(slug: string) {
   );
 }
 
+/**
+ * Summary response shape: `{ qualification, facts, summary: true }`.
+ * The homepage only needs exam_date, fee, and pass_rate facts — this
+ * validator checks the minimal fields that `directoryHighlights()` reads.
+ */
+function isQualificationSummaryView(value: unknown): boolean {
+  if (!isRecord(value)) return false;
+  const { qualification, facts, summary } = value;
+  return (
+    summary === true &&
+    isRecord(qualification) &&
+    typeof qualification.slug === 'string' &&
+    typeof qualification.officialNameJa === 'string' &&
+    Array.isArray(qualification.aliasesJa) &&
+    qualification.aliasesJa.every((alias) => typeof alias === 'string') &&
+    typeof qualification.field === 'string' &&
+    typeof qualification.category === 'string' &&
+    Array.isArray(facts) &&
+    facts.every(
+      (fact) =>
+        isRecord(fact) &&
+        typeof fact.factKey === 'string' &&
+        typeof fact.examYear === 'number' &&
+        typeof fact.displayValue === 'string',
+    )
+  );
+}
+
+type QualificationSummaryView = {
+  qualification: PublicQualificationView['qualification'];
+  facts: Array<{
+    factKey: string;
+    examYear: number;
+    displayValue: string;
+    normalizedValue?: unknown;
+    examLevelId?: string | null;
+    deliveryMode?: string | null;
+  }>;
+  summary: true;
+};
+
+/**
+ * Fetch the lightweight summary view for the homepage.
+ * Returns only exam_date, fee, and pass_rate facts (~5KB vs 1.2MB).
+ */
+async function readQualificationSummary(slug: string) {
+  const response = await fetchUpstream(
+    `${apiBaseUrl}/api/v1/qualifications/${slug}?summary=1`,
+  );
+  return readJson<QualificationSummaryView>(
+    response,
+    `qualifications/${slug}?summary=1`,
+    isQualificationSummaryView,
+  );
+}
+
 async function readCalendar(query: URLSearchParams) {
   const params = new URLSearchParams();
   const year = query.get('year');
@@ -987,7 +1043,7 @@ export async function handleRequest(
           readCalendar(new URLSearchParams()),
           readUpdates(new URLSearchParams(), 1),
           ...launchSlugs.map(async (slug) => {
-            const view = await readQualification(slug);
+            const view = await readQualificationSummary(slug);
             return { slug, facts: (view.facts ?? []) as PublicFact[] };
           }),
         ]);
