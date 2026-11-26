@@ -3,7 +3,7 @@
   "qualifications": [
     {
       "slug": "takken",
-      "expectedFacts": 16,
+      "expectedFacts": 14,
       "pageContains": "宅地建物取引士"
     },
     {
@@ -13,7 +13,7 @@
     },
     {
       "slug": "it-passport",
-      "expectedFacts": 10,
+      "expectedFacts": 9,
       "pageContains": "ITパスポート"
     },
     {
@@ -23,7 +23,7 @@
     },
     {
       "slug": "bookkeeping",
-      "expectedFacts": 869,
+      "expectedFacts": 1646,
       "pageContains": "日商簿記"
     },
     {

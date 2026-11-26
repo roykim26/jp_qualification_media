@@ -230,6 +230,11 @@ test('coverage gate fails after a required fact is removed and ignores duplicate
 });
 
 test('payment deadlines remain isolated by payment method', () => {
+  // Both payment_deadline requirements are `conditional` since the 2026 rules
+  // were superseded (owner decision 2026-11-26): a slot is only assessed once
+  // some fact carries that payment method for the coverage year. The pay_easy
+  // slot is activated here by a fee fact, and the convenience_store deadline
+  // must not satisfy it.
   const gaps = evaluateCoverage(
     'takken',
     [
@@ -237,6 +242,11 @@ test('payment deadlines remain isolated by payment method', () => {
         examYear: 2026,
         factKey: 'payment_deadline',
         paymentMethod: 'convenience_store',
+      },
+      {
+        examYear: 2026,
+        factKey: 'fee',
+        paymentMethod: 'pay_easy',
       },
     ],
     2026,

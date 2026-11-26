@@ -292,12 +292,12 @@
         },
         {
           "fields": ["payment_deadline"],
-          "requiredLevel": "required",
+          "requiredLevel": "conditional",
           "dimensions": { "paymentMethod": "convenience_store" }
         },
         {
           "fields": ["payment_deadline"],
-          "requiredLevel": "required",
+          "requiredLevel": "conditional",
           "dimensions": { "paymentMethod": "pay_easy" }
         },
         {

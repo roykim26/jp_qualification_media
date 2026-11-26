@@ -6,16 +6,21 @@ const sql = await readFile(
   'utf8',
 );
 assert.match(sql, /^-- Generated sanitized CI fixture\./);
-assert.equal((sql.match(/INSERT INTO facts /g) ?? []).length, 1037);
-assert.equal((sql.match(/INSERT INTO candidate_facts /g) ?? []).length, 1037);
-assert.equal((sql.match(/INSERT INTO fact_revisions /g) ?? []).length, 1037);
-assert.equal((sql.match(/INSERT INTO snapshots /g) ?? []).length, 40);
-for (const paymentMethod of ['convenience_store', 'pay_easy']) {
-  assert.ok(
-    sql.includes(`,'${paymentMethod}',`),
-    `fixture lost the payment_method dimension: ${paymentMethod}`,
-  );
-}
+assert.equal((sql.match(/INSERT INTO facts /g) ?? []).length, 1811);
+assert.equal((sql.match(/INSERT INTO candidate_facts /g) ?? []).length, 1811);
+assert.equal((sql.match(/INSERT INTO fact_revisions /g) ?? []).length, 1811);
+assert.equal((sql.match(/INSERT INTO snapshots /g) ?? []).length, 46);
+// The export must keep the payment_method dimension column. The concrete
+// values (convenience_store / pay_easy) were only carried by the two takken
+// payment_deadline_rule facts, superseded by owner decision 2026-11-26
+// (到期下架), so asserting the values would pin the fixture to those rows.
+const candidateColumns = sql
+  .match(/INSERT INTO candidate_facts \(([^)]*)\) VALUES/)?.[1]
+  ?.split(',');
+assert.ok(
+  candidateColumns?.includes('payment_method'),
+  'fixture lost the payment_method dimension column',
+);
 for (const forbidden of [
   'local-reviewer',
   'AppData',
