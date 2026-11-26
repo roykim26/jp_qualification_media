@@ -108,23 +108,50 @@ app.get<{ Querystring: { q?: string } }>(
 app.get('/api/v1/facts', async () => ({
   data: await readApprovedFacts(config.apiDatabaseUrl),
 }));
-app.get<{ Querystring: { year?: string; qualification?: string } }>(
-  '/api/v1/calendar',
-  async (request) => {
-    const facts = await readApprovedFacts(config.apiDatabaseUrl);
-    const year = request.query.year ? Number(request.query.year) : undefined;
-    const events = buildPublicCalendarEvents(
-      launchQualifications,
-      facts,
-    ).filter(
-      (event) =>
-        (!year || event.examYear === year) &&
-        (!request.query.qualification ||
-          event.qualification.slug === request.query.qualification),
-    );
-    return { data: events, query: request.query };
-  },
-);
+app.get<{
+  Querystring: { year?: string; qualification?: string; summary?: string };
+}>('/api/v1/calendar', async (request) => {
+  const facts = await readApprovedFacts(config.apiDatabaseUrl);
+  const year = request.query.year ? Number(request.query.year) : undefined;
+  const events = buildPublicCalendarEvents(launchQualifications, facts).filter(
+    (event) =>
+      (!year || event.examYear === year) &&
+      (!request.query.qualification ||
+        event.qualification.slug === request.query.qualification),
+  );
+  // ?summary=1 returns only the 4 most recent upcoming events for the
+  // homepage timeline. This reduces the payload from 431KB to ~1KB.
+  if (request.query.summary === '1') {
+    const today = new Date().toISOString().slice(0, 10);
+    const seen = new Set<string>();
+    const upcoming = events
+      .filter((event) => event.dateValue && event.dateValue >= today)
+      .sort(
+        (a, b) =>
+          a.dateValue!.localeCompare(b.dateValue!) || a.sequence - b.sequence,
+      )
+      .filter((event) => {
+        const key = `${event.dateValue}|${event.type}|${event.qualification.slug}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .slice(0, 4)
+      .map((event) => ({
+        dateValue: event.dateValue,
+        type: event.type,
+        label: event.label,
+        examYear: event.examYear,
+        sequence: event.sequence,
+        qualification: {
+          slug: event.qualification.slug,
+          officialNameJa: event.qualification.officialNameJa,
+        },
+      }));
+    return { data: upcoming, query: request.query, summary: true };
+  }
+  return { data: events, query: request.query };
+});
 app.get<{
   Params: { qualification: string; year: string; eventId?: string };
 }>('/api/v1/ics/:qualification/:year/:eventId?', async (request, reply) => {

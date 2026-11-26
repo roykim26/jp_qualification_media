@@ -338,6 +338,28 @@ describe('public qualification read path', () => {
     });
   });
 
+  it('serves a lightweight calendar summary when ?summary=1', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/v1/calendar?summary=1',
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(body.summary).toBe(true);
+    expect(Array.isArray(body.data)).toBe(true);
+    // Summary events have only the fields the homepage timeline reads.
+    for (const event of body.data) {
+      expect(typeof event.type).toBe('string');
+      expect(typeof event.label).toBe('string');
+      expect(typeof event.examYear).toBe('number');
+      expect(typeof event.sequence).toBe('number');
+      expect(event.qualification).toMatchObject({
+        slug: expect.any(String),
+        officialNameJa: expect.any(String),
+      });
+    }
+  });
+
   it('returns 404 instead of an empty ICS download', async () => {
     const response = await app.inject({
       method: 'GET',

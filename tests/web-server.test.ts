@@ -123,7 +123,11 @@ beforeAll(async () => {
     }
     if (req.url?.startsWith('/api/v1/calendar')) {
       res.writeHead(200, { 'content-type': 'application/json' });
-      res.end(JSON.stringify({ data: [] }));
+      if (req.url.includes('summary=1')) {
+        res.end(JSON.stringify({ data: [], summary: true }));
+      } else {
+        res.end(JSON.stringify({ data: [] }));
+      }
       return;
     }
     if (req.url?.startsWith('/api/v1/updates')) {

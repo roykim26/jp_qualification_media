@@ -344,6 +344,26 @@ function isCalendarEnvelope(value: unknown): boolean {
 }
 
 /**
+ * Calendar summary envelope: the homepage timeline only needs the 4 most
+ * recent upcoming events with dateValue, type, label, examYear, sequence,
+ * and qualification identity.
+ */
+function isCalendarSummaryEnvelope(value: unknown): boolean {
+  if (!isRecord(value) || !Array.isArray(value.data)) return false;
+  return value.data.every(
+    (event) =>
+      isRecord(event) &&
+      typeof event.type === 'string' &&
+      calendarEventTypes.has(event.type) &&
+      typeof event.label === 'string' &&
+      typeof event.examYear === 'number' &&
+      typeof event.sequence === 'number' &&
+      (event.dateValue === null || typeof event.dateValue === 'string') &&
+      hasQualificationIdentity(event.qualification),
+  );
+}
+
+/**
  * `{ data: { qualifications: [...], rows: [...] } }` -- the `/compare/` page.
  *
  * `renderComparePage()` walks `comparison.qualifications` for the table header
@@ -538,6 +558,28 @@ async function readCalendar(query: URLSearchParams) {
     'calendar',
     isCalendarEnvelope,
   );
+}
+
+/**
+ * Lightweight calendar read for the homepage timeline.
+ * Returns only the 4 most recent upcoming events with the fields
+ * `renderHomePage()` needs: dateValue, type, label, examYear, sequence,
+ * and qualification (slug, officialNameJa). ~1KB vs 431KB.
+ */
+async function readCalendarSummary() {
+  const response = await fetchUpstream(
+    `${apiBaseUrl}/api/v1/calendar?summary=1`,
+  );
+  return readJson<{
+    data: Array<{
+      dateValue: string | null;
+      type: PublicCalendarEvent['type'];
+      label: string;
+      examYear: number;
+      sequence: number;
+      qualification: { slug: string; officialNameJa: string };
+    }>;
+  }>(response, 'calendar?summary=1', isCalendarSummaryEnvelope);
 }
 
 async function readComparison(query: URLSearchParams) {
@@ -1040,7 +1082,7 @@ export async function handleRequest(
       // unavailable, so a data outage degrades to empty modules instead of 502.
       const [calendarResult, updatesResult, ...factsResults] =
         await Promise.allSettled([
-          readCalendar(new URLSearchParams()),
+          readCalendarSummary(),
           readUpdates(new URLSearchParams(), 1),
           ...launchSlugs.map(async (slug) => {
             const view = await readQualificationSummary(slug);
@@ -1049,7 +1091,7 @@ export async function handleRequest(
         ]);
       const calendarEvents =
         calendarResult.status === 'fulfilled'
-          ? (calendarResult.value.data ?? [])
+          ? ((calendarResult.value.data ?? []) as PublicCalendarEvent[])
           : [];
       const updateEvents =
         updatesResult.status === 'fulfilled'
