@@ -533,7 +533,7 @@ journalctl -t jpqm-readiness -p err        # 只看故障开始
 journalctl -t jpqm-readiness -p warning    # 只看心跳
 ```
 
-环境变量可覆盖默认值（写进 crontab 行首即可）：`HEARTBEAT_EVERY`（默认 12 次 = 1 小时）、`READINESS_TIMEOUT_MS`（默认 5000）、`READINESS_STATE_FILE`、`COMPOSE_FILE`、`COMPOSE_PROJECT`、`READINESS_TAG`、`PUBLIC_READY_URL`（见下）。
+环境变量可覆盖默认值（写进 crontab 行首即可）：`HEARTBEAT_EVERY`（默认 12 次 = 1 小时）、`READINESS_TIMEOUT_MS`（默认 5000）、`READINESS_STATE_FILE`、`COMPOSE_FILE`、`COMPOSE_PROJECT`、`READINESS_TAG`、`PUBLIC_READY_URL`（见下）、`ALERT_AFTER`（默认 2 次 = 10 分钟；连续失败够次数才发第一条 err，单次抖动不再成对推送「unreachable + recovered」；设为 1 恢复旧行为）。
 
 ### 公网入口检查（web 与 caddy）
 

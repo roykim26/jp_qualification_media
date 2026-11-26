@@ -168,45 +168,103 @@ describe('readiness cron wrapper', () => {
     expect(state).toBe('ready\n0\n');
   });
 
-  it('reports a failing first run as an error', () => {
+  it('holds back a lone failing run and reports it once the failure repeats', () => {
     writeFakeDocker(`printf '%s\\n' ${quote(errorJson())}; exit 1`);
 
-    const { status, logs, state } = runScript();
+    const first = runScript();
 
-    expect(status).toBe(0);
-    expect(logs).toHaveLength(1);
-    expect(logs[0]).toContain('daemon.err');
-    expect(logs[0]).toContain('status=error');
-    expect(logs[0]).toContain('ECONNREFUSED');
+    expect(first.status).toBe(0);
+    expect(first.logs).toEqual([]);
+    expect(first.state).toBe('error\n1\n');
+
+    // Same verdict, second consecutive check: the debounce is complete and
+    // the failure is announced exactly once, with the probe's own detail.
+    const second = runScript();
+
+    expect(second.status).toBe(0);
+    expect(second.logs).toHaveLength(1);
+    expect(second.logs[0]).toContain('daemon.err');
+    expect(second.logs[0]).toContain('status=error');
+    expect(second.logs[0]).toContain('ECONNREFUSED');
     // The message must be the message, not the tail of the JSON document:
     // a greedy sed capture would drag `durationMs` in with it.
-    expect(logs[0]).not.toContain('durationMs');
-    expect(logs[0]).toContain('message=connect ECONNREFUSED 127.0.0.1:5432');
-    expect(state).toBe('error\n1\n');
+    expect(second.logs[0]).not.toContain('durationMs');
+    expect(second.logs[0]).toContain(
+      'message=connect ECONNREFUSED 127.0.0.1:5432',
+    );
+    expect(second.state).toBe('error\n2\n');
   });
 
   it('announces the transition from ready to failing', () => {
     seedState('ready', 0);
     writeFakeDocker(`printf '%s\\n' ${quote(errorJson())}; exit 1`);
 
+    runScript();
     const { status, logs, state } = runScript();
 
     expect(status).toBe(0);
     expect(logs).toHaveLength(1);
     expect(logs[0]).toContain('daemon.err');
     expect(logs[0]).toContain('status=error');
-    expect(state).toBe('error\n1\n');
+    expect(state).toBe('error\n2\n');
   });
 
   it('does not repeat itself while a failure persists between heartbeats', () => {
-    seedState('error', 1);
+    seedState('error', 2);
     writeFakeDocker(`printf '%s\\n' ${quote(errorJson())}; exit 1`);
 
     const { status, logs, state } = runScript();
 
     expect(status).toBe(0);
     expect(logs).toEqual([]);
-    expect(state).toBe('error\n2\n');
+    expect(state).toBe('error\n3\n');
+  });
+
+  it('keeps a one-check blip entirely silent, in both directions', () => {
+    // The 2026-11-26 flap: the homepage answered over 5s on exactly one check
+    // and was fine on the next. Neither the failure nor the "recovery" may
+    // produce a message, because no user ever saw the outage.
+    seedState('ready', 0);
+    writeFakeDocker(`printf '%s\\n' ${quote(errorJson())}; exit 1`);
+    const blip = runScript();
+    expect(blip.logs).toEqual([]);
+    expect(blip.notifications).toEqual([]);
+    expect(blip.state).toBe('error\n1\n');
+
+    writeFakeDocker(`printf '%s\\n' ${quote(readyJson())}; exit 0`);
+    const back = runScript();
+    expect(back.logs).toEqual([]);
+    expect(back.notifications).toEqual([]);
+    expect(back.state).toBe('ready\n0\n');
+  });
+
+  it('announces immediately when ALERT_AFTER is 1', () => {
+    seedState('ready', 0);
+    writeFakeDocker(`printf '%s\\n' ${quote(errorJson())}; exit 1`);
+
+    const { logs, state } = runScript({ ALERT_AFTER: '1' });
+
+    expect(logs).toHaveLength(1);
+    expect(logs[0]).toContain('daemon.err');
+    expect(state).toBe('error\n1\n');
+  });
+
+  it('reports a change of failure shape while already paging', () => {
+    // The outage was announced at count 2; on the third check the db error
+    // became "the probe itself is not running". That is new, actionable
+    // detail and must page again rather than wait for the next heartbeat.
+    seedState('error', 2);
+    writeFakeDocker(
+      `printf '%s\\n' 'Cannot connect to the Docker daemon'; exit 1`,
+    );
+
+    const { logs, state } = runScript();
+
+    expect(logs).toHaveLength(1);
+    expect(logs[0]).toContain('daemon.err');
+    expect(logs[0]).toContain('status=unreachable');
+    expect(logs[0]).toContain('probe did not run');
+    expect(state).toBe('unreachable\n3\n');
   });
 
   it('emits a heartbeat once the failure has lasted a full interval', () => {
@@ -226,7 +284,13 @@ describe('readiness cron wrapper', () => {
     seedState('error', 1);
     writeFakeDocker(`printf '%s\\n' ${quote(errorJson())}; exit 1`);
 
-    const { status, logs } = runScript({ HEARTBEAT_EVERY: '2' });
+    // ALERT_AFTER=1 so count 2 is past the debounce and the heartbeat branch
+    // is what answers; with the default debounce this check would be the
+    // first err instead.
+    const { status, logs } = runScript({
+      HEARTBEAT_EVERY: '2',
+      ALERT_AFTER: '1',
+    });
 
     expect(status).toBe(0);
     expect(logs).toHaveLength(1);
@@ -264,6 +328,7 @@ describe('readiness cron wrapper', () => {
       `printf '%s\\n' 'Cannot connect to the Docker daemon'; exit 1`,
     );
 
+    runScript();
     const { status, logs, state } = runScript();
 
     expect(status).toBe(0);
@@ -271,18 +336,19 @@ describe('readiness cron wrapper', () => {
     expect(logs[0]).toContain('daemon.err');
     expect(logs[0]).toContain('status=unreachable');
     expect(logs[0]).toContain('probe did not run');
-    expect(state).toBe('unreachable\n1\n');
+    expect(state).toBe('unreachable\n2\n');
   });
 
   it('treats output without a status field as an unrunnable probe', () => {
     writeFakeDocker(`printf '%s\\n' 'not json at all'; exit 1`);
 
+    runScript();
     const { status, logs, state } = runScript();
 
     expect(status).toBe(0);
     expect(logs).toHaveLength(1);
     expect(logs[0]).toContain('status=unreachable');
-    expect(state).toBe('unreachable\n1\n');
+    expect(state).toBe('unreachable\n2\n');
   });
 
   it('recovers from an unrunnable probe without losing the failure count', () => {
@@ -312,6 +378,11 @@ describe('readiness cron wrapper', () => {
 describe('readiness cron notification wiring', () => {
   it('sends one message when a failure starts', () => {
     writeFakeDocker(`printf '%s\\n' ${quote(errorJson())}; exit 1`);
+
+    // The debounce holds the first check back; the message goes out with the
+    // second, and only once for the whole episode.
+    const pending = runScript();
+    expect(pending.notifications).toEqual([]);
 
     const { status, logs, notifications } = runScript();
 
@@ -345,7 +416,7 @@ describe('readiness cron notification wiring', () => {
   });
 
   it('sends nothing between heartbeats while a failure persists', () => {
-    seedState('error', 1);
+    seedState('error', 2);
     writeFakeDocker(`printf '%s\\n' ${quote(errorJson())}; exit 1`);
 
     const { notifications } = runScript();
@@ -366,6 +437,7 @@ describe('readiness cron notification wiring', () => {
   it('keeps syslog but stops notifying when READINESS_NOTIFY is 0', () => {
     writeFakeDocker(`printf '%s\\n' ${quote(errorJson())}; exit 1`);
 
+    runScript({ READINESS_NOTIFY: '0' });
     const { status, logs, notifications, state } = runScript({
       READINESS_NOTIFY: '0',
     });
@@ -374,7 +446,7 @@ describe('readiness cron notification wiring', () => {
     expect(logs).toHaveLength(1);
     expect(logs[0]).toContain('daemon.err');
     expect(notifications).toEqual([]);
-    expect(state).toBe('error\n1\n');
+    expect(state).toBe('error\n2\n');
   });
 
   it('survives a notifier that always fails', () => {
@@ -386,6 +458,7 @@ describe('readiness cron notification wiring', () => {
       'utf8',
     );
 
+    runScript();
     const { status, logs, state } = runScript();
 
     // The wrapper's contract is that a delivery problem never becomes the
@@ -393,18 +466,19 @@ describe('readiness cron notification wiring', () => {
     expect(status).toBe(0);
     expect(logs).toHaveLength(1);
     expect(logs[0]).toContain('status=error');
-    expect(state).toBe('error\n1\n');
+    expect(state).toBe('error\n2\n');
   });
 
   it('survives a notifier that does not exist', () => {
     writeFakeDocker(`printf '%s\\n' ${quote(errorJson())}; exit 1`);
     notifyScript = join(workDir, 'missing-notifier.sh');
 
+    runScript();
     const { status, logs, state } = runScript();
 
     expect(status).toBe(0);
     expect(logs).toHaveLength(1);
-    expect(state).toBe('error\n1\n');
+    expect(state).toBe('error\n2\n');
   });
 });
 
@@ -519,10 +593,12 @@ describe('readiness cron public entry passthrough', () => {
       1,
     );
 
-    const { status, logs, state } = runScript({
+    const env = {
       DOCKER_ARGS: toPosixPath(dockerArgs),
       PUBLIC_READY_URL: 'https://shikakucheck.com/',
-    });
+    };
+    runScript(env);
+    const { status, logs, state } = runScript(env);
 
     expect(status).toBe(0);
     expect(logs).toHaveLength(1);
@@ -531,7 +607,7 @@ describe('readiness cron public entry passthrough', () => {
     expect(logs[0]).toContain(
       'public entry https://shikakucheck.com/ returned 502',
     );
-    expect(state).toBe('unexpected\n1\n');
+    expect(state).toBe('unexpected\n2\n');
   });
 
   it('treats the public entry going down as a transition, not a new state word', () => {
@@ -552,16 +628,18 @@ describe('readiness cron public entry passthrough', () => {
       1,
     );
 
-    const { status, logs, notifications, state } = runScript({
+    const env = {
       DOCKER_ARGS: toPosixPath(dockerArgs),
       PUBLIC_READY_URL: 'https://shikakucheck.com/',
-    });
+    };
+    runScript(env);
+    const { status, logs, notifications, state } = runScript(env);
 
     expect(status).toBe(0);
     expect(logs).toHaveLength(1);
     expect(logs[0]).toContain('daemon.err');
     expect(logs[0]).toContain('reason=tls');
     expect(notifications).toHaveLength(1);
-    expect(state).toBe('unreachable\n1\n');
+    expect(state).toBe('unreachable\n2\n');
   });
 });

@@ -6,13 +6,25 @@
 # syslog, but only when something changed:
 #
 #   ready  -> ready            silent
-#   *      -> different        one line immediately (err on failure, notice on recovery)
+#   *      -> failing          silent until the failure has lasted ALERT_AFTER
+#                              consecutive checks (default 2 = 10 minutes),
+#                              then one err line; a later change of failure
+#                              mode (error -> unreachable -> ...) reports again
+#   *      -> ready            notice only if the failure had been announced
 #   same   -> same, failing    one warning per HEARTBEAT_EVERY checks (default 12 = 1h)
 #
 # Without that filter a two-hour outage would write 24 identical lines and a
 # one-day outage 288, drowning the two moments that matter: when it broke and
 # when it recovered. The state file also lets the heartbeat say how long the
 # failure has lasted.
+#
+# ALERT_AFTER exists because the public-entry check (Sprint 3L) sits right on
+# the homepage's latency cliff: with the probe deadline at 5s and the homepage
+# answering in 3-5s, a single slow render flipped the state and produced a
+# failure message plus a recovery message for a blip no user ever saw. Ten
+# such blips on 2026-11-26 sent twenty Feishu notifications. Requiring two
+# consecutive failures (10 minutes) turns a one-check blip into silence and
+# still pages within one interval of a real outage.
 #
 # The probe itself is NOT modified and is NOT wired into the compose
 # healthcheck: readiness there would let a brief database blip take the whole
@@ -41,6 +53,11 @@
 #   READINESS_TAG          syslog tag (default jpqm-readiness)
 #   READINESS_NOTIFY       set to 0 to keep syslog only (default 1)
 #   NOTIFY_SCRIPT          notifier to call (default: notify-feishu.sh next to this file)
+#   ALERT_AFTER            consecutive failing checks before the first err is
+#                          emitted (default 2 = 10 minutes at the 5-minute
+#                          cron cadence). Set to 1 to restore the pre-debounce
+#                          behaviour. A recovery notice is only emitted when
+#                          the preceding failure was actually announced.
 
 set -eu
 
@@ -51,6 +68,11 @@ TIMEOUT_MS="${READINESS_TIMEOUT_MS:-5000}"
 PUBLIC_URL="${PUBLIC_READY_URL:-}"
 NOTIFY="${READINESS_NOTIFY:-1}"
 NOTIFY_SCRIPT="${NOTIFY_SCRIPT:-$(dirname "$0")/notify-feishu.sh}"
+ALERT_AFTER="${ALERT_AFTER:-2}"
+case "$ALERT_AFTER" in
+  '' | *[!0-9]*) ALERT_AFTER=2 ;;
+esac
+[ "$ALERT_AFTER" -ge 1 ] || ALERT_AFTER=1
 # Compose needs the file spelled out. Without it `docker compose` walks up from
 # the cwd and picks whatever compose file it finds first -- on the VPS that is
 # /opt/jpqm/docker-compose.yml, an unrelated stack (project "jpqm", services
@@ -187,22 +209,31 @@ if [ -n "$code" ]; then
   detail="$detail code=$code"
 fi
 
-if [ "$status" = "$prev_status" ]; then
-  if [ "$status" != "ready" ]; then
-    if [ "$HEARTBEAT_EVERY" -gt 0 ] 2>/dev/null &&
-      [ $((count % HEARTBEAT_EVERY)) -eq 0 ]; then
-      emit warning "still $detail for $count checks"
-    fi
-  fi
-  # Steady state, healthy or still failing between heartbeats: stay quiet.
-elif [ "$status" = "ready" ]; then
-  if [ "$prev_status" = "unknown" ]; then
-    : # First observation is healthy; nothing to announce.
+if [ "$status" = "ready" ]; then
+  # A recovery notice is only worth sending when the failure that preceded it
+  # was actually announced. A blip that never paged anyone must not produce a
+  # "recovered" message either -- that was the second half of every flap on
+  # 2026-11-26.
+  if [ "$prev_status" = "unknown" ] || [ "$prev_count" -lt "$ALERT_AFTER" ]; then
+    : # First observation is healthy, or the blip was too brief to have paged.
   else
     emit notice "recovered: status=ready after $prev_count checks"
   fi
-else
+elif [ "$count" -eq "$ALERT_AFTER" ]; then
+  # The failure has now lasted long enough to be real rather than a single
+  # slow render. Announce it once, here.
   emit err "$detail"
+elif [ "$count" -lt "$ALERT_AFTER" ]; then
+  # Not yet. The state file keeps the running count so the next check can
+  # complete the debounce.
+  :
+elif [ "$status" != "$prev_status" ]; then
+  # Already paging and the failure changed shape (e.g. a db error became the
+  # probe itself not running). The new detail is actionable, so report it.
+  emit err "$detail"
+elif [ "$HEARTBEAT_EVERY" -gt 0 ] 2>/dev/null &&
+  [ $((count % HEARTBEAT_EVERY)) -eq 0 ]; then
+  emit warning "still $detail for $count checks"
 fi
 
 printf '%s\n%s\n' "$status" "$count" >"$STATE_FILE" 2>/dev/null || true
