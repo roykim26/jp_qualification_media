@@ -3,7 +3,7 @@ www.shikakucheck.com {
 }
 
 shikakucheck.com {
-	encode zstd gzip
+	encode br zstd gzip
 
 	log {
 		output file /var/log/caddy/access.log {
@@ -62,7 +62,7 @@ shikakucheck.com {
 # deployment must bring that container up separately, otherwise this vhost
 # answers 502 instead of disappearing (Caddy resolves upstreams per request).
 blog.waystoneai.online {
-	encode zstd gzip
+	encode br zstd gzip
 
 	log {
 		output file /var/log/caddy/blog-access.log {
