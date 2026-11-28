@@ -1,8 +1,8 @@
 # P1 交付报告（P0/P1 本轮收尾）
 
 - 报告日期：2026-11-28
-- 代码状态：`4c9d205`（数据缺口第一批）＋ 本轮回归修正（未提交）
-- 生产状态：**未部署**；生产仍运行 P0 `5e709df`
+- 代码状态：`3317c96`（已推送 `origin/main`）
+- 生产状态：**已部署**（2026-11-28，生产 SHA `3317c96`）
 
 ## 1. 完成情况
 
@@ -84,9 +84,9 @@
 
 ## 4. known gaps 变化
 
-| 范围                   | 本轮前 | 发布后预期 | 说明                                                       |
+| 范围                   | 本轮前 | 部署后实测 | 说明                                                       |
 | ---------------------- | ------ | ---------- | ---------------------------------------------------------- |
-| 生产审计（1811 facts） | 19     | 3          | 剩余 bookkeeping:1 question_count、takken 2 条（到期下架） |
+| 生产审计（1815 facts） | 19     | 3          | 剩余 bookkeeping:1 question_count、takken 2 条（到期下架） |
 | CI 夹具（1815 facts）  | 47 键  | 33 键      | it-passport 14 键、fp 2 键闭合                             |
 | 本机 dev（1041 facts） | 22     | 6          | 1 已知 + 5 个 bookkeeping:3 夹具漂移（不加入 baseline）    |
 
@@ -97,7 +97,15 @@
 - 需要执行 migration `0033`、`0034`；两者幂等。
 - 部署后 it-passport 公开页字段增至 13 条事实，API 状态仍按严格口径评估。
 - fp 的比较/覆盖按 `academic:basic`／`academic:applied` 子维度展示，不显示合并的 55 题。
-- 发布前需重新运行 `release:check` 与 `docker-smoke`；本轮未执行 docker smoke。
+- 已执行：`git pull --ff-only` → 构建 api／admin／web → `migrate`（Applied 0033、0034）→ 同步 4 条已批准事实与快照 → `up -d` → `caddy reload`。
+- `smoke:docker` 本轮未执行。
+
+### 部署后验证（2026-11-28 实测）
+
+- 容器：db／api／admin／web 均 healthy，Caddy 已 reload。
+- 生产审计：1815 approved facts、3 known gaps、**0 new**、`dimensionMismatch=0`、`unverified=0`、quality 78.9。
+- IT Passport：13 条事实全部 `delivery_mode=cbt`，含 application_rule／scoring_method／booking_window／venue_rule。
+- 公开站：`/` 200 且带 `Content-Security-Policy-Report-Only`；`/shikaku/it-passport/` 200 且显示新补采原文；`/updates/` 200；`/admin/` 401；`/sitemap.xml` 200。
 
 ## 6. 回滚
 
@@ -110,4 +118,4 @@
 2. takken `payment_deadline` 2 条：2026-11-26 所有者决定「到期下架」，保留。
 3. 本机 5 个 bookkeeping:3 漂移：夹具裁剪造成，未写入 baseline。
 4. `release:check` 的 `format:check` 受未跟踪任务文档影响；CI 不受影响。
-5. 生产部署与部署后验证未执行，等待明确授权。
+5. `smoke:docker` 本轮未执行；生产部署与公开站抽查已完成。
