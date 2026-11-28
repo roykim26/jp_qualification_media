@@ -93,8 +93,11 @@ function matchesField(fact, field, dimensions) {
   );
 }
 
-export function evaluateMvpCoverage(facts, examYear) {
+export function evaluateMvpCoverageDetailed(facts, examYear) {
   const gaps = [];
+  let expected = 0;
+  let satisfied = 0;
+  let notApplicable = 0;
   for (const qualification of contract.qualifications) {
     const launchScopes = limitedLaunchScopes[qualification.slug];
     // Same qualification and year, dimensions ignored. This is used only to tell
@@ -105,26 +108,32 @@ export function evaluateMvpCoverage(facts, examYear) {
         fact.examYear === examYear,
     );
     for (const requirement of qualification.requirements) {
-      if (
-        !['required', 'conditional'].includes(requirement.requiredLevel) ||
-        requirement.conditions?.includes('only_when_officially_published')
-      )
-        continue;
+      const included =
+        ['required', 'conditional'].includes(requirement.requiredLevel) &&
+        !requirement.conditions?.includes('only_when_officially_published');
       for (const dimensions of expandDimensions(requirement.dimensions)) {
-        if (
-          launchScopes &&
-          !launchScopes.some((scope) => matchesDimensions(scope, dimensions))
-        )
-          continue;
-        const scoped = facts.filter(
-          (fact) =>
-            fact.qualificationSlug === qualification.slug &&
-            fact.examYear === examYear &&
-            matchesDimensions(fact, dimensions),
-        );
+        const inLaunchScope =
+          !launchScopes ||
+          launchScopes.some((scope) => matchesDimensions(scope, dimensions));
+        const scoped =
+          included && inLaunchScope
+            ? facts.filter(
+                (fact) =>
+                  fact.qualificationSlug === qualification.slug &&
+                  fact.examYear === examYear &&
+                  matchesDimensions(fact, dimensions),
+              )
+            : [];
         for (const field of requirement.fields) {
-          if (scoped.some((fact) => matchesField(fact, field, dimensions)))
+          if (!included || !inLaunchScope) {
+            notApplicable += 1;
             continue;
+          }
+          expected += 1;
+          if (scoped.some((fact) => matchesField(fact, field, dimensions))) {
+            satisfied += 1;
+            continue;
+          }
           gaps.push({
             qualificationSlug: qualification.slug,
             examYear,
@@ -143,7 +152,11 @@ export function evaluateMvpCoverage(facts, examYear) {
       }
     }
   }
-  return gaps;
+  return { gaps, expected, satisfied, notApplicable };
+}
+
+export function evaluateMvpCoverage(facts, examYear) {
+  return evaluateMvpCoverageDetailed(facts, examYear).gaps;
 }
 
 /**

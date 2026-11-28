@@ -3,6 +3,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { Client } from 'pg';
 import {
   evaluateMvpCoverage,
+  evaluateMvpCoverageDetailed,
   limitedLaunchScopes,
   mvpGapKey,
   splitGapsAgainstBaseline,
@@ -12,6 +13,7 @@ import {
   isSanitizedCiFixture,
   summarizeProvenanceAudit,
 } from './provenance-audit-lib.mjs';
+import { buildDataQualityReport } from './quality-score-lib.mjs';
 import { shapeProblems } from './query-shape-lib.mjs';
 
 // Every column the two readers below touch. auditProvenanceRow needs the
@@ -41,7 +43,13 @@ const auditColumns = [
   'delivery_mode',
   'payment_method',
   'exam_year',
+  'exam_session',
   'fact_key',
+  // fact values used by the internal quality report (P1-04)
+  'display_value',
+  'value_type',
+  'normalized_value',
+  'snapshot_retrieved_at',
 ];
 
 const args = process.argv.slice(2);
@@ -86,11 +94,12 @@ try {
   const result = await client.query(`
     SELECT f.id AS fact_id, q.slug AS qualification_slug,
       c.provider_id, c.exam_level_id, c.exam_component, c.delivery_mode,
-      c.payment_method, c.exam_year, c.fact_key,
+      c.payment_method, c.exam_year, c.exam_session, c.fact_key,
+      fr.display_value, c.value_type, fr.normalized_value,
       c.source_id, c.source_snapshot_id, s.id AS snapshot_id,
       src.canonical_url, src.allowed_domain,
       s.source_id AS snapshot_source_id, s.synthetic AS snapshot_synthetic,
-      s.content_hash, s.object_key,
+      s.content_hash, s.object_key, s.retrieved_at AS snapshot_retrieved_at,
       latest_review.decision AS latest_review_decision,
       latest_review.created_at AS latest_review_at
     FROM facts f
@@ -196,6 +205,16 @@ try {
       // stripped review rows are artifacts of sanitization, not data
       // quality, so a provenance block there also downgrades to `warning`.
       const sanitizedCiFixture = isSanitizedCiFixture(result.rows);
+      // P1-04: an internal, explainable quality report. It never feeds the exit
+      // code (the gate below keeps its decision #6 semantics); it exists so a
+      // facts count is not mistaken for data quality.
+      const quality = buildDataQualityReport({
+        rows: result.rows,
+        coverage: evaluateMvpCoverageDetailed(facts, examYear),
+        knownGapCount: knownGaps.length,
+        newGapCount: newGaps.length,
+        sanitizedCiFixture,
+      });
       const provenanceBlocks =
         provenance.status !== 'passed' && !sanitizedCiFixture;
       const status =
@@ -222,9 +241,11 @@ try {
               unverifiedFacts: provenance.blockedFacts,
               baselineLoaded: baseline !== null,
               sanitizedCiFixture,
+              qualityScore: quality.overallScore,
             },
             coverageGaps,
             provenance,
+            quality,
           },
           null,
           2,
