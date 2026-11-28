@@ -117,6 +117,72 @@ describe('scoped qualification comparisons', () => {
     expect(entry).toContain('&lt;img');
     expect(entry).not.toContain('<img');
   });
+
+  it('flags scope variance only when provider/level/component/delivery differ', () => {
+    const sameScope = comparison([
+      fact({ examSession: '172', displayValue: '5,700円（172回）' }),
+      fact({ examSession: '173', displayValue: '5,700円（173回）' }),
+    ]).rows.find((row) => row.key === 'fee')!.cells.fp;
+    expect(sameScope.entries).toHaveLength(2);
+    expect(sameScope.scopeVaries).toBe(false);
+
+    const providerScope = comparison([
+      fact(),
+      fact({ providerId: 'kinzai', displayValue: '6,000円' }),
+    ]).rows.find((row) => row.key === 'fee')!.cells.fp;
+    expect(providerScope.scopeVaries).toBe(true);
+
+    const levelScope = comparison([
+      fact(),
+      fact({ examLevelId: 'fp:3' }),
+    ]).rows.find((row) => row.key === 'fee')!.cells.fp;
+    expect(levelScope.scopeVaries).toBe(true);
+  });
+
+  it('explains same-scope multiple values without claiming the scope differs', () => {
+    const html = renderComparePage(
+      comparison([
+        fact({ examSession: '172', displayValue: '5,700円（172回）' }),
+        fact({ examSession: '173', displayValue: '5,700円（173回）' }),
+      ]),
+      launchQualifications,
+    );
+    expect(html).toContain(
+      '同じ適用範囲に複数の値（回・期間・項目）があります',
+    );
+    expect(html).not.toContain('適用範囲（級・実施機関・科目・方式）が異なる');
+  });
+
+  it('shows each provider and level instead of averaging or merging them', () => {
+    const html = renderComparePage(
+      comparison([
+        fact({
+          factKey: 'pass_rate',
+          displayValue: '40%',
+          providerId: 'jafp',
+        }),
+        fact({
+          factKey: 'pass_rate',
+          displayValue: '30%',
+          providerId: 'kinzai',
+        }),
+        fact({ displayValue: '5,700円', examLevelId: 'fp:2' }),
+        fact({ displayValue: '4,000円', examLevelId: 'fp:3' }),
+      ]),
+      launchQualifications,
+    );
+    expect(html).toContain('日本FP協会・2級・学科・CBT');
+    expect(html).toContain('金融財政事情研究会・2級・学科・CBT');
+    expect(html).toContain('40%');
+    expect(html).toContain('30%');
+    expect(html).toContain('5,700円');
+    expect(html).toContain('4,000円');
+    expect(html).toContain('適用範囲（級・実施機関・科目・方式）が異なる');
+    // No derived average or merged fee is rendered.
+    expect(html).not.toContain('平均');
+    expect(html).not.toContain('5,150円');
+    expect(html).not.toContain('4,850円');
+  });
 });
 
 describe('scoped detail and historical evidence', () => {

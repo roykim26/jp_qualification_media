@@ -105,6 +105,30 @@ function comparisonScope(fact: PublicFact): string {
   ]);
 }
 
+/**
+ * The applicability dimensions a reader must check before comparing values.
+ * Deliberately excludes `factKey` and `examSession`: two rows of the same
+ * scope still differ by session, but that is not a scope variance.
+ */
+export function comparisonScopeKey(
+  entry: Pick<
+    PublicCompareEntry,
+    | 'providerId'
+    | 'examLevelId'
+    | 'examComponent'
+    | 'deliveryMode'
+    | 'paymentMethod'
+  >,
+): string {
+  return JSON.stringify([
+    entry.providerId ?? null,
+    entry.examLevelId ?? null,
+    entry.examComponent ?? null,
+    entry.deliveryMode ?? null,
+    entry.paymentMethod ?? null,
+  ]);
+}
+
 function cellFromFacts(
   facts: PublicFact[],
   missingReason?: string,
@@ -147,9 +171,19 @@ function cellFromFacts(
   return {
     entries,
     ...(entries.length
-      ? { scopeVaries: entries.length > 1 }
+      ? {
+          // Only a real applicability mismatch is flagged as scope variance;
+          // several sessions or several fact keys in one scope are a different
+          // situation and get their own note in the page.
+          scopeVaries: signaturesDiffer(entries),
+        }
       : { missingReason }),
   };
+}
+
+// Kept as a named helper so the intent stays readable at the call site.
+function signaturesDiffer(entries: readonly PublicCompareEntry[]): boolean {
+  return new Set(entries.map(comparisonScopeKey)).size > 1;
 }
 
 export function normalizeCompareSlugs(slugs: readonly string[]): string[] {

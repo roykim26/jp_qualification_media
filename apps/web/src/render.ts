@@ -2259,9 +2259,10 @@ export function renderComparePage(
             seenEntries.add(identity);
             return true;
           });
-          const scopeNotice =
-            entries.length > 1
-              ? '<p class="compare-scope-note">適用範囲（級・実施機関・科目・方式）が異なるため、単一の値としては比較できません。</p>'
+          const scopeNotice = cell.scopeVaries
+            ? '<p class="compare-scope-note">適用範囲（級・実施機関・科目・方式）が異なるため、単一の値としては比較できません。各値の適用範囲をご確認ください。</p>'
+            : entries.length > 1
+              ? '<p class="compare-scope-note">同じ適用範囲に複数の値（回・期間・項目）があります。年度・回ごとにご確認ください。</p>'
               : '';
           return `<td>${scopeNotice}${entries
             .map((entry) => {
