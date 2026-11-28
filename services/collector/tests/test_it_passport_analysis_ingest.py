@@ -124,6 +124,9 @@ def test_real_analysis_ingest_preserves_candidate_risk_and_value_type(
             calls.append((sql, params))
             self.rowcount = 1 if "INSERT INTO candidate_facts" in sql else 0
 
+        def fetchone(self):
+            return ("snapshot:fake",)
+
         def __enter__(self):
             return self
 

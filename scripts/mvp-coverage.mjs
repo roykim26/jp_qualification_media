@@ -17,12 +17,18 @@ export const limitedLaunchScopes = {
         deliveryMode: 'cbt',
       })),
     ),
-    {
-      providerId: 'kinzai',
-      examLevelId: 'fp:1',
-      examComponent: 'academic',
-      deliveryMode: 'pbt',
-    },
+    // The 1級 PBT 学科 page publishes 基礎編/応用編 separately and never a
+    // combined academic total, so question_count/question_format launch under
+    // the two published sub-components.  Every other academic field stays on
+    // the parent component.
+    ...['academic', 'academic:basic', 'academic:applied'].map(
+      (examComponent) => ({
+        providerId: 'kinzai',
+        examLevelId: 'fp:1',
+        examComponent,
+        deliveryMode: 'pbt',
+      }),
+    ),
     {
       providerId: 'kinzai',
       examLevelId: 'fp:1',

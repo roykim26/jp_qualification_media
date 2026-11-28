@@ -8,6 +8,10 @@ import json
 from pathlib import Path
 
 from collector.it_passport import extract_real_page_candidates, snapshot_from_html
+from collector.youkou_pdf import (
+    extract_it_passport_candidates,
+    snapshot_from_pdf,
+)
 
 
 CAPTURE_ROOT = Path("var/official-snapshots/it-passport")
@@ -25,12 +29,20 @@ def analyze_capture(
         byte_hash = sha256(snapshot_bytes).hexdigest()
         if byte_hash != captured["content_hash"]:
             raise ValueError(f"snapshot hash mismatch: {snapshot_path}")
-        snapshot = snapshot_from_html(
-            captured["source_id"],
-            snapshot_bytes.decode("utf-8", errors="strict"),
-            synthetic=False,
-        )
-        candidates, issues = extract_real_page_candidates(snapshot)
+        if snapshot_path.suffix.lower() == ".pdf":
+            snapshot = snapshot_from_pdf(
+                snapshot_bytes,
+                source_id=captured["source_id"],
+                synthetic=False,
+            )
+            candidates, issues = extract_it_passport_candidates(snapshot)
+        else:
+            snapshot = snapshot_from_html(
+                captured["source_id"],
+                snapshot_bytes.decode("utf-8", errors="strict"),
+                synthetic=False,
+            )
+            candidates, issues = extract_real_page_candidates(snapshot)
         results.append(
             {
                 "source_id": snapshot.source_id,

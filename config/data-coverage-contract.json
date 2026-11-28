@@ -630,8 +630,6 @@
             "fee",
             "exam_method",
             "exam_time",
-            "question_count",
-            "question_format",
             "passing_standard",
             "source_url",
             "official_verified_at"
@@ -640,7 +638,17 @@
           "dimensions": {
             "providerId": "kinzai",
             "examLevelId": "fp:1",
-            "examComponent": ["academic", "academic:basic", "academic:applied"],
+            "examComponent": "academic",
+            "deliveryMode": "pbt"
+          }
+        },
+        {
+          "fields": ["question_count", "question_format"],
+          "requiredLevel": "conditional",
+          "dimensions": {
+            "providerId": "kinzai",
+            "examLevelId": "fp:1",
+            "examComponent": ["academic:basic", "academic:applied"],
             "deliveryMode": "pbt"
           }
         },

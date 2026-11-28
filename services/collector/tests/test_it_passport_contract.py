@@ -27,6 +27,7 @@ def test_it_passport_source_plan_is_explicit_and_https_only():
         "source:it-passport:ipa-fee",
         "source:it-passport:ipa-exam-detail",
         "source:it-passport:jitec-faq",
+        "source:it-passport:youkou-pdf",
     }
     assert all(item["canonical_url"].startswith("https://") for item in plan)
 
@@ -145,6 +146,7 @@ def test_real_application_parser_emits_evidenced_review_candidates_only():
     assert not issues
     assert [candidate.fact_key for candidate in candidates] == [
         "application_change_deadline_rule",
+        "application_rule",
         "application_open_2026_may_sessions",
     ]
     assert all(

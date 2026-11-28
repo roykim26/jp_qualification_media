@@ -234,7 +234,7 @@ test('a fact belonging to a different dimension value is not a labelling problem
   }
 });
 
-test('a child component fact is not a labelling problem for its parent component', () => {
+test('question_count launches on the published child components, not the parent', () => {
   const gaps = evaluateMvpCoverage(
     [
       fact({
@@ -251,11 +251,15 @@ test('a child component fact is not a labelling problem for its parent component
     (gap) =>
       gap.qualificationSlug === 'fp' &&
       gap.field === 'question_count' &&
-      gap.dimensions.examComponent === 'academic' &&
       gap.dimensions.providerId === 'kinzai' &&
       gap.dimensions.examLevelId === 'fp:1',
   );
-  assert.equal(gaps.length, 1);
+  // The owner-approved split removed question_count from the parent academic
+  // requirement; only the still-missing 応用編 child may report a gap.
+  assert.deepEqual(
+    gaps.map((gap) => gap.dimensions.examComponent),
+    ['academic:applied'],
+  );
   assert.equal(gaps[0].dimensionMismatch, false);
 });
 

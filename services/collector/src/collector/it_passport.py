@@ -45,6 +45,12 @@ IT_PASSPORT_SOURCES = {
         "canonical_url": "https://www3.jitec.ipa.go.jp/JitesCbt/html/reference/faq.html",
         "allowed_domain": "www3.jitec.ipa.go.jp",
     },
+    # Shared 情報処理技術者試験 試験要綱 PDF.  Only the IRT sentence is read;
+    # scoring_method is not published in any of the HTML pages above.
+    "source:it-passport:youkou-pdf": {
+        "canonical_url": "https://www.ipa.go.jp/shiken/syllabus/rcu1hd00000141gq-att/youkou_ver5_6.pdf",
+        "allowed_domain": "www.ipa.go.jp",
+    },
 }
 
 
@@ -428,6 +434,22 @@ def extract_real_page_candidates(
                 "P3D_BEFORE_EXAM",
                 "試験日の3日前まで変更可能",
                 change_rule.group(0),
+                risk_level="high",
+            )
+        )
+    application_rule = re.search(
+        r"受験申込内容\(試験会場、受験日時\)の変更は、試験日の3日前まで\s*行うことができます。",
+        text,
+    )
+    if application_rule:
+        evidence = re.sub(r"\s+", "", application_rule.group(0))
+        candidates.append(
+            _candidate(
+                snapshot,
+                "application_rule",
+                evidence,
+                evidence,
+                evidence,
                 risk_level="high",
             )
         )

@@ -67,7 +67,14 @@ def ingest_analysis(
                 if not candidates:
                     continue
                 content_hash = source_result["content_hash"]
-                snapshot_path = CAPTURE_ROOT / f"{content_hash}.html"
+                snapshot_path = next(
+                    (
+                        CAPTURE_ROOT / f"{content_hash}{suffix}"
+                        for suffix in (".html", ".pdf")
+                        if (CAPTURE_ROOT / f"{content_hash}{suffix}").exists()
+                    ),
+                    CAPTURE_ROOT / f"{content_hash}.html",
+                )
                 if not snapshot_path.exists():
                     raise ValueError(f"snapshot file missing: {snapshot_path}")
                 record = capture_record(source_result["source_id"], content_hash, snapshot_path)
@@ -86,7 +93,8 @@ def ingest_analysis(
                     ON CONFLICT (source_id,content_hash) DO UPDATE SET
                       object_key=EXCLUDED.object_key,synthetic=EXCLUDED.synthetic,retrieved_at=EXCLUDED.retrieved_at,
                       capture_run_id=EXCLUDED.capture_run_id,original_url=EXCLUDED.original_url,final_url=EXCLUDED.final_url,
-                      http_status=EXCLUDED.http_status,retrieved_at_jst=EXCLUDED.retrieved_at_jst,collector_version=EXCLUDED.collector_version""",
+                      http_status=EXCLUDED.http_status,retrieved_at_jst=EXCLUDED.retrieved_at_jst,collector_version=EXCLUDED.collector_version
+                    RETURNING id""",
                     (
                         snapshot_id,
                         source_result["source_id"],
@@ -100,6 +108,11 @@ def ingest_analysis(
                         record["captured_at"],
                     ),
                 )
+                # A patrol capture may already own this (source_id, content_hash)
+                # under a different snapshot id.  The upsert keeps that row, so
+                # the FK targets must use the id actually stored, not the one we
+                # proposed.
+                snapshot_id = cursor.fetchone()[0]
                 inserted_snapshots += cursor.rowcount
                 cursor.execute(
                     """INSERT INTO source_checks
@@ -135,13 +148,17 @@ def ingest_analysis(
                     candidate_id = (
                         f"candidate:it-passport:{content_hash}:{candidate['fact_key']}"
                     )
+                    # IT Passport is delivered as CBT; stamping the dimension at
+                    # ingest keeps new candidates aligned with the coverage
+                    # contract (migration 0033 did the same for older rows).
                     cursor.execute(
                         """INSERT INTO candidate_facts
                         (id, qualification_id, exam_year, fact_key, value_type,
                          normalized_value, display_value, evidence_text, status,
-                         risk_level, source_id, source_snapshot_id, synthetic)
+                         risk_level, source_id, source_snapshot_id, synthetic,
+                         delivery_mode)
                         VALUES (%s, %s, %s, %s, %s, %s::jsonb, %s, %s,
-                                'pending_review', %s, %s, %s, false)
+                                'pending_review', %s, %s, %s, false, 'cbt')
                         ON CONFLICT DO NOTHING""",
                         (
                             candidate_id,

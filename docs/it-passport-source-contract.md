@@ -23,22 +23,23 @@
 
 ## 字段映射边界
 
-| 事实键                 | 允许来源                  | 风险   | 处理规则                                         |
-| ---------------------- | ------------------------- | ------ | ------------------------------------------------ |
-| `fee`                  | `ipa-fee`（区分共通金额） | high   | 只读取「受験手数料 7,500円」原文，保留括注条件   |
-| `exam_method`          | `ipa-exam-detail`         | medium | 只读取「実施方式・実施時期」标注的 CBT 表述      |
-| `exam_time`            | `ipa-exam-detail`         | medium | 只读取「試験時間 N分」中的数字，值类型 `integer` |
-| `question_format`      | `ipa-exam-detail`         | medium | 只读取「出題形式」原文，保留全角括号             |
-| `question_count`       | `ipa-exam-detail`         | medium | 只读取「出題数 N問」中的数字，值类型 `integer`   |
-| `eligibility`          | `jitec-faq`               | high   | 只接受「受験資格は特段ありません」明确表述       |
-| `exam_subjects`        | `jitec-faq`               | medium | 只读取三领域名称，不推导各领域配分               |
-| `passing_standard`     | `jitec-faq`               | high   | 保存「综合 600 分以上且各分野 300 分以上」原文   |
-| `application_rule`     | `jitec-application`       | high   | 保存官方原文片段，禁止推导统一报名窗口           |
-| `exam_date`            | 具体报名/公告页面         | high   | 仅提取明确日期；不得从当前日期或示例文本推算     |
-| `application_deadline` | 具体报名/公告页面         | high   | CBT 可能按场次变化，必须按页面声明的适用范围保存 |
-| `exam_content`         | JITEC 考试内容页          | medium | 保存版本号和原文范围，制度变化进入审核           |
+| 事实键                 | 允许来源                  | 风险   | 处理规则                                          |
+| ---------------------- | ------------------------- | ------ | ------------------------------------------------- |
+| `fee`                  | `ipa-fee`（区分共通金额） | high   | 只读取「受験手数料 7,500円」原文，保留括注条件    |
+| `exam_method`          | `ipa-exam-detail`         | medium | 只读取「実施方式・実施時期」标注的 CBT 表述       |
+| `exam_time`            | `ipa-exam-detail`         | medium | 只读取「試験時間 N分」中的数字，值类型 `integer`  |
+| `question_format`      | `ipa-exam-detail`         | medium | 只读取「出題形式」原文，保留全角括号              |
+| `question_count`       | `ipa-exam-detail`         | medium | 只读取「出題数 N問」中的数字，值类型 `integer`    |
+| `eligibility`          | `jitec-faq`               | high   | 只接受「受験資格は特段ありません」明确表述        |
+| `exam_subjects`        | `jitec-faq`               | medium | 只读取三领域名称，不推导各领域配分                |
+| `passing_standard`     | `jitec-faq`               | high   | 保存「综合 600 分以上且各分野 300 分以上」原文    |
+| `application_rule`     | `jitec-application`       | high   | 保存官方原文片段，禁止推导统一报名窗口            |
+| `scoring_method`       | `youkou-pdf`              | medium | 只解析「ITパスポート試験…IRT…」原文，值固定 `IRT` |
+| `exam_date`            | 具体报名/公告页面         | high   | 仅提取明确日期；不得从当前日期或示例文本推算      |
+| `application_deadline` | 具体报名/公告页面         | high   | CBT 可能按场次变化，必须按页面声明的适用范围保存  |
+| `exam_content`         | JITEC 考试内容页          | medium | 保存版本号和原文范围，制度变化进入审核            |
 
-评分方式（IRT 等）不在上述页面正文中，只出现在 `試験要綱 Ver.5.6` PDF；当前适配器不解析 PDF，因此本轮不生成评分方式事实，也不得用推断值补齐。
+评分方式（IRT 等）不在上述页面正文中，只出现在 `試験要綱 Ver.5.6` PDF。2026-11-28 起适配器按 PDF 后缀分派到 `youkou_pdf.extract_it_passport_candidates()`，只读取该 PDF 第 4(1) 条「ITパスポート試験…においてはIRT…に基づいて…評価点を算出する。」原文并登记为 `scoring_method`，不得用推断值补齐。
 
 本资格没有固定的全年统一考试日历；未发现明确日期时必须保持 `awaiting_official`，不能生成伪日期。
 
@@ -81,7 +82,15 @@
 
 合计 10 条候选，全部 `pending_review`、`synthetic=false`；报告明确记录 `database_write: not_run`、`automatic_approval: not_run`。随后经单独授权写入本机审核队列：`jitec-application` 的 2 条此前已批准（本次 `ON CONFLICT` 未新增），其余 **8 条新候选已入库并于同日经所有者授权审核批准**，`pending_review` 归零。
 
-据此补上的 P0-1 缺口：费用、报考资格、考试结构（方式/时间/形式/题数/领域）与合格标准。仍未覆盖：评分方式（仅 PDF 试验要纲）。
+据此补上的 P0-1 缺口：费用、报考资格、考试结构（方式/时间/形式/题数/领域）与合格标准。评分方式当时仍未覆盖（仅 PDF 试验要纲）。
+
+### 2026-11-28 维度回填与 PDF 补采
+
+- 迁移 `0033_it_passport_cbt_dimensions_backfill.sql` 把既有 10 条事实的 `delivery_mode` 回填为 `cbt`，关闭 10 个 `dimensionMismatch` 缺口（含 `source_url`／`official_verified_at`）。
+- 适配器新增 `application_rule`（`jitec-application` 原文「受験申込内容（試験会場、受験日時）の変更は、試験日の3日前まで行うことができます。」）。
+- 迁移 `0034_it_passport_youkou_pdf_source.sql` 登记 `source:it-passport:youkou-pdf`；抓取同一官方 `試験要綱 Ver.5.6` PDF（`e191898aadf4…`），解析第 4(1) 条 IRT 原文生成 `scoring_method`。
+- 两条新候选经 `x-reviewer-id` 批准，本机 IT Passport 已批准事实 10 → 12；CI 夹具同步为 1813 facts／47 snapshots，`release-gate-baseline` 的 `it-passport.expectedFacts` 由 9 调整为 11。
+- 仍未覆盖：`venue_rule`、`booking_window`（官方只有会场一览与「初回申込日から1年後」变更口径，未据此推导字段）。
 
 ## 当前结论
 
