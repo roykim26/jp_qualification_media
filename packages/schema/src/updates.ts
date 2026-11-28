@@ -1,3 +1,4 @@
+import { formatUpdateDisplayValue, isDateFactKey } from './display.js';
 import type { Qualification } from './index.js';
 
 export type PublicUpdateEvent = {
@@ -122,4 +123,58 @@ export function updateFactLabel(factKey: string): string {
       factKey.startsWith(prefix),
     )?.[1] ?? factKey
   );
+}
+
+// Comparison-only canonical form. NFKC folds full-width digits/punctuation,
+// whitespace runs collapse, and a simple date is rewritten to ISO so that
+// `2026/06/14`, `2026-06-14` and `2026年6月14日` compare equal. The rendered
+// text itself is untouched.
+const SIMPLE_DATE = /^(\d{4})[年/.\-](\d{1,2})[月/.\-](\d{1,2})日?$/;
+
+function canonicalText(value: string): string {
+  return value
+    .normalize('NFKC')
+    .replace(/[\s\u3000]+/g, ' ')
+    .trim();
+}
+
+/**
+ * The value a reader actually sees for an update-log cell. `null`/undefined
+ * mean "no previous value" and normalise to the empty string.
+ */
+export function normalizedUpdateDisplayValue(
+  factKey: string,
+  value: string | null | undefined,
+): string {
+  if (value === null || value === undefined) return '';
+  const source = canonicalText(String(value));
+  if (!source) return '';
+  const formatted = canonicalText(formatUpdateDisplayValue(factKey, source));
+  if (isDateFactKey(factKey)) {
+    const date = formatted.match(SIMPLE_DATE);
+    if (date) {
+      const month = date[2].padStart(2, '0');
+      const day = date[3].padStart(2, '0');
+      return `${date[1]}-${month}-${day}`;
+    }
+  }
+  return formatted;
+}
+
+/**
+ * True when publishing this revision would show an A -> A row (or an empty
+ * after value). The comparison uses the rendered display values, so a
+ * different raw/normalised JSON blob with identical visible text is a no-op.
+ *
+ * `previousValue === null` is a first publication: it is a real update only
+ * when the new value has something visible to show.
+ */
+export function isNoOpUpdate(
+  factKey: string,
+  previousValue: string | null | undefined,
+  newValue: string | null | undefined,
+): boolean {
+  const after = normalizedUpdateDisplayValue(factKey, newValue);
+  if (!after) return true;
+  return normalizedUpdateDisplayValue(factKey, previousValue) === after;
 }
