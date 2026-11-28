@@ -55,8 +55,13 @@ app.setErrorHandler((error, request, reply) => {
 const calendarEventTypes: readonly PublicCalendarEvent['type'][] = [
   'application_open',
   'application_deadline',
+  'booking_open',
+  'booking_deadline',
   'exam_date',
+  'exam_period',
   'result_date',
+  'effective_from',
+  'effective_until',
 ];
 
 function boundedQueryInteger(
@@ -131,7 +136,9 @@ app.get<{
           a.dateValue!.localeCompare(b.dateValue!) || a.sequence - b.sequence,
       )
       .filter((event) => {
-        const key = `${event.dateValue}|${event.type}|${event.qualification.slug}`;
+        // Distinct providers on the same day stay distinct; levels of one
+        // provider still collapse because the home timeline does not show them.
+        const key = `${event.dateValue}|${event.type}|${event.qualification.slug}|${event.providerId ?? ''}`;
         if (seen.has(key)) return false;
         seen.add(key);
         return true;

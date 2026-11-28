@@ -71,15 +71,21 @@ function parseEventStart(value: string): Date | null {
 function eventTimingLines(event: PublicCalendarEvent): string[] {
   const value = event.startValue ?? event.dateValue;
   if (!value) return [];
+  const endValue = event.endValue ?? null;
   if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    // A period keeps one VEVENT whose DTEND is exclusive: the day after the
+    // last day of the window, never a second exam-day event.
+    const lastDay =
+      endValue && /^\d{4}-\d{2}-\d{2}$/.test(endValue) ? endValue : value;
     return [
       `DTSTART;VALUE=DATE:${value.replaceAll('-', '')}`,
-      `DTEND;VALUE=DATE:${nextDateValue(value)}`,
+      `DTEND;VALUE=DATE:${nextDateValue(lastDay)}`,
     ];
   }
   const start = parseEventStart(value);
   if (!start) return [];
-  const end = new Date(start.getTime() + 60 * 60 * 1000);
+  const explicitEnd = endValue ? parseEventStart(endValue) : null;
+  const end = explicitEnd ?? new Date(start.getTime() + 60 * 60 * 1000);
   return [`DTSTART:${compactUtcDate(start)}`, `DTEND:${compactUtcDate(end)}`];
 }
 

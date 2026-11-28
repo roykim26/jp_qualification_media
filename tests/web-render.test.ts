@@ -527,7 +527,7 @@ describe('shared qualification page rendering', () => {
     expect(html).toContain('次回試験日');
     expect(html).toContain('2999年4月1日');
     expect(html).toContain('受験料');
-    expect(html).toContain('8200円');
+    expect(html).toContain('8,200円');
     expect(html).toContain('合格率');
     expect(html).toContain('51.2%');
     expect(html).toContain('詳細を見る');
@@ -826,7 +826,7 @@ describe('shared qualification page rendering', () => {
     expect(html).toContain('3級');
   });
 
-  it('folds long date lists behind a details control', () => {
+  it('renders one event per date without reprinting the whole fact list', () => {
     const takken = launchQualifications.find((item) => item.slug === 'takken')!;
     const today = new Intl.DateTimeFormat('en-CA', {
       timeZone: 'Asia/Tokyo',
@@ -837,24 +837,25 @@ describe('shared qualification page rendering', () => {
       return date.toISOString().slice(0, 10);
     };
     const dates = [shift(10), shift(40), shift(70)];
-    const html = renderSchedulePage([
-      {
-        id: 'event:multi',
-        type: 'exam_date',
+    const html = renderSchedulePage(
+      dates.map((date, index) => ({
+        id: `event:multi:${index + 1}`,
+        type: 'exam_date' as const,
         label: '試験日',
         qualification: takken,
         examYear: 2026,
         displayValue: dates.join(','),
-        dateValue: dates[0],
-        startValue: null,
+        dateValue: date,
+        startValue: date,
         factKey: 'exam_date',
         verifiedAt: '2026-01-01T00:00:00.000Z',
         sequence: 0,
-      },
-    ]);
-    expect(html).toContain('すべての日付を見る');
-    expect(html).toContain('ほか2件');
-    for (const value of dates) expect(html).toContain(value);
+        occurrenceCount: dates.length,
+      })),
+    );
+    expect(html).not.toContain('すべての日付を見る');
+    expect(html).not.toContain('ほか2件');
+    expect(html.match(/schedule-event__value/g)).toHaveLength(dates.length);
   });
 
   it('caps each month at ten cards and folds the remainder', () => {
@@ -2126,7 +2127,7 @@ describe('home page data modules', () => {
     }));
     const html = renderHomePage([], [], { 'it-passport': facts });
     expect(html).toContain('<dt>次回試験日</dt><dd>2999年4月1日');
-    expect(html).toContain('<dt>受験料</dt><dd>8200円</dd>');
+    expect(html).toContain('<dt>受験料</dt><dd>8,200円</dd>');
     expect(
       (html.match(/<dl class="home-qualification__facts">/g) ?? []).length,
     ).toBe(1);

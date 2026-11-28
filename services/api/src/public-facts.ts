@@ -79,7 +79,9 @@ export async function readApprovedFacts(
       s.content_hash, s.object_key,
       latest_review.decision AS latest_review_decision,
       latest_review.created_at AS latest_review_at,
-      GREATEST((SELECT count(*) FROM change_events ce WHERE ce.fact_id=f.id) - 1, 0)::int AS sequence
+      s.retrieved_at AS snapshot_retrieved_at,
+      change_stats.first_published_at,
+      GREATEST(change_stats.event_count - 1, 0)::int AS sequence
     FROM facts f
     JOIN fact_revisions fr ON fr.id = f.current_revision_id
     JOIN candidate_facts c ON c.id = fr.candidate_fact_id
@@ -91,6 +93,10 @@ export async function readApprovedFacts(
       WHERE r.candidate_fact_id=c.id
       ORDER BY r.created_at DESC, r.id DESC LIMIT 1
     ) latest_review ON true
+    LEFT JOIN LATERAL (
+      SELECT count(*)::int AS event_count, min(created_at) AS first_published_at
+      FROM change_events ce WHERE ce.fact_id=f.id
+    ) change_stats ON true
     WHERE f.status = 'approved'
       AND fr.status = 'approved'
       AND c.status = 'approved'
@@ -121,6 +127,10 @@ export async function readApprovedFacts(
     synthetic: row.synthetic,
     verifiedAt: new Date(row.verified_at).toISOString(),
     ...projectPublicFactProvenance(row),
+    capturedAt: new Date(row.snapshot_retrieved_at).toISOString(),
+    ...(row.first_published_at
+      ? { publishedAt: new Date(String(row.first_published_at)).toISOString() }
+      : {}),
     sequence: row.sequence,
   }));
 }
@@ -135,7 +145,9 @@ export type SummaryFact = {
   examYear: number;
   displayValue: string;
   normalizedValue: unknown;
+  providerId?: string | null;
   examLevelId?: string | null;
+  examComponent?: string | null;
   deliveryMode?: string | null;
 };
 
@@ -157,7 +169,7 @@ export async function readSummaryFacts(
   const result = await databasePool(configuredUrl).query(
     `
     SELECT c.fact_key, c.exam_year, fr.display_value, fr.normalized_value,
-      c.exam_level_id, c.delivery_mode
+      c.provider_id, c.exam_level_id, c.exam_component, c.delivery_mode
     FROM facts f
     JOIN fact_revisions fr ON fr.id = f.current_revision_id
     JOIN candidate_facts c ON c.id = fr.candidate_fact_id
@@ -167,7 +179,7 @@ export async function readSummaryFacts(
       AND c.status = 'approved'
       AND c.synthetic = false
       AND (
-        c.fact_key IN ('exam_date', 'exam_schedule', 'fee')
+        c.fact_key IN ('exam_date', 'exam_schedule', 'exam_period', 'fee')
         OR c.fact_key LIKE '%\\_fee'
         OR c.fact_key LIKE 'pass\\_rate%'
       )
@@ -181,7 +193,9 @@ export async function readSummaryFacts(
     examYear: row.exam_year,
     displayValue: row.display_value,
     normalizedValue: row.normalized_value,
+    providerId: row.provider_id,
     examLevelId: row.exam_level_id,
+    examComponent: row.exam_component,
     deliveryMode: row.delivery_mode,
   }));
 }

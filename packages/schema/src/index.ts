@@ -88,6 +88,10 @@ export const publicFactSchema = candidateFactSchema.extend({
   provenanceStatus: z.enum(['verified', 'fixture', 'incomplete']).optional(),
   /** Present only when a real snapshot has a final human approve decision. */
   officialVerifiedAt: z.string().datetime().optional(),
+  /** ShikakuCheck capture/check time from the stored snapshot; never official. */
+  capturedAt: z.string().datetime().optional(),
+  /** First change event for the fact: when ShikakuCheck published it. */
+  publishedAt: z.string().datetime().optional(),
   sequence: z.number().int().nonnegative().optional(),
 });
 export type PublicFact = z.infer<typeof publicFactSchema>;

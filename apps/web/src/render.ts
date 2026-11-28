@@ -1,8 +1,13 @@
 import {
   buildPublicCalendarEvents,
+  formatExamTemporalValue,
   type PublicCalendarEvent,
 } from '../../../packages/schema/src/calendar.js';
 import type { PublicQualificationComparison } from '../../../packages/schema/src/compare.js';
+import {
+  summarizeQualificationFee,
+  type FeeFact,
+} from '../../../packages/schema/src/fee.js';
 import type { PublicUpdateEvent } from '../../../packages/schema/src/updates.js';
 import type {
   PublicFact,
@@ -183,8 +188,13 @@ const dimensionLabels: Record<string, string> = {
 const eventTone: Record<PublicCalendarEvent['type'], string> = {
   application_open: '受付開始',
   application_deadline: '締切',
+  booking_open: '予約開始',
+  booking_deadline: '予約締切',
   exam_date: '試験',
+  exam_period: '試験期間',
   result_date: '発表',
+  effective_from: '適用開始',
+  effective_until: '適用終了',
 };
 
 // B4: past schedule entries keep their verified facts but get an ended badge
@@ -194,17 +204,32 @@ const endedGuidance: Record<PublicCalendarEvent['type'], string> = {
     'この申込開始日は過ぎました。次回の申込日程は公式サイトでご確認ください。',
   application_deadline:
     'この申込締切は過ぎました。次回の申込日程は公式サイトでご確認ください。',
+  booking_open:
+    'この予約開始日は過ぎました。次回の予約日程は公式サイトでご確認ください。',
+  booking_deadline:
+    'この予約締切は過ぎました。次回の予約日程は公式サイトでご確認ください。',
   exam_date:
     'この試験は終了しました。合格発表日と次回日程は公式サイトでご確認ください。',
+  exam_period:
+    'この試験期間は終了しました。合格発表日と次回日程は公式サイトでご確認ください。',
   result_date:
     'この合格発表日は過ぎました。最新の情報は公式サイトでご確認ください。',
+  effective_from:
+    'この適用開始日は過ぎました。最新の情報は公式サイトでご確認ください。',
+  effective_until:
+    'この適用終了日は過ぎました。最新の情報は公式サイトでご確認ください。',
 };
 
 const scheduleTypeLabels: Record<PublicCalendarEvent['type'], string> = {
   application_open: '申込開始',
   application_deadline: '申込締切',
+  booking_open: '予約開始',
+  booking_deadline: '予約締切',
   exam_date: '試験日',
+  exam_period: '試験期間',
   result_date: '合格発表',
+  effective_from: '適用開始',
+  effective_until: '適用終了',
 };
 
 function addDays(dateValue: string, days: number): string {
@@ -662,17 +687,45 @@ function verificationLabel(
   fact: Pick<PublicFact, 'officialVerifiedAt' | 'provenanceStatus'>,
 ): string {
   if (fact.provenanceStatus === 'verified' && fact.officialVerifiedAt)
-    return `公式情報確認: ${formatVerifiedAt(fact.officialVerifiedAt)}`;
+    return `公式情報確認（審査）: ${formatVerifiedAt(fact.officialVerifiedAt)}`;
   return fact.provenanceStatus === 'fixture'
-    ? '公式情報確認: 回帰用 fixture（確認時刻なし）'
-    : '公式情報確認: 確認記録未移行';
+    ? '公式情報確認（審査）: 回帰用 fixture（確認時刻なし）'
+    : '公式情報確認（審査）: 確認記録未移行';
+}
+
+/**
+ * Five different timestamps must never be collapsed into one "更新日":
+ * official publication date (not modelled), official page last-modified
+ * (not modelled), capture/check time, review time and site publication time.
+ * Only the last three are stored, so the panel labels exactly those.
+ */
+function provenanceTimeLines(fact: PublicFact): string[] {
+  const lines = [verificationLabel(fact)];
+  lines.push(
+    fact.capturedAt
+      ? fact.provenanceStatus === 'fixture'
+        ? '取得日時（チェック）: 回帰用 fixture（実取得時刻なし）'
+        : `取得日時（チェック）: ${formatVerifiedAt(fact.capturedAt)}`
+      : '取得日時（チェック）: 記録なし',
+  );
+  lines.push(
+    fact.publishedAt
+      ? `掲載日時（本サイト）: ${formatVerifiedAt(fact.publishedAt)}`
+      : '掲載日時（本サイト）: 初回の変更記録なし',
+  );
+  lines.push(
+    '公式発表日: 本サイトでは未記録（公式ページの更新日は保持していません）',
+  );
+  return lines;
 }
 
 function renderFactSource(fact: PublicFact): string {
-  const verification = escapeHtml(verificationLabel(fact));
+  const times = provenanceTimeLines(fact)
+    .map((line) => `<p>${escapeHtml(line)}</p>`)
+    .join('');
   return fact.sourceUrl
-    ? `<details><summary>公式ソースを確認</summary><div><p><a href="${escapeHtml(fact.sourceUrl)}" target="_blank" rel="noreferrer">公式サイトで確認（新しいタブ）</a></p><p class="source-url">${escapeHtml(fact.sourceUrl)}</p><p>保存記録: ${escapeHtml(fact.sourceSnapshotId)}</p><p>${verification}</p></div></details>`
-    : `<details><summary>出典情報</summary><div><p>ソース ID: ${escapeHtml(fact.sourceId)}</p><p>スナップショット: ${escapeHtml(fact.sourceSnapshotId)}</p><p>${verification}</p></div></details>`;
+    ? `<details><summary>公式ソースを確認</summary><div><p><a href="${escapeHtml(fact.sourceUrl)}" target="_blank" rel="noreferrer">公式サイトで確認（新しいタブ）</a></p><p class="source-url">${escapeHtml(fact.sourceUrl)}</p><p>保存記録: ${escapeHtml(fact.sourceSnapshotId)}</p>${times}</div></details>`
+    : `<details><summary>出典情報</summary><div><p>ソース ID: ${escapeHtml(fact.sourceId)}</p><p>スナップショット: ${escapeHtml(fact.sourceSnapshotId)}</p>${times}</div></details>`;
 }
 
 // B4: a date-family fact is "ended" only when EVERY date in its normalized
@@ -726,11 +779,15 @@ function renderFact(fact: PublicFact): string {
   const verified =
     fact.provenanceStatus === 'verified' && Boolean(fact.officialVerifiedAt);
   const ended = factScheduleEnded(fact, tokyoToday());
-  const formattedValue = formatFactDisplayValue({
-    factKey: fact.factKey,
-    displayValue: fact.displayValue,
-    normalizedValue: fact.normalizedValue,
-  });
+  // Exam facts use the calendar's period semantics; other facts keep the
+  // official text so application times are not lost.
+  const formattedValue =
+    formatExamTemporalValue(fact) ??
+    formatFactDisplayValue({
+      factKey: fact.factKey,
+      displayValue: fact.displayValue,
+      normalizedValue: fact.normalizedValue,
+    });
   const longValue = formattedValue.length > 24 || formattedValue.includes('\n');
   return `<article class="card fact" data-fact-key="${escapeHtml(fact.factKey)}"><div class="card__body"><div class="fact__heading"><h3>${escapeHtml(factLabel(fact.factKey))}</h3>${renderBadge(verified ? '公式確認済み' : '出典確認待ち', verified ? 'verified' : 'review')}${ended ? renderBadge('終了', 'info') : ''}</div>${dimensions ? `<div class="dimensions">${dimensions}</div>` : ''}<p class="fact-value ${longValue ? 'fact-value--long' : 'fact-value--numeric'}">${escapeHtml(formattedValue)}</p>${ended ? '<p class="meta">この日程は終了しています。最新の日程・情報は公式サイトでご確認ください。</p>' : ''}<p class="meta fact__meta">${escapeHtml(`${fact.examYear}年度・${factVerificationNote(fact)}`)}</p>${renderFactSource(fact)}</div></article>`;
 }
@@ -744,9 +801,42 @@ function matchesPrefixes(fact: PublicFact, prefixes: readonly string[]) {
  * snapshots confirm it. Cards are deduplicated on the full display identity so
  * genuinely different dimensions stay visible.
  */
+function factScopeIdentity(fact: PublicFact): string {
+  return [
+    fact.examYear,
+    fact.providerId ?? '',
+    fact.examLevelId ?? '',
+    fact.examComponent ?? '',
+    fact.deliveryMode ?? '',
+    fact.paymentMethod ?? '',
+  ].join('|');
+}
+
+/**
+ * A schedule text that mirrors a structured date fact of the same scope is the
+ * same official information twice. The calendar already drops it; the fact
+ * cards do too, which also prevents a flat 24-date list next to the periods.
+ */
+function dropMirroredScheduleFacts(facts: PublicFact[]): PublicFact[] {
+  const structuredScopes = new Set(
+    facts
+      .filter((fact) =>
+        ['exam_date', 'exam_dates', 'exam_period'].includes(fact.factKey),
+      )
+      .map(factScopeIdentity),
+  );
+  return facts.filter(
+    (fact) =>
+      !(
+        fact.factKey.startsWith('exam_schedule') &&
+        structuredScopes.has(factScopeIdentity(fact))
+      ),
+  );
+}
+
 function dedupeFacts(facts: PublicFact[]): PublicFact[] {
   const seen = new Set<string>();
-  return facts.filter((fact) => {
+  return dropMirroredScheduleFacts(facts).filter((fact) => {
     const identity = JSON.stringify([
       fact.factKey,
       fact.examYear,
@@ -835,13 +925,6 @@ type DetailSummaryItem = {
   icsHref?: string;
 };
 
-function factDateValues(fact: PublicFact): string[] {
-  if (typeof fact.normalizedValue !== 'string') return [];
-  return [...fact.normalizedValue.matchAll(/\d{4}-\d{2}-\d{2}/g)].map(
-    (match) => match[0],
-  );
-}
-
 function factDimensionNote(fact: PublicFact): string {
   return [
     fact.providerId,
@@ -856,61 +939,33 @@ function factDimensionNote(fact: PublicFact): string {
     .join('・');
 }
 
-function calendarEventKey(event: {
-  factKey: string;
-  dateValue: string | null;
-  providerId?: string | null;
-  examLevelId?: string | null;
-  examComponent?: string | null;
-  deliveryMode?: string | null;
-  paymentMethod?: string | null;
-}): string {
-  return [
-    event.factKey,
-    event.dateValue,
-    event.providerId ?? '',
-    event.examLevelId ?? '',
-    event.examComponent ?? '',
-    event.deliveryMode ?? '',
-    event.paymentMethod ?? '',
-  ].join('|');
-}
-
-/**
- * Detail KPIs reuse the schedule page's event identity so the existing
- * /ics/<slug>/<year>/<eventId>.ics route keeps its single-event behaviour.
- */
-function calendarEventLookup(
-  qualification: Qualification,
-  facts: PublicFact[],
-): Map<string, PublicCalendarEvent> {
-  const lookup = new Map<string, PublicCalendarEvent>();
-  for (const event of buildPublicCalendarEvents([qualification], facts)) {
-    if (event.dateValue) lookup.set(calendarEventKey(event), event);
-  }
-  return lookup;
-}
-
-function detailIcsHref(
-  qualification: Qualification,
-  events: Map<string, PublicCalendarEvent>,
+function eventMatchesFact(
+  event: PublicCalendarEvent,
   fact: PublicFact,
-  date: string,
-): string | undefined {
-  const event = events.get(
-    calendarEventKey({
-      factKey: fact.factKey,
-      dateValue: date,
-      providerId: fact.providerId,
-      examLevelId: fact.examLevelId,
-      examComponent: fact.examComponent,
-      deliveryMode: fact.deliveryMode,
-      paymentMethod: fact.paymentMethod,
-    }),
+): boolean {
+  return (
+    event.factKey === fact.factKey &&
+    (event.providerId ?? '') === (fact.providerId ?? '') &&
+    (event.examLevelId ?? '') === (fact.examLevelId ?? '') &&
+    (event.examComponent ?? '') === (fact.examComponent ?? '') &&
+    (event.deliveryMode ?? '') === (fact.deliveryMode ?? '') &&
+    (event.paymentMethod ?? '') === (fact.paymentMethod ?? '')
   );
-  return event
-    ? `/ics/${qualification.slug}/${event.examYear}/${encodeURIComponent(event.id)}.ics`
-    : undefined;
+}
+
+/** One event is one date or one period; it never reprints the whole fact list. */
+function eventDisplayValue(event: PublicCalendarEvent): string {
+  if (event.endValue) {
+    return `${formatCalendarDate(event.startValue ?? event.dateValue)}〜${formatCalendarDate(event.endValue)}`;
+  }
+  if ((event.occurrenceCount ?? 1) > 1) {
+    return formatCalendarDate(event.dateValue);
+  }
+  return formatFactDisplayValue({
+    factKey: event.factKey,
+    displayValue: event.displayValue,
+    normalizedValue: event.startValue ?? event.dateValue,
+  });
 }
 
 function dateSummaryItem(
@@ -919,35 +974,96 @@ function dateSummaryItem(
   prefixes: readonly string[],
   label: string,
   qualification: Qualification,
-  events: Map<string, PublicCalendarEvent>,
+  events: readonly PublicCalendarEvent[],
 ): DetailSummaryItem | null {
-  const candidates = facts.flatMap((fact) =>
-    matchesPrefixes(fact, prefixes)
-      ? factDateValues(fact).map((date) => ({ fact, date }))
-      : [],
+  const candidates = events.filter(
+    (event) =>
+      event.dateValue &&
+      prefixes.some((prefix) => event.factKey.startsWith(prefix)),
   );
   if (!candidates.length) return null;
-  const latestYear = Math.max(...candidates.map(({ fact }) => fact.examYear));
+  const latestYear = Math.max(...candidates.map((event) => event.examYear));
   const sorted = candidates
-    .filter(({ fact }) => fact.examYear === latestYear)
-    .sort((left, right) => left.date.localeCompare(right.date));
+    .filter((event) => event.examYear === latestYear)
+    .sort(
+      (left, right) =>
+        left.dateValue!.localeCompare(right.dateValue!) ||
+        (left.endValue ?? left.dateValue!).localeCompare(
+          right.endValue ?? right.dateValue!,
+        ),
+    );
   const today = tokyoToday();
   const chosen =
-    sorted.find(({ date }) => date >= today) ?? sorted[sorted.length - 1];
+    sorted.find((event) => event.dateValue! >= today) ??
+    sorted[sorted.length - 1];
   if (!chosen) return null;
-  const groupId = groupIds.get(chosen.fact);
+  const fact = facts.find((candidate) => eventMatchesFact(chosen, candidate));
+  if (!fact) return null;
+  const groupId = groupIds.get(fact);
   if (!groupId) return null;
   const noteParts = [`${latestYear}年度`];
-  const dimension = factDimensionNote(chosen.fact);
+  const dimension = factDimensionNote(fact);
   if (dimension) noteParts.push(dimension);
-  const remaining = factDateValues(chosen.fact).length - 1;
+  const remaining = (chosen.occurrenceCount ?? 1) - 1;
   if (remaining > 0) noteParts.push(`ほか${remaining}日程`);
   return {
-    label,
-    value: formatCalendarDate(chosen.date),
+    label: chosen.type === 'exam_period' ? '試験期間' : label,
+    value: eventDisplayValue(chosen),
     note: noteParts.join('・'),
     href: `#${groupId}`,
-    icsHref: detailIcsHref(qualification, events, chosen.fact, chosen.date),
+    icsHref: `/ics/${qualification.slug}/${chosen.examYear}/${encodeURIComponent(chosen.id)}.ics`,
+  };
+}
+
+function feeScopeLabels(facts: readonly FeeFact[]): string {
+  const summary = summarizeQualificationFee(facts);
+  if (!summary) return '';
+  const labels = new Set<string>();
+  for (const fact of facts) {
+    if (fact.examYear !== summary.examYear) continue;
+    for (const value of [
+      fact.providerId,
+      fact.examLevelId,
+      fact.examComponent,
+      fact.deliveryMode,
+    ])
+      if (value) labels.add(dimensionLabel(value));
+  }
+  return [...labels].join('・');
+}
+
+function feeScopeNote(facts: readonly FeeFact[]): string {
+  const summary = summarizeQualificationFee(facts);
+  if (!summary) return '';
+  if (summary.isRange) return '級・実施機関・科目・方式により異なる';
+  if (!summary.hasScope) return '';
+  const labels = feeScopeLabels(facts);
+  return labels ? `対象: ${labels}` : '';
+}
+
+function feeSummaryItem(
+  facts: PublicFact[],
+  groupIds: Map<PublicFact, string>,
+): DetailSummaryItem | null {
+  const feeFacts = facts.filter(
+    (fact) => fact.factKey === 'fee' || fact.factKey.endsWith('_fee'),
+  );
+  const summary = summarizeQualificationFee(feeFacts);
+  if (!summary) return null;
+  const chosen = feeFacts.find(
+    (fact) => fact.examYear === summary.examYear && groupIds.has(fact),
+  );
+  if (!chosen) return null;
+  const groupId = groupIds.get(chosen);
+  if (!groupId) return null;
+  const noteParts = [`${summary.examYear}年度`];
+  const scope = feeScopeNote(feeFacts);
+  if (scope) noteParts.push(scope);
+  return {
+    label: '受験料',
+    value: summary.display,
+    note: noteParts.join('・'),
+    href: `#${groupId}`,
   };
 }
 
@@ -997,12 +1113,12 @@ function renderDetailSummary(
   groups.forEach((group) =>
     group.facts.forEach((fact) => groupIds.set(fact, group.id)),
   );
-  const events = calendarEventLookup(qualification, facts);
+  const events = buildPublicCalendarEvents([qualification], facts);
   const items = [
     dateSummaryItem(
       facts,
       groupIds,
-      ['exam_date', 'exam_schedule'],
+      ['exam_date', 'exam_period', 'exam_schedule'],
       '試験日',
       qualification,
       events,
@@ -1015,13 +1131,7 @@ function renderDetailSummary(
       qualification,
       events,
     ),
-    valueSummaryItem(
-      facts,
-      groupIds,
-      (fact) => fact.factKey === 'fee' || fact.factKey.endsWith('_fee'),
-      '受験料',
-      /[0-9,]+円/,
-    ),
+    feeSummaryItem(facts, groupIds),
     valueSummaryItem(
       facts,
       groupIds,
@@ -1651,27 +1761,39 @@ export function renderQualificationSectionPage(
   });
 }
 
-function directoryHighlights(facts: PublicFact[]) {
+function directoryHighlights(
+  facts: PublicFact[],
+  qualification: Qualification,
+) {
   const highlights: Array<{ label: string; value: string }> = [];
-  const dateCandidates = facts.flatMap((fact) =>
-    matchesPrefixes(fact, ['exam_date', 'exam_schedule'])
-      ? factDateValues(fact).map((date) => ({ fact, date }))
-      : [],
+  // Same calendar source as the schedule page: period facts stay periods and
+  // no end-of-window date is advertised as the next one-day exam.
+  const examEvents = buildPublicCalendarEvents([qualification], facts).filter(
+    (event) => event.type === 'exam_date' || event.type === 'exam_period',
   );
-  if (dateCandidates.length) {
-    const latestYear = Math.max(
-      ...dateCandidates.map(({ fact }) => fact.examYear),
-    );
-    const sorted = dateCandidates
-      .filter(({ fact }) => fact.examYear === latestYear)
-      .sort((left, right) => left.date.localeCompare(right.date));
+  if (examEvents.length) {
+    const latestYear = Math.max(...examEvents.map((event) => event.examYear));
+    const sorted = examEvents
+      .filter((event) => event.examYear === latestYear)
+      .sort(
+        (left, right) =>
+          (left.dateValue ?? '').localeCompare(right.dateValue ?? '') ||
+          (left.endValue ?? '').localeCompare(right.endValue ?? ''),
+      );
     const today = tokyoToday();
-    const future = sorted.find(({ date }) => date >= today);
+    const future = sorted.find((event) => (event.dateValue ?? '') >= today);
     const chosen = future ?? sorted[sorted.length - 1];
     if (chosen) {
+      const period = chosen.type === 'exam_period';
       highlights.push({
-        label: future ? '次回試験日' : '前回試験日',
-        value: formatCalendarDate(chosen.date),
+        label: future
+          ? period
+            ? '次回試験期間'
+            : '次回試験日'
+          : period
+            ? '前回試験期間'
+            : '前回試験日',
+        value: eventDisplayValue(chosen),
       });
     }
   }
@@ -1691,11 +1813,24 @@ function directoryHighlights(facts: PublicFact[]) {
     });
     return pattern.exec(formatted)?.[0] ?? formatted.split('／')[0].trim();
   };
-  const fee = valueFor(
+  // Fee summary follows the same scope rule as the detail page: a multi-scope
+  // qualification shows a range with the reason instead of one arbitrary scope.
+  const feeFacts = facts.filter(
     (fact) => fact.factKey === 'fee' || fact.factKey.endsWith('_fee'),
-    /[0-9,]+円/,
   );
-  if (fee) highlights.push({ label: '受験料', value: fee });
+  const feeSummary = summarizeQualificationFee(feeFacts);
+  if (feeSummary) {
+    const scope = feeScopeNote(feeFacts);
+    const suffix = feeSummary.isRange
+      ? '（級・実施機関・科目・方式により異なる）'
+      : scope
+        ? `（${scope.replace(/^対象: /, '')}）`
+        : '';
+    highlights.push({
+      label: '受験料',
+      value: `${feeSummary.display}${suffix}`,
+    });
+  }
   const passRate = valueFor(
     (fact) => fact.factKey.startsWith('pass_rate'),
     /\d+(?:\.\d+)?%/,
@@ -1717,7 +1852,9 @@ export function renderQualificationDirectory(
   const trimmedQuery = query.trim();
   const cards = items
     .map((item) => {
-      const highlights = item.facts ? directoryHighlights(item.facts) : [];
+      const highlights = item.facts
+        ? directoryHighlights(item.facts, item)
+        : [];
       const highlightList = highlights.length
         ? `<dl class="directory-card__facts">${highlights
             .map(
@@ -1782,8 +1919,13 @@ const scheduleRangeLabels: Record<string, string> = {
 const scheduleTypeOrder: Record<PublicCalendarEvent['type'], number> = {
   application_open: 0,
   application_deadline: 1,
-  exam_date: 2,
-  result_date: 3,
+  booking_open: 2,
+  booking_deadline: 3,
+  exam_period: 4,
+  exam_date: 5,
+  result_date: 6,
+  effective_from: 7,
+  effective_until: 8,
 };
 
 type MergedScheduleEvent = {
@@ -1792,13 +1934,6 @@ type MergedScheduleEvent = {
 };
 
 const scheduleMonthEventLimit = 10;
-
-function scheduleValueParts(value: string): string[] {
-  return value
-    .split(/[／,、]\s*|\n+/)
-    .map((part) => part.trim())
-    .filter(Boolean);
-}
 
 export function renderSchedulePage(
   events: PublicCalendarEvent[],
@@ -1833,7 +1968,7 @@ export function renderSchedulePage(
   });
   const mergedEvents = new Map<string, MergedScheduleEvent>();
   for (const event of visibleEvents) {
-    const key = `${event.qualification.slug}|${event.examYear}|${event.type}|${event.dateValue ?? 'undated'}`;
+    const key = `${event.qualification.slug}|${event.examYear}|${event.type}|${event.dateValue ?? 'undated'}|${event.endValue ?? ''}`;
     const dimensions = [
       event.providerId,
       event.examLevelId,
@@ -1921,21 +2056,15 @@ export function renderSchedulePage(
           icon: 'calendar',
         })
       : '';
+    const opensWindow =
+      event.type === 'application_open' ||
+      event.type === 'booking_open' ||
+      event.type === 'effective_from';
+    const endedBoundary = event.endValue ?? event.dateValue;
     const ended =
-      event.type !== 'application_open' &&
-      Boolean(event.dateValue && event.dateValue < today);
-    const value = formatFactDisplayValue({
-      factKey: event.factKey,
-      displayValue: event.displayValue,
-      normalizedValue: event.startValue,
-    });
-    const valueParts = scheduleValueParts(value);
-    const valueBlock =
-      valueParts.length >= 3
-        ? `<p class="schedule-event__value">${escapeHtml(valueParts[0])}<span class="schedule-event__count">ほか${valueParts.length - 1}件</span></p><details class="schedule-event__dates"><summary>すべての日付を見る</summary><ul>${valueParts
-            .map((part) => `<li>${escapeHtml(part)}</li>`)
-            .join('')}</ul></details>`
-        : `<p class="schedule-event__value">${escapeHtml(value)}</p>`;
+      !opensWindow && Boolean(endedBoundary && endedBoundary < today);
+    const value = eventDisplayValue(event);
+    const valueBlock = `<p class="schedule-event__value">${escapeHtml(value)}</p>`;
     return `<article class="schedule-event schedule-event--${event.type}${ended ? ' schedule-event--ended' : ''}"><time datetime="${escapeHtml(event.dateValue ?? '')}">${escapeHtml(formatCalendarDate(event.dateValue))}</time><div><div class="schedule-event__heading"><span class="schedule-event__type">${escapeHtml(eventTone[event.type])}</span>${ended ? renderBadge('終了', 'info') : ''}<h2><a href="/shikaku/${escapeHtml(event.qualification.slug)}/${event.examYear}/">${escapeHtml(event.qualification.officialNameJa)}</a></h2></div>${valueBlock}${ended ? `<p class="meta">${escapeHtml(endedGuidance[event.type])}</p>` : ''}${dimensionChips ? `<div class="dimensions">${dimensionChips}</div>` : ''}<p class="meta">${event.examYear}年 / ${escapeHtml(event.label)} / ${event.verifiedAt ? `公式確認: ${escapeHtml(formatVerifiedAt(event.verifiedAt))}` : '確認記録未移行'} / ${source}</p>${eventIcs ? `<div class="schedule-event__actions">${eventIcs}</div>` : ''}</div></article>`;
   };
   const renderCompactEvent = (entry: MergedScheduleEvent): string => {
@@ -2142,7 +2271,11 @@ export function renderComparePage(
             seenEntries.add(identity);
             return true;
           });
-          return `<td>${entries
+          const scopeNotice =
+            entries.length > 1
+              ? '<p class="compare-scope-note">適用範囲（級・実施機関・科目・方式）が異なるため、単一の値としては比較できません。</p>'
+              : '';
+          return `<td>${scopeNotice}${entries
             .map((entry) => {
               const scope = [
                 entry.providerId,
@@ -2559,7 +2692,7 @@ export function renderUpdatesPage(
           `<tr><th scope="row">${escapeHtml(row.label)}</th><td>${row.before ? escapeHtml(row.before) : '<span class="update-changes__empty">未登録</span>'}</td><td>${escapeHtml(row.after)}</td></tr>`,
       )
       .join('');
-    return `<article class="update-card"><div class="update-card__header"><div><p class="eyebrow">${escapeHtml(first.eventLabel)}</p><h2><a href="${escapeHtml(targetHref)}">${escapeHtml(title)}</a></h2></div><time datetime="${escapeHtml(first.createdAt.slice(0, 10))}">${escapeHtml(formatVerifiedDay(first.createdAt))}</time></div><table class="update-changes"><caption class="visually-hidden">${escapeHtml(title)}の変更前後</caption><thead><tr><th scope="col">項目</th><th scope="col">変更前</th><th scope="col">変更後</th></tr></thead><tbody>${rowsHtml}</tbody></table><div class="tag-row">${affectedPages}</div><p class="meta">${first.examYear}年度 / ${first.verifiedAt ? `公式確認: ${escapeHtml(formatVerifiedAt(first.verifiedAt))}` : '確認記録未移行'} / ${source}</p></article>`;
+    return `<article class="update-card"><div class="update-card__header"><div><p class="eyebrow">${escapeHtml(first.eventLabel)}</p><h2><a href="${escapeHtml(targetHref)}">${escapeHtml(title)}</a></h2></div><time datetime="${escapeHtml(first.createdAt.slice(0, 10))}">${escapeHtml(formatVerifiedDay(first.createdAt))}</time></div><table class="update-changes"><caption class="visually-hidden">${escapeHtml(title)}の変更前後</caption><thead><tr><th scope="col">項目</th><th scope="col">変更前</th><th scope="col">変更後</th></tr></thead><tbody>${rowsHtml}</tbody></table><div class="tag-row">${affectedPages}</div><p class="meta">${first.examYear}年度 / ${first.verifiedAt ? `審査確認: ${escapeHtml(formatVerifiedAt(first.verifiedAt))}` : '確認記録未移行'} / ${source}</p></article>`;
   };
   const groups: { label: string; items: PublicUpdateEvent[] }[] = [];
   const indexByLabel = new Map<string, number>();
@@ -2717,6 +2850,7 @@ export function renderHomePage(
     .map((qualification) => {
       const highlights = directoryHighlights(
         factsBySlug[qualification.slug] ?? [],
+        qualification,
       ).slice(0, 2);
       const factsList = highlights.length
         ? `<dl class="home-qualification__facts">${highlights

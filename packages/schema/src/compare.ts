@@ -30,6 +30,8 @@ export type PublicCompareEntry = Pick<
 export type PublicCompareCell = {
   entries: PublicCompareEntry[];
   missingReason?: string;
+  /** True when the cell mixes several scopes, so no single value is comparable. */
+  scopeVaries?: boolean;
 };
 
 export type PublicCompareRow = {
@@ -142,7 +144,12 @@ function cellFromFacts(
       provenanceStatus: fact.provenanceStatus,
       sourceUrl: fact.sourceUrl,
     }));
-  return { entries, ...(entries.length ? {} : { missingReason }) };
+  return {
+    entries,
+    ...(entries.length
+      ? { scopeVaries: entries.length > 1 }
+      : { missingReason }),
+  };
 }
 
 export function normalizeCompareSlugs(slugs: readonly string[]): string[] {

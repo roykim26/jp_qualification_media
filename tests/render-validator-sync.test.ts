@@ -108,6 +108,8 @@ function validatedFields(entity: string): Set<string> {
  * names nobody dares delete.
  */
 const allowList: Record<string, string> = {
+  capturedAt:
+    'optional in the schema; read inside `fact.capturedAt ? ...` and stringified, so a bad value only changes the provenance label',
   deliveryMode:
     'optional in the schema; only ever passed to .filter(Boolean) and String()',
   examComponent:
@@ -120,6 +122,8 @@ const allowList: Record<string, string> = {
     'z.unknown() by design; every reader guards with `typeof ... !== "string"` first',
   paymentMethod:
     'optional in the schema; only ever passed to .filter(Boolean) and String()',
+  publishedAt:
+    'optional in the schema; read inside `fact.publishedAt ? ...` and stringified, so a bad value only changes the provenance label',
   provenanceStatus:
     'optional enum; only compared with ===, so an unknown value degrades to "not verified"',
   providerId:
@@ -245,8 +249,6 @@ const routeGates: RouteGate[] = [
       id: 'only feeds encodeURIComponent() in the ICS link',
       providerId:
         'optional in the schema; only ever passed to .filter(Boolean) and String() in the qualification label',
-      startValue:
-        'fed to formatFactDisplayValue(), which stringifies whatever it is given',
       verifiedAt: 'renders as 未確認 through formatVerifiedAt()',
     },
     pinned: ['type', 'label', 'factKey', 'dateValue', 'qualification'],

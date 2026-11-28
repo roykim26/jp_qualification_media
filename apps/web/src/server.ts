@@ -302,8 +302,13 @@ function hasQualificationIdentity(value: unknown): boolean {
 const calendarEventTypes = new Set([
   'application_open',
   'application_deadline',
+  'booking_open',
+  'booking_deadline',
   'exam_date',
+  'exam_period',
   'result_date',
+  'effective_from',
+  'effective_until',
 ]);
 
 /**
@@ -338,6 +343,9 @@ function isCalendarEnvelope(value: unknown): boolean {
       typeof event.displayValue === 'string' &&
       typeof event.factKey === 'string' &&
       (event.dateValue === null || typeof event.dateValue === 'string') &&
+      (event.endValue === undefined ||
+        event.endValue === null ||
+        typeof event.endValue === 'string') &&
       (event.sourceUrl === undefined || typeof event.sourceUrl === 'string') &&
       hasQualificationIdentity(event.qualification),
   );
@@ -522,7 +530,9 @@ type QualificationSummaryView = {
     examYear: number;
     displayValue: string;
     normalizedValue?: unknown;
+    providerId?: string | null;
     examLevelId?: string | null;
+    examComponent?: string | null;
     deliveryMode?: string | null;
   }>;
   summary: true;
