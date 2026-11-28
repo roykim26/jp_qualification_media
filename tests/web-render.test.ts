@@ -2540,6 +2540,6 @@ describe('P0 trust fixes from the 2026-11-25 audit', () => {
       [{ ...base, verifiedAt: '2026-10-13T00:00:00.000Z' }],
       { range: 'all' },
     );
-    expect(confirmed).toContain('公式確認: 2026年10月13日');
+    expect(confirmed).toContain('公式情報確認（審査）: 2026年10月13日');
   });
 });

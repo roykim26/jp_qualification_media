@@ -35,6 +35,13 @@ import {
 } from './format.js';
 import { heroImageMarkup } from './hero-image.js';
 import { renderPublicDocument, renderQualificationSubnav } from './layout.js';
+import {
+  formatDateOnlyJa,
+  formatSiteDateAttribute,
+  formatSiteDateTime,
+  formatSiteDay,
+  timeLabels,
+} from './time.js';
 
 export type PublicQualificationView = {
   qualification: Qualification;
@@ -639,37 +646,6 @@ const officialSourcesBySlug: Record<
   ],
 };
 
-function formatVerifiedAt(value: string | null): string {
-  if (!value) return '未確認';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '未確認';
-  const day = new Intl.DateTimeFormat('ja-JP', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    weekday: 'short',
-    timeZone: 'Asia/Tokyo',
-  }).format(date);
-  const time = new Intl.DateTimeFormat('ja-JP', {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-    timeZone: 'Asia/Tokyo',
-  }).format(date);
-  return `${day} ${time}`;
-}
-
-function formatVerifiedDay(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '未確認';
-  return new Intl.DateTimeFormat('ja-JP', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    timeZone: 'Asia/Tokyo',
-  }).format(date);
-}
-
 function formatCalendarDate(value: string | null): string {
   if (!value) return '日付形式未確定';
   const date = new Date(`${value}T00:00:00+09:00`);
@@ -687,10 +663,10 @@ function verificationLabel(
   fact: Pick<PublicFact, 'officialVerifiedAt' | 'provenanceStatus'>,
 ): string {
   if (fact.provenanceStatus === 'verified' && fact.officialVerifiedAt)
-    return `公式情報確認（審査）: ${formatVerifiedAt(fact.officialVerifiedAt)}`;
+    return `${timeLabels.officialVerified}: ${formatSiteDateTime(fact.officialVerifiedAt)}`;
   return fact.provenanceStatus === 'fixture'
-    ? '公式情報確認（審査）: 回帰用 fixture（確認時刻なし）'
-    : '公式情報確認（審査）: 確認記録未移行';
+    ? `${timeLabels.officialVerified}: 回帰用 fixture（確認時刻なし）`
+    : `${timeLabels.officialVerified}: 確認記録未移行`;
 }
 
 // The public site has been live since 2026-11-15. Snapshot capture and change
@@ -715,18 +691,18 @@ function provenanceTimeLines(fact: PublicFact): string[] {
     fact.capturedAt &&
     fact.provenanceStatus !== 'fixture' &&
     !isMigrationPlaceholderTime(fact.capturedAt)
-      ? `取得日時（チェック）: ${formatVerifiedAt(fact.capturedAt)}`
+      ? `${timeLabels.captured}: ${formatSiteDateTime(fact.capturedAt)}`
       : fact.provenanceStatus === 'fixture'
-        ? '取得日時（チェック）: 回帰用 fixture（実取得時刻なし）'
-        : '取得日時（チェック）: 記録なし（移行時のプレースホルダー）';
+        ? `${timeLabels.captured}: 回帰用 fixture（実取得時刻なし）`
+        : `${timeLabels.captured}: 記録なし（移行時のプレースホルダー）`;
   lines.push(captured);
   lines.push(
     fact.publishedAt && !isMigrationPlaceholderTime(fact.publishedAt)
-      ? `掲載日時（本サイト）: ${formatVerifiedAt(fact.publishedAt)}`
-      : '掲載日時（本サイト）: 初回の変更記録なし（移行時のプレースホルダー）',
+      ? `${timeLabels.sitePublished}: ${formatSiteDateTime(fact.publishedAt)}`
+      : `${timeLabels.sitePublished}: 初回の変更記録なし（移行時のプレースホルダー）`,
   );
   lines.push(
-    '公式発表日: 本サイトでは未記録（公式ページの更新日は保持していません）',
+    `${timeLabels.officialPublished}: 本サイトでは未記録（公式ページの更新日は保持していません）`,
   );
   return lines;
 }
@@ -768,7 +744,7 @@ function factScheduleEnded(fact: PublicFact, today: string): boolean {
 
 function factVerificationNote(fact: PublicFact): string {
   if (fact.provenanceStatus === 'verified' && fact.officialVerifiedAt) {
-    return `${formatVerifiedDay(fact.officialVerifiedAt)}確認`;
+    return `${formatSiteDay(fact.officialVerifiedAt)}確認`;
   }
   return fact.provenanceStatus === 'fixture' ? '確認記録なし' : '確認待ち';
 }
@@ -1408,7 +1384,7 @@ function renderVerificationHistory(facts: PublicFact[]): string {
     .sort((left, right) => right.localeCompare(left))
     .slice(0, 5);
   if (!entries.length) return '';
-  return `<section class="verification-history page-section" aria-labelledby="verification-history-heading"><div class="section-heading"><div><p class="eyebrow">確認記録</p><h2 id="verification-history-heading">公式情報の確認履歴</h2></div></div><ol>${entries.map((entry) => `<li><time datetime="${escapeHtml(entry)}">${escapeHtml(formatVerifiedAt(entry))}</time><span>掲載中の公式事実を確認</span></li>`).join('')}</ol><p class="meta">これは公式情報の確認日時です。ページ内容の更新日時とは異なります。</p></section>`;
+  return `<section class="verification-history page-section" aria-labelledby="verification-history-heading"><div class="section-heading"><div><p class="eyebrow">確認記録</p><h2 id="verification-history-heading">公式情報の確認履歴</h2></div></div><ol>${entries.map((entry) => `<li><time datetime="${escapeHtml(entry)}">${escapeHtml(formatSiteDateTime(entry))}</time><span>掲載中の公式事実を確認</span></li>`).join('')}</ol><p class="meta">これは公式情報の確認日時です。ページ内容の更新日時とは異なります。</p></section>`;
 }
 
 function renderSourceModule(slug: string): string {
@@ -1681,7 +1657,7 @@ export function renderQualificationSectionPage(
         )
         .join('')}</nav></section>`
     : '';
-  const sidebar = `<aside class="detail-sidebar" aria-label="ページ情報"><section class="sidebar-panel"><h2>情報ステータス</h2>${status}<dl class="status-list"><div><dt>公式情報確認</dt><dd>${escapeHtml(formatVerifiedAt(view.officialVerifiedAt))}</dd></div><div><dt>このページの事実</dt><dd>${sortedFacts.length}件</dd></div></dl></section><section class="sidebar-panel"><h2>年度を選ぶ</h2><div class="year-links">${yearLinks}</div></section><section class="sidebar-panel"><h2>関連ページ</h2><nav class="sidebar-links" aria-label="関連ページ">${relatedLinks}</nav></section>${comparisonGuidePanel}${officialSiteCta}</aside>`;
+  const sidebar = `<aside class="detail-sidebar" aria-label="ページ情報"><section class="sidebar-panel"><h2>情報ステータス</h2>${status}<dl class="status-list"><div><dt>${escapeHtml(timeLabels.officialVerified)}</dt><dd>${escapeHtml(formatSiteDateTime(view.officialVerifiedAt))}</dd></div><div><dt>このページの事実</dt><dd>${sortedFacts.length}件</dd></div></dl></section><section class="sidebar-panel"><h2>年度を選ぶ</h2><div class="year-links">${yearLinks}</div></section><section class="sidebar-panel"><h2>関連ページ</h2><nav class="sidebar-links" aria-label="関連ページ">${relatedLinks}</nav></section>${comparisonGuidePanel}${officialSiteCta}</aside>`;
   const interpretationNote =
     section === 'pass-rate'
       ? `<aside class="alert alert--info interpretation-note"><div><h2 class="alert__title">数値の見方</h2><p>過去の合格率は集団の実績であり、個人の合格可能性を示すものではありません。年度、級、実施区分と統計の母数をあわせて確認してください。</p></div></aside>`
@@ -1704,7 +1680,7 @@ export function renderQualificationSectionPage(
     section === 'annual'
       ? renderAnnualSourceModule(qualification.slug, navigationYear)
       : renderSourceModule(qualification.slug);
-  const body = `<div class="container"><header class="page-hero detail-hero"><div class="tag-row"><span class="tag">${escapeHtml(fieldLabel(qualification.field))}</span><span class="tag">${escapeHtml(categoryLabel(qualification.category))}</span></div><h1>${escapeHtml(qualification.officialNameJa)}</h1>${heroSectionTitle ? `<p class="detail-hero__section">${escapeHtml(heroSectionTitle)}</p>` : ''}<p>${qualification.aliasesJa.map(escapeHtml).join(' / ') || '公式情報を整理して掲載します。'}</p>${sectionMeta ? `<p class="detail-hero__intro">${escapeHtml(sectionMeta.intro)}</p>` : ''}<div class="page-hero__meta">${status}<span class="meta">公式情報確認日: ${escapeHtml(formatVerifiedAt(view.officialVerifiedAt))}</span></div><nav class="detail-hero__years" aria-label="年度を選ぶ">${yearLinks}</nav>${annualIcs}</header><div class="detail-layout"><div class="detail-main">${detailSummary}${qualificationScopeNotice(qualification.slug)}${interpretationNote}${historyTables}${scopeNote}${facts}${renderVerificationHistory(sortedFacts)}${sourceModule}</div>${sidebar}</div></div>`;
+  const body = `<div class="container"><header class="page-hero detail-hero"><div class="tag-row"><span class="tag">${escapeHtml(fieldLabel(qualification.field))}</span><span class="tag">${escapeHtml(categoryLabel(qualification.category))}</span></div><h1>${escapeHtml(qualification.officialNameJa)}</h1>${heroSectionTitle ? `<p class="detail-hero__section">${escapeHtml(heroSectionTitle)}</p>` : ''}<p>${qualification.aliasesJa.map(escapeHtml).join(' / ') || '公式情報を整理して掲載します。'}</p>${sectionMeta ? `<p class="detail-hero__intro">${escapeHtml(sectionMeta.intro)}</p>` : ''}<div class="page-hero__meta">${status}<span class="meta">${escapeHtml(timeLabels.officialVerified)}: ${escapeHtml(formatSiteDateTime(view.officialVerifiedAt))}</span></div><nav class="detail-hero__years" aria-label="年度を選ぶ">${yearLinks}</nav>${annualIcs}</header><div class="detail-layout"><div class="detail-main">${detailSummary}${qualificationScopeNotice(qualification.slug)}${interpretationNote}${historyTables}${scopeNote}${facts}${renderVerificationHistory(sortedFacts)}${sourceModule}</div>${sidebar}</div></div>`;
   const canonicalPath =
     section === 'overview'
       ? `/shikaku/${qualification.slug}/`
@@ -2077,7 +2053,7 @@ export function renderSchedulePage(
       !opensWindow && Boolean(endedBoundary && endedBoundary < today);
     const value = eventDisplayValue(event);
     const valueBlock = `<p class="schedule-event__value">${escapeHtml(value)}</p>`;
-    return `<article class="schedule-event schedule-event--${event.type}${ended ? ' schedule-event--ended' : ''}"><time datetime="${escapeHtml(event.dateValue ?? '')}">${escapeHtml(formatCalendarDate(event.dateValue))}</time><div><div class="schedule-event__heading"><span class="schedule-event__type">${escapeHtml(eventTone[event.type])}</span>${ended ? renderBadge('終了', 'info') : ''}<h2><a href="/shikaku/${escapeHtml(event.qualification.slug)}/${event.examYear}/">${escapeHtml(event.qualification.officialNameJa)}</a></h2></div>${valueBlock}${ended ? `<p class="meta">${escapeHtml(endedGuidance[event.type])}</p>` : ''}${dimensionChips ? `<div class="dimensions">${dimensionChips}</div>` : ''}<p class="meta">${event.examYear}年 / ${escapeHtml(event.label)} / ${event.verifiedAt ? `公式確認: ${escapeHtml(formatVerifiedAt(event.verifiedAt))}` : '確認記録未移行'} / ${source}</p>${eventIcs ? `<div class="schedule-event__actions">${eventIcs}</div>` : ''}</div></article>`;
+    return `<article class="schedule-event schedule-event--${event.type}${ended ? ' schedule-event--ended' : ''}"><time datetime="${escapeHtml(event.dateValue ?? '')}">${escapeHtml(formatCalendarDate(event.dateValue))}</time><div><div class="schedule-event__heading"><span class="schedule-event__type">${escapeHtml(eventTone[event.type])}</span>${ended ? renderBadge('終了', 'info') : ''}<h2><a href="/shikaku/${escapeHtml(event.qualification.slug)}/${event.examYear}/">${escapeHtml(event.qualification.officialNameJa)}</a></h2></div>${valueBlock}${ended ? `<p class="meta">${escapeHtml(endedGuidance[event.type])}</p>` : ''}${dimensionChips ? `<div class="dimensions">${dimensionChips}</div>` : ''}<p class="meta">${event.examYear}年 / ${escapeHtml(event.label)} / ${event.verifiedAt ? `${escapeHtml(timeLabels.officialVerified)}: ${escapeHtml(formatSiteDateTime(event.verifiedAt))}` : '確認記録未移行'} / ${source}</p>${eventIcs ? `<div class="schedule-event__actions">${eventIcs}</div>` : ''}</div></article>`;
   };
   const renderCompactEvent = (entry: MergedScheduleEvent): string => {
     const { event } = entry;
@@ -2704,7 +2680,7 @@ export function renderUpdatesPage(
           `<tr><th scope="row">${escapeHtml(row.label)}</th><td>${row.before ? escapeHtml(row.before) : '<span class="update-changes__empty">未登録</span>'}</td><td>${escapeHtml(row.after)}</td></tr>`,
       )
       .join('');
-    return `<article class="update-card"><div class="update-card__header"><div><p class="eyebrow">${escapeHtml(first.eventLabel)}</p><h2><a href="${escapeHtml(targetHref)}">${escapeHtml(title)}</a></h2></div><time datetime="${escapeHtml(first.createdAt.slice(0, 10))}">${escapeHtml(formatVerifiedDay(first.createdAt))}</time></div><table class="update-changes"><caption class="visually-hidden">${escapeHtml(title)}の変更前後</caption><thead><tr><th scope="col">項目</th><th scope="col">変更前</th><th scope="col">変更後</th></tr></thead><tbody>${rowsHtml}</tbody></table><div class="tag-row">${affectedPages}</div><p class="meta">${first.examYear}年度 / ${first.verifiedAt ? `審査確認: ${escapeHtml(formatVerifiedAt(first.verifiedAt))}` : '確認記録未移行'} / ${source}</p></article>`;
+    return `<article class="update-card"><div class="update-card__header"><div><p class="eyebrow">${escapeHtml(first.eventLabel)}</p><h2><a href="${escapeHtml(targetHref)}">${escapeHtml(title)}</a></h2></div><time datetime="${escapeHtml(formatSiteDateAttribute(first.createdAt))}">${escapeHtml(timeLabels.sitePublished)}: ${escapeHtml(formatSiteDay(first.createdAt))}</time></div><table class="update-changes"><caption class="visually-hidden">${escapeHtml(title)}の変更前後</caption><thead><tr><th scope="col">項目</th><th scope="col">変更前</th><th scope="col">変更後</th></tr></thead><tbody>${rowsHtml}</tbody></table><div class="tag-row">${affectedPages}</div><p class="meta">${first.examYear}年度 / ${first.verifiedAt ? `${escapeHtml(timeLabels.officialVerified)}: ${escapeHtml(formatSiteDateTime(first.verifiedAt))}` : '確認記録未移行'} / ${source}</p></article>`;
   };
   const groups: { label: string; items: PublicUpdateEvent[] }[] = [];
   const indexByLabel = new Map<string, number>();
@@ -2833,12 +2809,6 @@ function tokyoToday(): string {
   }).format(new Date());
 }
 
-function formatDateJa(value: string): string {
-  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (!match) return value;
-  return `${Number(match[1])}年${Number(match[2])}月${Number(match[3])}日`;
-}
-
 function remainingDaysLabel(dateValue: string, today: string): string {
   const days = Math.round(
     (Date.parse(`${dateValue.slice(0, 10)}T00:00:00Z`) -
@@ -2897,7 +2867,7 @@ export function renderHomePage(
     ? `<ul class="home-timeline" aria-label="直近の試験日程">${upcoming
         .map(
           (event) =>
-            `<li class="home-timeline__item"><span class="home-timeline__date">${escapeHtml(formatDateJa(event.dateValue!))}</span><span class="home-timeline__badge">${escapeHtml(event.label)}</span><a class="home-timeline__link" href="/shikaku/${escapeHtml(event.qualification.slug)}/${event.examYear}/">${escapeHtml(event.qualification.officialNameJa)}</a><span class="home-timeline__count">${escapeHtml(remainingDaysLabel(event.dateValue!, today))}</span></li>`,
+            `<li class="home-timeline__item"><span class="home-timeline__date">${escapeHtml(formatDateOnlyJa(event.dateValue!))}</span><span class="home-timeline__badge">${escapeHtml(event.label)}</span><a class="home-timeline__link" href="/shikaku/${escapeHtml(event.qualification.slug)}/${event.examYear}/">${escapeHtml(event.qualification.officialNameJa)}</a><span class="home-timeline__count">${escapeHtml(remainingDaysLabel(event.dateValue!, today))}</span></li>`,
         )
         .join(
           '',
@@ -2925,7 +2895,7 @@ export function renderHomePage(
     ? `<ul class="home-updates">${recentUpdates
         .map(
           ({ event, labels }) =>
-            `<li><span class="home-updates__date">${escapeHtml(formatDateJa(event.createdAt))}</span><div><a href="/updates/?qualification=${encodeURIComponent(event.qualification.slug)}">${escapeHtml(event.qualification.officialNameJa)}：${escapeHtml(event.eventLabel)}</a><span class="home-updates__meta">${escapeHtml(labels.join('・'))}</span></div></li>`,
+            `<li><span class="home-updates__date" title="${escapeHtml(timeLabels.sitePublished)}">${escapeHtml(formatSiteDay(event.createdAt))}</span><div><a href="/updates/?qualification=${encodeURIComponent(event.qualification.slug)}">${escapeHtml(event.qualification.officialNameJa)}：${escapeHtml(event.eventLabel)}</a><span class="home-updates__meta">${escapeHtml(labels.join('・'))}</span></div></li>`,
         )
         .join(
           '',

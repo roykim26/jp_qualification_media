@@ -338,7 +338,7 @@ function bodyFor(url: string): string {
       // Sprint 3M, measured. `/updates/` reads `eventLabel`, `factKey`,
       // `newValue` through `escapeHtml()`, and `factKey` again through
       // `factLabel()` (`factKey.match(...)`); `affectedPages` is `.map`-ed and
-      // `createdAt` goes to `formatVerifiedDay()`. All of them blank the page.
+      // `createdAt` goes to `formatSiteDay()`. All of them blank the page.
       //
       // The follow-up round added four more, all measured the same way:
       // a null/non-object `qualification` (read as `.slug` and

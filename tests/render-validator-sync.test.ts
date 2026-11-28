@@ -249,7 +249,7 @@ const routeGates: RouteGate[] = [
       id: 'only feeds encodeURIComponent() in the ICS link',
       providerId:
         'optional in the schema; only ever passed to .filter(Boolean) and String() in the qualification label',
-      verifiedAt: 'renders as 未確認 through formatVerifiedAt()',
+      verifiedAt: 'renders as 未確認 through formatSiteDateTime()',
     },
     pinned: ['type', 'label', 'factKey', 'dateValue', 'qualification'],
   },
