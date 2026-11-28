@@ -1,6 +1,8 @@
 {
   "version": 1,
   "note": "既知の MVP カバレッジ欠落（監査 G-15 / 決定#6 のソフトゲート基線）。キーは slug|field|dimensions で examYear を含まない。意図的なデータ変更後に --update-baseline で再生成する。",
+  "reviewedAt": "2026-11-28",
+  "reviewNote": "47 は『欠落キー（gap keys）』であり、誤った事実 47 件ではない。2026-11-28 の本番監査（5e709df, 1811 facts）では 19 キーが未充足、28 キーは本番データで充足済み。ただし 28 キーは CI/local の縮小エクスポート（1007/1037 facts）には存在しないため、環境横断のソフトゲート基線として残す。local dev のみの追加 5 キー（bookkeeping:3 の exam_subjects/exam_time/passing_standard/question_count/result_date）は fixture 差分による環境ドリフトで、新規欠落として検出させるため意図的に本基線へ追加しない。詳細: docs/audit/MVP_GAP_BASELINE_STATUS.md",
   "gapKeys": [
     "bookkeeping|official_verified_at|deliveryMode=network|examLevelId=bookkeeping:2",
     "bookkeeping|official_verified_at|deliveryMode=network|examLevelId=bookkeeping:3",

@@ -1,6 +1,7 @@
 # V2 差距矩阵（Phase 0 产出，只读审计）
 
 - 编制日期：2026-11-24
+- 最后复核：2026-11-28（P1-05；更新 §2.3 gap keys、G-15、G-16）
 - 依据：`docs/audit/REPOSITORY_AUDIT_2026-11-24.md`（仓库与产品基线）、`docs/audit/PRODUCTION_BASELINE_2026-11-24.md`（线上可验证证据）、`E:\项目运营\05.shikakucheck\项目审计\V2_PLAN_CORRECTION.md`（修订版 V2 方案）
 - 性质：**只读分析**。本文档为新增文件，未修改任何既有文档、代码、配置、数据。
 - 证据目录：`var/audit-2026-11-24/`（`.gitignore` 内，不进版本库）
@@ -81,6 +82,20 @@
 | `/shikaku/takken/pass-rate/`                                                                    | 无任何历史统计数字 → 空态 + `noindex`，且**不在 sitemap**（`sitemap.ts` 状态白名单 + `qualificationSectionHasContent` 正确剔除）；**但资格页的 subnav 仍然显示「合格率」标签**（360px 截图 `takken-360.png` 中 `.subnav` scrollWidth 390 > clientWidth 360，「合格率」需横滑才能看到）         | `render.ts:1432`（`sectionEmpty`）、`:1561`（noindex）、`sitemap.ts:15-30` |
 | `/shikaku/gyoseishoshi/pass-rate/`、`/shikaku/it-passport/pass-rate/`、`/shikaku/fp/pass-rate/` | 正文分别 **1147 / 1046 / 2697 字**，**0 张历史表**，却**在 sitemap 内**（因为 `qualificationSectionHasContent` 对 `pass-rate` 无 `year` 时只要有任一 `historyNumericKeys` 事实就返回 true，而这三者有 `pass_rate` 等单年事实）；三页彼此相似度 **44.97% / 80.89%**（同模板不同资格的天然基线） | `check_thin.py` → `thin-result`；`sim-result.txt`                          |
 | `/shikaku/{slug}/2025/`、`/2027/`、`/2030/`                                                     | 返回 **200 + `noindex,follow` + 自指 canonical**（`/shikaku/takken/2030/` 的 canonical 就是自己）→ 空壳页仍可被抓取、且 canonical 指向自身而非主页面                                                                                                                                           | `edge-check.txt`、`head-metrics.txt`（`p_shikaku_takken_2030_.html`）      |
+
+### 2.3 47 known gap keys 复核（2026-11-28，P1-05）
+
+`config/mvp-audit-baseline.json` 的 47 条是**字段/维度缺口键（gap keys）**，不是 47 条错误事实，也不是 47 个未实现功能。按生产审计（`5e709df`、1811 facts）逐键核对：
+
+| 分类                   | 键数 | 说明                                                                              |
+| ---------------------- | ---- | --------------------------------------------------------------------------------- |
+| 生产仍未采集           | 19   | bookkeeping 1、fp 2、it-passport 14、takken 2；官方是否公开其中部分字段需人工确认 |
+| 生产已满足、保留在基线 | 28   | CI/local 缩小导出夹具仍可能缺这些事实，删除会把它们变成新缺口                     |
+| 不适用                 | 0    | 本清单不含 n/a 键                                                                 |
+
+- 逐键状态与证据：`docs/audit/MVP_GAP_BASELINE_STATUS.md`
+- 本地 dev 因夹具裁剪额外出现 5 个 bookkeeping:3 缺口，属环境漂移，**未自动加入基线**，仍由审计以 new gaps 检出。
+- 基线只控制公开展示字段的覆盖缺口；不改变事实数量，也不据此推断内容质量。
 
 ---
 
@@ -213,7 +228,7 @@
 - **影响**：G-02/G-03/G-10 这类「路由层行为」的修复没有回归网；改 `/sitemap.xml` 只能靠 `test:verify-gate` 的间接断言。
 - **改动文件范围**：`tests/`（新增进程级/路由级测试）、`vitest.config.ts`（如需 setup）。
 - **风险**：**低**。属纯测试新增。
-- **状态**：✅ **已闭环（2026-11-25 chore/phase1-baseline）**。路由/进程级测试主体已在 Sprint 3J（`tests/web-routes.test.ts`：静态资源白名单、robots/sitemap、slug 404、ICS 转发、空表 noindex 等）与 3K/3M 落地；本轮补齐剩余：`proxyIcs` 上游 404→站点 404、上游 5xx→503+Retry-After 两条错误路径测试，`?history=all` 变体（noindex＋canonical）路由测试，HTML ETag/304 协商测试（`web-server.test.ts`）。`audit:mvp` 按决策#6 接入 `release:check` 为**软门禁**：`config/mvp-audit-baseline.json` 落 22 条已知缺口基线（键=`slug|field|dimensions`，不含年度），已知→`warning` exit 0、新缺口或 provenance 失败→`blocked` exit 1；`--update-baseline` 供有意变更后再生成。gate 114 pass、vitest 31 files/531 全绿。
+- **状态**：✅ **已闭环（2026-11-25 chore/phase1-baseline）**。路由/进程级测试主体已在 Sprint 3J（`tests/web-routes.test.ts`：静态资源白名单、robots/sitemap、slug 404、ICS 转发、空表 noindex 等）与 3K/3M 落地；本轮补齐剩余：`proxyIcs` 上游 404→站点 404、上游 5xx→503+Retry-After 两条错误路径测试，`?history=all` 变体（noindex＋canonical）路由测试，HTML ETag/304 协商测试（`web-server.test.ts`）。`audit:mvp` 按决策#6 接入 `release:check` 为**软门禁**：`config/mvp-audit-baseline.json` 落 47 条已知**缺口键**基线（键=`slug|field|dimensions`，不含年度；47 是字段/维度缺口数，不是错误事实数），已知→`warning` exit 0、新缺口或 provenance 失败→`blocked` exit 1；`--update-baseline` 供有意变更后再生成。2026-11-28 P1-05 复核见 §2.3 与 `docs/audit/MVP_GAP_BASELINE_STATUS.md`；P1-04 新增内部质量报告 `quality`（source/scope/freshness/consistency/coverage/review/calendar，按维度均分，不按 facts 数加权），不改变 exit code。gate 114 pass、vitest 31 files/531 全绿。
 
 ### G-16 `change_events` 的 schema 漂移（P2，工程风险）
 
@@ -221,6 +236,7 @@
 - **影响**：任何走 Drizzle 读取 `change_events` 的代码会静默丢失审计信息；属「schema 与迁移不同步」。
 - **改动文件范围**：`packages/db/src/schema.ts:320-332`（补两列声明）。
 - **风险**：**低**，但**本次禁止改迁移/schema**（Phase 0 禁止项明确包含「不修改数据库、迁移」）→ **仅登记，不在 Phase 0 执行**。
+- **状态**：✅ **已修复（2026-11-28 P1-05 复核）**。`packages/db/src/schema.ts:333-334` 已声明 `operatorId: text('operator_id')` / `reason: text('reason')`；迁移 `0021_change_event_audit.sql:7-8` 与 `services/api/src/release.ts:208` 的 INSERT 对齐；`scripts/rollback-fact.ts` 使用同一字段。原「未声明」判断已过期。
 
 ### G-17 唯一真正未做的既有待办：FE 统计月度附件刷新（P2）
 
