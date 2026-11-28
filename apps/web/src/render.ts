@@ -693,6 +693,16 @@ function verificationLabel(
     : '公式情報確認（審査）: 確認記録未移行';
 }
 
+// The public site has been live since 2026-11-15. Snapshot capture and change
+// timestamps before that are fixture-import placeholders, not real events.
+const siteLaunchAtMs = Date.parse('2026-11-15T00:00:00+09:00');
+
+function isMigrationPlaceholderTime(value: string | undefined): boolean {
+  if (!value) return true;
+  const parsed = Date.parse(value);
+  return !Number.isFinite(parsed) || parsed < siteLaunchAtMs;
+}
+
 /**
  * Five different timestamps must never be collapsed into one "更新日":
  * official publication date (not modelled), official page last-modified
@@ -701,17 +711,19 @@ function verificationLabel(
  */
 function provenanceTimeLines(fact: PublicFact): string[] {
   const lines = [verificationLabel(fact)];
-  lines.push(
-    fact.capturedAt
-      ? fact.provenanceStatus === 'fixture'
+  const captured =
+    fact.capturedAt &&
+    fact.provenanceStatus !== 'fixture' &&
+    !isMigrationPlaceholderTime(fact.capturedAt)
+      ? `取得日時（チェック）: ${formatVerifiedAt(fact.capturedAt)}`
+      : fact.provenanceStatus === 'fixture'
         ? '取得日時（チェック）: 回帰用 fixture（実取得時刻なし）'
-        : `取得日時（チェック）: ${formatVerifiedAt(fact.capturedAt)}`
-      : '取得日時（チェック）: 記録なし',
-  );
+        : '取得日時（チェック）: 記録なし（移行時のプレースホルダー）';
+  lines.push(captured);
   lines.push(
-    fact.publishedAt
+    fact.publishedAt && !isMigrationPlaceholderTime(fact.publishedAt)
       ? `掲載日時（本サイト）: ${formatVerifiedAt(fact.publishedAt)}`
-      : '掲載日時（本サイト）: 初回の変更記録なし',
+      : '掲載日時（本サイト）: 初回の変更記録なし（移行時のプレースホルダー）',
   );
   lines.push(
     '公式発表日: 本サイトでは未記録（公式ページの更新日は保持していません）',

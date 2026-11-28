@@ -49,18 +49,39 @@ describe('public provenance time labels', () => {
       buildPublicQualificationView(takken, [
         fact({
           provenanceStatus: 'verified',
-          officialVerifiedAt: '2026-08-11T00:00:00.000Z',
-          capturedAt: '2026-08-10T03:00:00.000Z',
-          publishedAt: '2026-08-11T02:00:00.000Z',
+          officialVerifiedAt: '2026-11-21T00:00:00.000Z',
+          capturedAt: '2026-11-20T03:00:00.000Z',
+          publishedAt: '2026-11-21T02:00:00.000Z',
         }),
       ]),
     );
-    expect(html).toContain('公式情報確認（審査）: 2026年8月11日');
+    expect(html).toContain('公式情報確認（審査）: 2026年11月21日');
     expect(html).toContain('09:00');
-    expect(html).toContain('取得日時（チェック）: 2026年8月10日');
+    expect(html).toContain('取得日時（チェック）: 2026年11月20日');
     expect(html).toContain('12:00');
-    expect(html).toContain('掲載日時（本サイト）: 2026年8月11日');
+    expect(html).toContain('掲載日時（本サイト）: 2026年11月21日');
     expect(html).toContain('11:00');
     expect(html).toContain('公式発表日: 本サイトでは未記録');
+  });
+
+  it('hides pre-launch migration placeholders instead of showing them as times', () => {
+    const html = renderQualificationPage(
+      buildPublicQualificationView(takken, [
+        fact({
+          provenanceStatus: 'verified',
+          officialVerifiedAt: '2026-10-13T00:00:00.000Z',
+          capturedAt: '2026-01-01T00:00:00.000Z',
+          publishedAt: '2026-10-10T02:27:00.000Z',
+        }),
+      ]),
+    );
+    expect(html).toContain(
+      '取得日時（チェック）: 記録なし（移行時のプレースホルダー）',
+    );
+    expect(html).toContain(
+      '掲載日時（本サイト）: 初回の変更記録なし（移行時のプレースホルダー）',
+    );
+    expect(html).not.toContain('2026年1月1日');
+    expect(html).not.toContain('2026年10月10日');
   });
 });
