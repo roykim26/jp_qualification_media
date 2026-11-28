@@ -411,6 +411,8 @@ function isComparisonEnvelope(value: unknown): boolean {
       (cell) =>
         isRecord(cell) &&
         Array.isArray(cell.entries) &&
+        (cell.scopeVaries === undefined ||
+          typeof cell.scopeVaries === 'boolean') &&
         cell.entries.every(
           (entry) =>
             isRecord(entry) &&
