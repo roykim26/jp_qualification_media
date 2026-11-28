@@ -232,6 +232,8 @@ def test_faq_page_reads_eligibility_subjects_and_pass_criteria():
         <p>Ａ ： 受験資格は特段ありません。 この試験の狙いは、すべての社会人が備えておくべき情報技術の基礎知識を受験者に習得していただくことにあります。</p>
         <p>Ａ ： 120分の試験で100問の問題が出題されます。 すべて多肢選択式(四肢択一)の問題で、ストラテジ系（経営全般）、マネジメント系（IT管理）、テクノロジ系（IT技術）の3つの分野から幅広く出題されます。</p>
         <p>Ａ ： 合格基準を満たすには、総合評価点が600点以上であるとともに、すべての分野別評価点が300点以上である必要があります。</p>
+        <p>Ａ ： 「受験申込み」の「試験開催状況一覧」から、都道府県ごとの試験会場の試験日、試験開始時間、座席数、空席数等が確認できます。</p>
+        <p>Ａ ： 申込み可能な試験日は、最短で翌日、最長で3ヵ月先（2026年9月28日以降に申込みを行う方は、2026年12月27日まで）までとなります。ただし、支払い方法及び申込時刻により申込み可能な試験日は異なりますので、詳しくは「受験申込手順」を確認してください。</p>
         </body></html>""",
         synthetic=False,
     )
@@ -247,8 +249,14 @@ def test_faq_page_reads_eligibility_subjects_and_pass_criteria():
         by_key["passing_standard"].normalized_value
         == "総合評価点600点以上かつ全分野別評価点300点以上"
     )
+    assert by_key["booking_window"].normalized_value.startswith(
+        "申込み可能な試験日は、最短で翌日"
+    )
+    assert by_key["venue_rule"].evidence_text.startswith("「受験申込み」の")
     assert by_key["eligibility"].risk_level == "high"
     assert by_key["passing_standard"].risk_level == "high"
+    assert by_key["booking_window"].risk_level == "high"
+    assert by_key["venue_rule"].risk_level == "high"
     assert by_key["exam_subjects"].risk_level == "medium"
     assert all(item.synthetic is False for item in candidates)
 

@@ -125,7 +125,22 @@ export function evaluateCoverage(slug, facts, examYear) {
         (fact.examYear === examYear || isYearAgnosticFact(fact.factKey)) &&
         inDimensions(fact),
     );
+    // `only_when_officially_published` means the field is optional until the
+    // official source actually publishes it.  The gate cannot know publication
+    // independently of the collected facts, so a field with no approved fact is
+    // left out instead of being reported as missing.  Once a fact exists, the
+    // normal coverage check applies.
+    const onlyWhenPublished =
+      requirement.conditions?.includes('only_when_officially_published') ??
+      false;
     for (const field of requirement.fields) {
+      if (
+        onlyWhenPublished &&
+        !facts.some((fact) =>
+          satisfiesCoverageField(fact, field, requirement.dimensions),
+        )
+      )
+        continue;
       if (
         !scoped.some((fact) =>
           satisfiesCoverageField(fact, field, requirement.dimensions),

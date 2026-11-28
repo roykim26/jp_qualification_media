@@ -13,7 +13,7 @@
     },
     {
       "slug": "it-passport",
-      "expectedFacts": 11,
+      "expectedFacts": 13,
       "pageContains": "ITパスポート"
     },
     {

@@ -65,6 +65,30 @@ test('coverage gate reports field and dimension gaps even when fact counts are h
   assert.ok(gaps.some((gap) => gap.dimensions.deliveryMode === 'unified'));
 });
 
+test('only_when_officially_published fields do not gap before publication', () => {
+  // A CBT qualification has facts for the conditional scope, which previously
+  // woke the whole requirement up and demanded annual application/exam dates
+  // the official source does not publish.  The condition now stays per-field.
+  const facts = [
+    { examYear: 2026, deliveryMode: 'cbt', factKey: 'fee' },
+    {
+      examYear: 2026,
+      deliveryMode: 'cbt',
+      factKey: 'application_open_2026_may_sessions',
+    },
+  ];
+  const gaps = evaluateCoverage('it-passport', facts, 2026);
+  assert.deepEqual(
+    gaps.filter((gap) =>
+      ['application_deadline', 'exam_date', 'result_date'].includes(gap.field),
+    ),
+    [],
+  );
+  // Other required fields are still reported, so the condition does not mute
+  // the whole scope.
+  assert.ok(gaps.some((gap) => gap.field === 'booking_window'));
+});
+
 test('FE subject facts satisfy component-scoped coverage without renaming', () => {
   const base = {
     examYear: 2026,

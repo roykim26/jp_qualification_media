@@ -34,6 +34,8 @@
 | `exam_subjects`        | `jitec-faq`               | medium | 只读取三领域名称，不推导各领域配分                |
 | `passing_standard`     | `jitec-faq`               | high   | 保存「综合 600 分以上且各分野 300 分以上」原文    |
 | `application_rule`     | `jitec-application`       | high   | 保存官方原文片段，禁止推导统一报名窗口            |
+| `booking_window`       | `jitec-faq`               | high   | 保存「最短で翌日、最長で3ヵ月先」原文，不推导日期 |
+| `venue_rule`           | `jitec-faq`               | high   | 保存「試験開催状況一覧」按会场查日程/空席原文     |
 | `scoring_method`       | `youkou-pdf`              | medium | 只解析「ITパスポート試験…IRT…」原文，值固定 `IRT` |
 | `exam_date`            | 具体报名/公告页面         | high   | 仅提取明确日期；不得从当前日期或示例文本推算      |
 | `application_deadline` | 具体报名/公告页面         | high   | CBT 可能按场次变化，必须按页面声明的适用范围保存  |
@@ -71,14 +73,14 @@
 
 六个来源全部 HTTP 200，快照与 `analysis-report.json` 位于 `var/official-snapshots/it-passport/`（本地证据，未提交）：
 
-| 来源                | content_hash（前 12 位） | 候选 | 事实键                                                                            |
-| ------------------- | ------------------------ | ---- | --------------------------------------------------------------------------------- |
-| `ipa-exam`          | `d8e3c7812930`           | 0    | —                                                                                 |
-| `jitec-home`        | `359c3f4a260b`           | 0    | —                                                                                 |
-| `jitec-application` | `30b9a8bcf036`           | 2    | `application_change_deadline_rule`、`application_open_2026_may_sessions`          |
-| `ipa-fee`           | `371df8121666`           | 1    | `fee` = 7,500 円（`integer`，high）                                               |
-| `ipa-exam-detail`   | `dd00822a92b5`           | 4    | `exam_method`=CBT、`exam_time`=120 分、`question_format`、`question_count`=100 問 |
-| `jitec-faq`         | `d8d6f4bbefd8`           | 3    | `eligibility`、`exam_subjects`、`passing_standard`                                |
+| 来源                | content_hash（前 12 位） | 候选 | 事实键                                                                             |
+| ------------------- | ------------------------ | ---- | ---------------------------------------------------------------------------------- |
+| `ipa-exam`          | `d8e3c7812930`           | 0    | —                                                                                  |
+| `jitec-home`        | `359c3f4a260b`           | 0    | —                                                                                  |
+| `jitec-application` | `30b9a8bcf036`           | 2    | `application_change_deadline_rule`、`application_open_2026_may_sessions`           |
+| `ipa-fee`           | `371df8121666`           | 1    | `fee` = 7,500 円（`integer`，high）                                                |
+| `ipa-exam-detail`   | `dd00822a92b5`           | 4    | `exam_method`=CBT、`exam_time`=120 分、`question_format`、`question_count`=100 問  |
+| `jitec-faq`         | `d8d6f4bbefd8`           | 5    | `eligibility`、`exam_subjects`、`passing_standard`、`booking_window`、`venue_rule` |
 
 合计 10 条候选，全部 `pending_review`、`synthetic=false`；报告明确记录 `database_write: not_run`、`automatic_approval: not_run`。随后经单独授权写入本机审核队列：`jitec-application` 的 2 条此前已批准（本次 `ON CONFLICT` 未新增），其余 **8 条新候选已入库并于同日经所有者授权审核批准**，`pending_review` 归零。
 
@@ -89,13 +91,14 @@
 - 迁移 `0033_it_passport_cbt_dimensions_backfill.sql` 把既有 10 条事实的 `delivery_mode` 回填为 `cbt`，关闭 10 个 `dimensionMismatch` 缺口（含 `source_url`／`official_verified_at`）。
 - 适配器新增 `application_rule`（`jitec-application` 原文「受験申込内容（試験会場、受験日時）の変更は、試験日の3日前まで行うことができます。」）。
 - 迁移 `0034_it_passport_youkou_pdf_source.sql` 登记 `source:it-passport:youkou-pdf`；抓取同一官方 `試験要綱 Ver.5.6` PDF（`e191898aadf4…`），解析第 4(1) 条 IRT 原文生成 `scoring_method`。
-- 两条新候选经 `x-reviewer-id` 批准，本机 IT Passport 已批准事实 10 → 12；CI 夹具同步为 1813 facts／47 snapshots，`release-gate-baseline` 的 `it-passport.expectedFacts` 由 9 调整为 11。
-- 仍未覆盖：`venue_rule`、`booking_window`（官方只有会场一览与「初回申込日から1年後」变更口径，未据此推导字段）。
+- 适配器新增 `booking_window`（FAQ「申込み可能な試験日は、最短で翌日、最長で3ヵ月先…」）与 `venue_rule`（FAQ「試験開催状況一覧…都道府県ごとの試験会場の試験日…」），均按原文片段登记。
+- 四条新候选经 `x-reviewer-id` 批准，本机 IT Passport 已批准事实 10 → 13；CI 夹具同步为 1815 facts／47 snapshots，`release-gate-baseline` 的 `it-passport.expectedFacts` 由 9 调整为 13。
+- it-passport 14 个契约字段已全部覆盖，不再有未采集项。
 
 ## 当前结论
 
 离线解析边界、真实快照分析、显式授权的本地候选入库、审核队列和公开读取/展示链路均已完成本地验收。当前仍不等同于生产事实：真实候选必须人工审核，公开 API 继续过滤 synthetic 事实；实时定时采集、生产发布、正式认证和外部通知不在本阶段范围。
 
-2026-11-10 新增的 10 条候选中，8 条已完成「抓取 + 解析 + 报告 + 写入本机审核队列 + 人工批准」，2 条报名类候选此前已批准。审核使用 `x-reviewer-id` 头逐条写入 `reviews`，理由绑定对应官方快照；本机 IT Passport 现有 10 条已批准事实（本机库 `facts` 982→991，该增量只在本机，CI 夹具与发布基线仍为 982）。`ingest_it_passport_analysis.py` 按候选自带的 `value_type`／`risk_level` 写入，并只接受 high／medium 风险；首次写入曾把风险压平成 high，纠正后已删除错误行并重跑，结构类 5 条现为 `medium`，费用/资格/合格标准 3 条为 `high`。审核页 `/review/it-passport` 待审核 0 条，`verify:all` 恢复 6/6。
+2026-11-10 新增的 10 条候选中，8 条已完成「抓取 + 解析 + 报告 + 写入本机审核队列 + 人工批准」，2 条报名类候选此前已批准。审核使用 `x-reviewer-id` 头逐条写入 `reviews`，理由绑定对应官方快照；当时本机 IT Passport 新增 9 条已批准事实（本机库 `facts` 982→991）；2026-11-28 已增至 13 条，并同步 CI 夹具（1815 facts）与 `release-gate-baseline`（`it-passport.expectedFacts=13`）。`ingest_it_passport_analysis.py` 按候选自带的 `value_type`／`risk_level` 写入，并只接受 high／medium 风险；首次写入曾把风险压平成 high，纠正后已删除错误行并重跑，结构类 5 条现为 `medium`，费用/资格/合格标准 3 条为 `high`。审核页 `/review/it-passport` 待审核 0 条，`verify:all` 恢复 6/6。
 
 本地 fixture 候选入库命令要求同时设置 `STAGE2_LOCAL_WRITE=1`、`DATABASE_URL`、`IT_PASSPORT_FIXTURE` 和明确的 `IT_PASSPORT_EXAM_YEAR`，入口为 `services/collector/src/collector/ingest_it_passport.py`。审核队列地址为 `/review/it-passport`。fixture 候选保留 `synthetic=true`，不会进入公开 API。

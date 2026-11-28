@@ -377,11 +377,45 @@ def _extract_faq_page(
                 risk_level="high",
             )
         )
+    booking = re.search(
+        r"申込み可能な試験日は、最短で翌日、最長で3[ヵカヶ]月先\s*[（(][^）)]*[）)]\s*までとなります。"
+        r"\s*ただし、[^。]*確認してください。",
+        text,
+    )
+    if booking:
+        evidence = re.sub(r"\s+", "", booking.group(0))
+        candidates.append(
+            _candidate(
+                snapshot,
+                "booking_window",
+                evidence,
+                evidence,
+                evidence,
+                risk_level="high",
+            )
+        )
+    venue = re.search(
+        r"「受験申込み」の「試験開催状況一覧」から、都道府県ごとの試験会場の試験日、"
+        r"試験開始時間、座席数、空席数等が確認できます。",
+        text,
+    )
+    if venue:
+        evidence = venue.group(0)
+        candidates.append(
+            _candidate(
+                snapshot,
+                "venue_rule",
+                evidence,
+                evidence,
+                evidence,
+                risk_level="high",
+            )
+        )
     if not candidates:
         return [], (
             ITPassportParseIssue(
                 "target_fields_missing",
-                "JITEC FAQ contained no supported eligibility, subject or pass criteria",
+                "JITEC FAQ contained no supported eligibility, subject, pass criteria, booking or venue fields",
             ),
         )
     return candidates, ()

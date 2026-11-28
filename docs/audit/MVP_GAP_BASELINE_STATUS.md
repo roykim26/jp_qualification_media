@@ -16,7 +16,7 @@
 
 > 本表不把“官方未公开”和“尚未采集”强行区分：审计只能证明“没有 approved fact”，无法证明官方页面是否存在该字段。因此 19 个未满足键统一标为“未采集（官方是否公开待确认）”，而不是记为错误事实。
 
-## 2. 生产仍缺的 19 个 gap keys（本轮已解决 14 键，待发布生效）
+## 2. 生产仍缺的 19 个 gap keys（本轮已解决 16 键，待发布生效）
 
 ### bookkeeping（1）
 
@@ -36,7 +36,7 @@
 | key                                                   | 状态             | 说明                                                         |
 | ----------------------------------------------------- | ---------------- | ------------------------------------------------------------ |
 | `it-passport\|application_rule\|deliveryMode=cbt`     | 已补采           | 2026-11-28 按官方申込页原文建事实并批准                      |
-| `it-passport\|booking_window\|deliveryMode=cbt`       | 未采集           | 预约期间；官方只给「初回申込日から1年後」变更口径            |
+| `it-passport\|booking_window\|deliveryMode=cbt`       | 已补采           | 2026-11-28 按 FAQ「最短で翌日、最長で3ヵ月先…」原文批准      |
 | `it-passport\|eligibility\|deliveryMode=cbt`          | 维度回填后已满足 | 事实存在但 `delivery_mode` 为 NULL                           |
 | `it-passport\|exam_method\|deliveryMode=cbt`          | 维度回填后已满足 | 同上                                                         |
 | `it-passport\|exam_subjects\|deliveryMode=cbt`        | 维度回填后已满足 | 同上                                                         |
@@ -48,7 +48,7 @@
 | `it-passport\|question_format\|deliveryMode=cbt`      | 维度回填后已满足 | 同上                                                         |
 | `it-passport\|scoring_method\|deliveryMode=cbt`       | 已补采           | 2026-11-28 解析官方 `試験要綱 Ver.5.6` PDF 的 IRT 原文并批准 |
 | `it-passport\|source_url\|deliveryMode=cbt`           | 维度回填后已满足 | 官方来源 URL 已 verified，回填后命中                         |
-| `it-passport\|venue_rule\|deliveryMode=cbt`           | 未采集           | 会场规则；FAQ 只说明「試験開催状況一覧」按会场查日程/空席    |
+| `it-passport\|venue_rule\|deliveryMode=cbt`           | 已补采           | 2026-11-28 按 FAQ「試験開催状況一覧…」原文批准               |
 
 ### takken（2）
 
@@ -61,15 +61,14 @@
 
 it-passport 的 14 键里，10 键**不是**官方未公开，而是已批准事实缺少 `delivery_mode` 维度（审计原先把它们标为 `dimensionMismatch`）。2026-11-28 已用迁移 `0033_it_passport_cbt_dimensions_backfill.sql` 回填为 `cbt`，本地审计 14 → 4 键。
 
-随后按官方原文补采并批准 2 键（本地事实 9 → 11，迁移 `0034_it_passport_youkou_pdf_source.sql` 新增 PDF 来源）：
+随后按官方原文补采并批准 4 键（本地事实 9 → 13，迁移 `0034_it_passport_youkou_pdf_source.sql` 新增 PDF 来源）：
 
 - `application_rule`：官方申込页「受験申込内容（試験会場、受験日時）の変更は、試験日の3日前まで行うことができます。」
 - `scoring_method`：官方 `試験要綱 Ver.5.6` 第 4(1)「ITパスポート試験…においてはIRT（ItemResponseTheory：項目応答理論）に基づいて解答結果から評価点を算出する。」
+- `booking_window`：官方 FAQ「申込み可能な試験日は、最短で翌日、最長で3ヵ月先…までとなります。」
+- `venue_rule`：官方 FAQ「『受験申込み』の『試験開催状況一覧』から、都道府県ごとの試験会場の試験日、試験開始時間、座席数、空席数等が確認できます。」
 
-剩余 2 键仍需人工确认口径，未移出基线，也未写入未经官方原文支持的数值：
-
-- `venue_rule`：FAQ 只说明「試験開催状況一覧」按都道府県/会场查日程与空席，是否构成 `venue_rule` 需确认。
-- `booking_window`：官方只给「初回申込日から1年後の同日まで」变更可选口径，并非年度统一预约窗口。
+至此 it-passport 的 14 个键全部闭合；以上均按官方原文片段登记，未推导数值。发布后生产剩余已知缺口为 3 键（bookkeeping:1 question_count、takken 2 条到期下架）。
 
 ### fp 契约粒度（2026-11-28 所有者确认）
 
