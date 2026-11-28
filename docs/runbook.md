@@ -86,6 +86,26 @@ curl -s -o /dev/null -w '%{http_code} %{redirect_url}\n' https://shikakucheck.co
 
 排障 401：先看 `docker compose -f deploy/docker-compose.prod.yml exec -T admin printenv ADMIN_AUTH_USERS`（不应为空）；应用启动日志里 `invalid ADMIN_AUTH_USERS ...` 表示条目格式不对（名字 2–32 位 `[A-Za-z0-9._-]`、salt 32 个 hex、hash 64 个 hex）；浏览器可能缓存了旧口令，换无痕窗口再试。
 
+## CSP（Content-Security-Policy，report-only）
+
+`deploy/caddy/Caddyfile` 的 `shikakucheck.com` 站点块通过 `Content-Security-Policy-Report-Only` 下发 CSP，**只报告、不拦截**，用于在收紧到强制模式前观察真实违规。
+
+当前策略（最小权限、无 `default-src *`、无通配来源）：
+
+- `default-src 'self'`
+- `script-src 'self' 'unsafe-inline' https://www.googletagmanager.com`（站内两段内联交互脚本 + 同意后加载的 GA4）
+- `style-src 'self' 'unsafe-inline'`（首屏 critical CSS 内联 + 站内样式表）
+- `img-src 'self'`、`font-src 'self'`（图片/字体均同源；无外部字体）
+- `connect-src 'self' https://www.google-analytics.com https://region1.google-analytics.com https://www.googletagmanager.com`（GA4 收集端点）
+- `frame-ancestors 'none'`、`base-uri 'none'`、`form-action 'self'`、`object-src 'none'`
+
+维护方式：
+
+1. 新增任何第三方脚本/图片/字体/API 域名时，改 Caddyfile 对应指令；不要加 `*`。
+2. 部署后打开首页、搜索、详情、比较、日程、指南与 `/admin/`，看浏览器控制台是否出现 `[Report Only]` violation；同时 `curl -sI https://shikakucheck.com/ | grep -i content-security-policy` 确认头已下发。
+3. 计划收紧到强制模式前，先把内联脚本改为 nonce/hash 并移除 `'unsafe-inline'`；这一步是独立工作，不在当前 P1 范围。
+4. 回滚：删除 `Content-Security-Policy-Report-Only` 行 → `docker compose -f deploy/docker-compose.prod.yml exec -T caddy caddy reload --config /etc/caddy/Caddyfile`。
+
 ## 正式发布前门禁
 
 本地正式发布前必须执行：

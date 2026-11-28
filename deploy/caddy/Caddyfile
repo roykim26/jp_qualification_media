@@ -19,6 +19,12 @@ shikakucheck.com {
 		X-Frame-Options "DENY"
 		Referrer-Policy "strict-origin-when-cross-origin"
 		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		# P1-07: report-only first. Inline scripts/styles and the consent-gated
+		# GA4 loader are why 'unsafe-inline' is still listed; enforcement needs a
+		# nonce/hash pass first. When adding any third-party resource, extend the
+		# matching directive here and re-check the browser console. Rollback:
+		# delete this line and `caddy reload`.
+		Content-Security-Policy-Report-Only "default-src 'self'; script-src 'self' 'unsafe-inline' https://www.googletagmanager.com; style-src 'self' 'unsafe-inline'; img-src 'self'; font-src 'self'; connect-src 'self' https://www.google-analytics.com https://region1.google-analytics.com https://www.googletagmanager.com; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'"
 	}
 
 	handle /googlea01c41ed599c5311.html {

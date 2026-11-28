@@ -9,8 +9,15 @@
 - **P1-04 内部数据质量评分**：新增 `scripts/quality-score-lib.mjs`，`audit:mvp` 输出 `quality`：source／scope／freshness／consistency／coverage／review／calendar，每维给出分母、分子、缺失原因；均分且显式 `factsCountUsed=false`；区分 n/a、unknown、known debt；新增未知 gap 仍 blocking。测试 `scripts/quality-score-lib.test.mjs`。
 - **P1-05 47 gap keys 复核**：生产审计（`5e709df`、1811 approved facts）逐键核对＝19 键仍未采集、28 键生产已满足但保留在基线（CI/local 缩小夹具仍需要）；G-16 `change_events.operator_id/reason` 已确认在 schema/migration/INSERT 三处存在，矩阵改为已修复。新增 `docs/audit/MVP_GAP_BASELINE_STATUS.md`，更新 `config/mvp-audit-baseline.json` 的复核注记与 `docs/audit/V2_GAP_MATRIX.md` §2.3／G-15／G-16。**47 是 gap keys，不是 47 条错误事实。**
 - **P1-06 文档同步**：README 区分“仓库夹具 1007/37、本机开发库 1037/123/53、生产库 1811 approved/123/53”；修正 README 与 RUNBOOK 对 admin 是否上生产的矛盾（admin 已在 `/admin/` 运行，采集链仍留本机）；本页、`docs/next-round-ticket.md`、`docs/transition-handoff.md` 增加 2026-11-28 时点注记。
-- **P1-07 CSP**：见下方“CSP”小节（report-only 起步，最小权限，回滚＝移除 header）。
-- **验证（2026-11-28 现取）**：`tsc -p tsconfig.json --noEmit` 通过；P1 相关 vitest 分组全绿；`audit:mvp` 本地＝1037 facts、22 gaps（17 known／5 new，均为 bookkeeping:3 夹具裁剪漂移）、quality `blocked` 72.3；生产＝1811 facts、19 known／0 new／`warning`。全量门禁与部署状态在下文“P1 收尾”补齐。
+- **P1-07 CSP**：`deploy/caddy/Caddyfile` 的 `shikakucheck.com` 块加入 `Content-Security-Policy-Report-Only`：`default-src 'self'`，脚本 `'self' 'unsafe-inline' https://www.googletagmanager.com`，样式 `'self' 'unsafe-inline'`，图片/字体 `'self'`，connect `'self'` + GA4 两域 + gtm，`frame-ancestors 'none'`、`base-uri 'none'`、`form-action 'self'`、`object-src 'none'`；无 `*`、无 `default-src *`。新增 `scripts/csp-config.test.mjs` 校验策略与其余 5 项安全头，并确认 blog vhost 未受影响；`docs/runbook.md` 增加维护/抽查/回滚步骤，`docs/compliance-audit-2026-11-13.md` L1 更新为 6/6（CSP report-only）。**未部署**：强制模式前仍需 nonce/hash 并移除 `'unsafe-inline'`。
+- **验证（2026-11-28 现取）**：`tsc -p tsconfig.json --noEmit` 通过；`npm run build` 通过；`npm run lint` 通过；`npm test`＝36 files／583 tests 全绿；`npm run test:verify-gate`＝129 tests 全绿（含新增 `quality-score-lib` 与 `csp-config`）；`npm run hygiene:check`＝358 tracked files clean。`format:check` 对已跟踪改动文件通过；本地整仓 `format:check` 因未跟踪的 `docs/第二轮审计及迭代开发任务/*.md`（4 个，未提交、不属于本轮）以 exit 1 结束，CI 不含这些文件。`audit:mvp` 本地＝1037 facts、22 gaps（17 known／5 new，均为 bookkeeping:3 夹具裁剪漂移）、quality `blocked` 72.3（本地夹具口径，不代表生产）；生产只读审计＝1811 approved facts、19 known／0 new／`warning`。
+
+### P1 收尾：部署状态与回滚
+
+- **已部署生产**：仅 P0（`5e709df`）。P1-01～P1-07 只在本地/CI 验证，**尚未部署**。
+- **部署顺序（获授权后）**：`git pull --ff-only` → 重建 `api`／`web`／`admin`（无 migration）→ Caddy 配置含 CSP report-only，需 `caddy reload`。部署后按 runbook 抽查 `/updates/` 无 A→A、时间标签统一、比较器 scope 提示、CSP 响应头与控制台。
+- **回滚**：代码按提交 revert 后重建容器；CSP 删除 `Content-Security-Policy-Report-Only` 行并 `caddy reload`；无数据库迁移。
+- **未解决**：it-passport 14 个、takken payment_deadline 2 个、fp PBT 2 个、bookkeeping 1 级 question_count 1 个仍无 approved fact；history statistics 的 `exam_session` 未落库（scope 16.6%）；CSP 仍是 report-only 且含 `'unsafe-inline'`，强制模式需 nonce/hash。
 - **生产部署影响**：P0 已部署；P1 未部署。回滚：代码按提交 revert；CSP 仅移除 Caddy header 后 reload。
 
 ## 2026-11-19（页脚邮箱移除轮・已交付已部署：页脚「法務・連絡」栏去掉 contact@shikakucheck.com 直显、contact/corrections/operator/privacy 四页正文 mailto 保留；squash PR #109 合并 `dc4e0ec`，PR CI `44441472295`＋main push CI `44441881700` 双绿；已部署东京 `f3a6492`→`dc4e0ec`＋线上六页 HTML／三视口复核；零库写入／零迁移／零判级面改动，计数仍 1007／37；vitest 17 文件／189、verify:all 6/6、gate 40/40/0）
