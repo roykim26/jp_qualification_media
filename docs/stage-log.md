@@ -1,5 +1,18 @@
 # 阶段记录与剩余问题
 
+## 2026-11-28（P0 数据语义收口＋P1 可信度／数据治理／工程维护轮・P0 已部署、P1 待部署）
+
+- 起因：第二轮审计的 `P0_FIX_TASK.md`／`P1_FIX_TASK.md`。P0 已先完成并部署生产 `5e709df`（`5db4eed`＝日历 `exam_period` 语义、费用 scope 区间、来源时间标签；`5e709df`＝隐藏 pre-launch 迁移占位时间）。生产抽查通过：FP 試験期間、費 4,000～28,000、年度页期间、日程期间、ICS 单 VEVENT、占位时间不再泄漏。
+- **P1-01 更新日志 no-op 过滤**：把显示格式化抽到 `packages/schema/src/display.ts`（`apps/web/src/format.ts` 仅 re-export），新增 `normalizedUpdateDisplayValue()`／`isNoOpUpdate()`；`services/api/src/public-updates.ts` 在服务层按“用户可见值”过滤 A→A，并用窗口扫描保证 `limit/offset/hasMore` 正确。测试 `tests/public-updates-noop.test.ts`（A→A、A→B、数字/日期/空白/枚举归一、null→A、空 after）。
+- **P1-02 时间标签统一**：新增 `apps/web/src/time.ts`，四个标签（公式情報確認（審査）／取得日時（チェック）／掲載日時（本サイト）／公式発表日）各自对应唯一字段；所有存储时刻统一按 `Asia/Tokyo` 渲染，`formatSiteDateAttribute()` 供 `<time datetime>`；首页/详情/更新日志/日程/来源说明全部改走同一实现。测试 `tests/time-labels.test.ts`、`tests/provenance-time.test.ts`、`tests/web-render.test.ts`。
+- **P1-03 比较器 scope**：`PublicCompareCell.scopeVaries` 改为仅在 provider／level／component／delivery／payment 真正不同时为 true；同 scope 多回/多项目显示独立提示，不再误称“适用范围不同”；不平均合格率、不合并级别费用。测试 `tests/compare-scopes.test.ts`。
+- **P1-04 内部数据质量评分**：新增 `scripts/quality-score-lib.mjs`，`audit:mvp` 输出 `quality`：source／scope／freshness／consistency／coverage／review／calendar，每维给出分母、分子、缺失原因；均分且显式 `factsCountUsed=false`；区分 n/a、unknown、known debt；新增未知 gap 仍 blocking。测试 `scripts/quality-score-lib.test.mjs`。
+- **P1-05 47 gap keys 复核**：生产审计（`5e709df`、1811 approved facts）逐键核对＝19 键仍未采集、28 键生产已满足但保留在基线（CI/local 缩小夹具仍需要）；G-16 `change_events.operator_id/reason` 已确认在 schema/migration/INSERT 三处存在，矩阵改为已修复。新增 `docs/audit/MVP_GAP_BASELINE_STATUS.md`，更新 `config/mvp-audit-baseline.json` 的复核注记与 `docs/audit/V2_GAP_MATRIX.md` §2.3／G-15／G-16。**47 是 gap keys，不是 47 条错误事实。**
+- **P1-06 文档同步**：README 区分“仓库夹具 1007/37、本机开发库 1037/123/53、生产库 1811 approved/123/53”；修正 README 与 RUNBOOK 对 admin 是否上生产的矛盾（admin 已在 `/admin/` 运行，采集链仍留本机）；本页、`docs/next-round-ticket.md`、`docs/transition-handoff.md` 增加 2026-11-28 时点注记。
+- **P1-07 CSP**：见下方“CSP”小节（report-only 起步，最小权限，回滚＝移除 header）。
+- **验证（2026-11-28 现取）**：`tsc -p tsconfig.json --noEmit` 通过；P1 相关 vitest 分组全绿；`audit:mvp` 本地＝1037 facts、22 gaps（17 known／5 new，均为 bookkeeping:3 夹具裁剪漂移）、quality `blocked` 72.3；生产＝1811 facts、19 known／0 new／`warning`。全量门禁与部署状态在下文“P1 收尾”补齐。
+- **生产部署影响**：P0 已部署；P1 未部署。回滚：代码按提交 revert；CSP 仅移除 Caddy header 后 reload。
+
 ## 2026-11-19（页脚邮箱移除轮・已交付已部署：页脚「法務・連絡」栏去掉 contact@shikakucheck.com 直显、contact/corrections/operator/privacy 四页正文 mailto 保留；squash PR #109 合并 `dc4e0ec`，PR CI `44441472295`＋main push CI `44441881700` 双绿；已部署东京 `f3a6492`→`dc4e0ec`＋线上六页 HTML／三视口复核；零库写入／零迁移／零判级面改动，计数仍 1007／37；vitest 17 文件／189、verify:all 6/6、gate 40/40/0）
 
 - 起因：号主贴生产页脚截图（圈出邮箱条目）＋指示「联系页里面有邮箱就行了，外面页底这个位置去掉邮箱展示」，并连续授权「修改后自动完成上线部署、测试验证、文档落账的全部流程」。

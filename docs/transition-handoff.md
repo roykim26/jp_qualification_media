@@ -1,7 +1,12 @@
 # 交接单：簿記批准轮已收口＋历年统计接上公开面＋G-2 完整方案已进 main＋`?year=`／sitemap 的 SEO 口径已定（`?year=` 不收；sitemap 改为状态门＋按内容（空栏目页 `noindex` 且不收、年度 URL 数据驱动）；2026-11-10 时点；`facts` 982（基本情報 FE 停考 `suspension_period` 已批准）、非合成 `pending_review` 归 0、门禁 6/6）
 
-> **2026-11-24 更新注记（本文正文仍是 2026-11-10 #68 时点快照，未重写；新增注记一律加在本文最上方，旧注记保留）**：
+> **2026-11-28 更新注记（本文正文仍是 2026-11-10 #68 时点快照；新注记加在最上方，旧注记保留）**：
 >
+> 1. **P0 已部署、P1 已提交未部署**：P0（日历 `exam_period` 语义、费用 scope 区间、来源时间标签、迁移占位时间隐藏）合并为 `5db4eed`／`5e709df` 并部署生产；P1-01…P1-07（更新日志 no-op 过滤、统一时间标签、比较器 scope、内部质量评分、47 gap keys 复核、文档同步、CSP）只在本分支/CI 验证，生产尚未部署。main 现取以 `git log -1` 与 `docs/next-round-ticket.md` 为准。
+> 2. **库侧读数（2026-11-28 现取）**：生产 `facts` 1814（approved 1811／superseded 3）／`snapshots` 123／`sources` 53；本机开发库 `facts` 1037／`snapshots` 123／`sources` 53；仓库导出夹具／CI 基线仍 1007 facts／37 snapshots（是夹具，不是实时生产库）。迁移目录到 `0032`。审计：生产 19 known gaps／0 new／`warning`，逐键见 `docs/audit/MVP_GAP_BASELINE_STATUS.md`；本地多出 5 个 bookkeeping:3 缺口＝夹具裁剪漂移，未加入基线。
+> 3. **admin 生产状态更正**：`deploy/docker-compose.prod.yml` 的 `admin` 服务已在生产运行，挂 `/admin/`、HTTP Basic；采集链与实时定时采集仍留开发机。README/RUNBOOK 已按此统一。
+> 4. **新增内部审计能力**：`audit:mvp` 输出 `quality`（source／scope／freshness／consistency／coverage／review／calendar，按维度均分、不按 facts 数加权）。CSP 按 P1-07 以 report-only 起步；Caddy 配置变更属部署配置，需单独授权后上线。
+
 > 1. **main 已前进到 `01b86dd`**（PR #111＝常备线上视觉冒烟工具 `scripts/visual_smoke.py` +101 行＋开工单 §3 补 `node_modules/.bin` shim 缺失根因与修法，纯工具/文档）；其前 `9df67ed`（PR #110＝落账 #109 交付链＋#108 中间轮＋清理＋部署，五处文档纯文档）、`dc4e0ec`（PR #109＝页脚移除邮箱直显）。**远端 heads 现为 5 条**（`main`／`chore/dev-env-file`／`feat/p0-1-core-facts`／`feat/prod-pg18`／`feat/prod-pg18-mount`），`docs/pr104-close` 已不在远端。
 > 2. **库侧读数已过期**：§3 首段的 `sources` 45／`facts` 982（FE 11）／`snapshots` 31 是 2026-11-10 夹具档读数；2026-11-13 现取已是 `sources` 52／`facts` **1007**（takken 16／gyoseishoshi 15／it-passport 10／FE 28／bookkeeping 863／fp 75）／`candidate_facts` 1046 全 approved／`snapshots` 80／迁移 30（`0000–0029`）。**2026-11-24 本轮 `jpqm-pg18` 未运行**（`docker ps` 无该容器、55432 连接被拒），库侧读数一个都没重取。
 > 3. **§4 待办 2 的结论已被推翻**：正文写「基本情報技術者附件提取…全仓既无 PDF 也无 xlsx 解析能力」——**该判断不成立**。现在仓库里有 `services/collector/src/collector/fe_statistics_xlsx.py`（9664 B，openpyxl 解析 xlsx）与 `services/collector/src/collector/youkou_pdf.py`（`:14` `from pypdf import PdfReader`，pypdf 7.0.1 已装）。FE 附件提取已由工作包 J／D2 轮落地，`202610` 月度刷新是当前唯一未做的既有待办（预期 2026-12 上中旬）。

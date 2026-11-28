@@ -38,7 +38,7 @@ docker compose -f deploy/docker-compose.prod.yml exec -T web node -e "fetch('htt
 
 数据侧当前状态为 **1007 条**已批准正式事实（宅建 16／行政書士 15／IT Passport 10／基本情報技術者 28／簿記 863／FP 75）、覆盖缺口 0、`pnpm verify:all` 六资格全通过（读数见 `docs/data-gate-semantics.md` 第 10 节）。注意 1007 条里簿記占 863 条（85.7%）且几乎全是历年合格率统计，**条数不代表六个资格信息同等丰富**；`coverageGaps=0` 也不代表字段齐备（`conditional` 档在维度未命中时整条跳过、`post_event` 档永不参与），语义见 `docs/data-gate-semantics.md`。
 
-仍不在生产范围：实时定时采集（采集继续在开发机本机跑）、admin 与采集链上 VPS、正式认证与外部通知。页面完成不等于数据完成；每个资格哪些字段有官方事实、哪些靠规则型说明闭合，以对应的 `docs/<qualification>-source-contract.md` 为准。
+仍不在生产范围：实时定时采集与采集链本身（采集继续在开发机本机跑）。admin 已作为独立容器部署在 `/admin/`（HTTP Basic，见「admin 后台部署与鉴权」）。页面完成不等于数据完成；每个资格哪些字段有官方事实、哪些靠规则型说明闭合，以对应的 `docs/<qualification>-source-contract.md` 为准。
 
 API 契约见 [docs/api-contract.md](api-contract.md)。阶段 1 宅建闭环说明见 [docs/stage1-takken.md](stage1-takken.md)。门禁语义、判级规则与三级授权边界见 [docs/data-gate-semantics.md](data-gate-semantics.md)。
 

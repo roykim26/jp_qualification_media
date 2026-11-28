@@ -1,8 +1,8 @@
 # 日本资格考试数据媒体
 
-阶段 1 的宅建与 IT Passport 本地闭环已归档；阶段 2 的六资格页面、跨资格日程/比较/更新与 ICS 下载，以及阶段 3 的技术 SEO 基线均已完成。**公开站与公开 API 自 2026-11-15 起已部署生产（`https://shikakucheck.com`）**；admin 与采集链不上生产，采集继续在开发机本机跑。任何动态事实都必须先经批准才出现在公开面。
+阶段 1 的宅建与 IT Passport 本地闭环已归档；阶段 2 的六资格页面、跨资格日程/比较/更新与 ICS 下载，以及阶段 3 的技术 SEO 基线均已完成。**公开站、公开 API 与 admin 后台自 2026-11-15 起已部署生产（`https://shikakucheck.com`；admin 挂在 `/admin/`，HTTP Basic 鉴权，见 runbook）**；采集链与实时定时采集不上生产，继续在开发机本机跑。任何动态事实都必须先经批准才出现在公开面。
 
-页面完成不等于数据完成。数据现状：本机库 1007 条已批准正式事实（宅建 16／行政書士 15／IT Passport 10／基本情報技術者 28／簿記 863／FP 75；release baseline 与 CI 夹具已同批刷新为 1007 facts／37 snapshots＝本机库／baseline／CI 夹具三方一致，2026-11-13 随 squash PR #79 合并；D2 八条纯新增、按 fact_id 比对零值差），覆盖缺口 0（`coverageGaps=0` 只表示 required 档字段齐全，`conditional` 档在维度未命中时整条跳过、`post_event` 档永不参与，**不等于字段全齐**），`pnpm verify:all` 六资格全通过。历史统计类字段：簿記 863 条历年统计事实已批准并接上公开面历年表（工作包 G）；FE 统计五字段已由推移表 xlsx 事实化（工作包 J，令和7完整年度 5 条，迁移 0029；目录页 `statistics-fe` 供方法论证据；同日 D2 历史年度轮再批准令和5/6 八条，`exam_year` 2023/2024，FE 统计合计 13 条）；其余资格的合格率等字段仍无已批准事实，其只读调研与候选官方统计页清单见 [docs/work-package-f-statistics-sources.md](docs/work-package-f-statistics-sources.md)。逐资格字段账目见 `docs/<qualification>-source-contract.md`，门禁与授权口径见 [docs/data-gate-semantics.md](docs/data-gate-semantics.md)。
+页面完成不等于数据完成。数据基线分三种口径，不能混读（2026-11-28 现取）：**仓库导出夹具／CI 基线＝1007 facts／37 snapshots**（`fixtures/ci/approved-facts.sql` 与 `config/release-gate-baseline.json`，逐格 16／15／10／28／863／75，2026-11-13 随 PR #79 合并；它是可审查的导出夹具，不是实时生产库）；**本机开发库＝1037 facts／123 snapshots／53 sources**（`jpqm-pg18`，2026-11-28 现取）；**生产库＝1811 approved facts（另 3 superseded）／123 snapshots／53 sources**（2026-11-28 现取）。公开面覆盖缺口以 `audit:mvp` 为准：生产为 19 个已知 gap keys、0 new（`warning`），逐键状态见 [docs/audit/MVP_GAP_BASELINE_STATUS.md](docs/audit/MVP_GAP_BASELINE_STATUS.md)；`coverageGaps=0` 只表示 required 档字段齐全，`conditional` 档在维度未命中时整条跳过、`post_event` 档永不参与，**不等于字段全齐**；`pnpm verify:all` 六资格全通过。历史统计类字段：簿記 863 条历年统计事实已批准并接上公开面历年表（工作包 G）；FE 统计五字段已由推移表 xlsx 事实化（工作包 J，令和7完整年度 5 条，迁移 0029；目录页 `statistics-fe` 供方法论证据；同日 D2 历史年度轮再批准令和5/6 八条，`exam_year` 2023/2024，FE 统计合计 13 条）；其余资格的合格率等字段仍无已批准事实，其只读调研与候选官方统计页清单见 [docs/work-package-f-statistics-sources.md](docs/work-package-f-statistics-sources.md)。逐资格字段账目见 `docs/<qualification>-source-contract.md`，门禁与授权口径见 [docs/data-gate-semantics.md](docs/data-gate-semantics.md)。
 
 ## 本地启动
 
@@ -18,7 +18,7 @@ pnpm build
 
 需要数据库时：`docker compose up -d`，再执行 `pnpm db:migrate` 与 `pnpm db:seed`。种子仅包含 6 个资格的稳定主数据和别名，不包含动态事实。
 
-入口：`pnpm dev:api`（API）、`pnpm dev:web`（公开站，六资格全部页面）、`pnpm dev:admin`（后台骨架）。后台写操作（批准、拒绝、延期、撤销）只接受 `x-reviewer-id` 请求头，`?reviewer=` 查询参数仅用于打开队列页（只读），不提供匿名生产写入。
+入口：`pnpm dev:api`（API）、`pnpm dev:web`（公开站，六资格全部页面）、`pnpm dev:admin`（后台本机开发；生产 `/admin/` 为同应用 + HTTP Basic，见 runbook）。后台写操作（批准、拒绝、延期、撤销）只接受 `x-reviewer-id` 请求头，`?reviewer=` 查询参数仅用于打开队列页（只读），不提供匿名生产写入。
 
 公开页默认从 `http://127.0.0.1:4100` 读取 API，可用 `API_BASE_URL` 覆盖。**`NODE_ENV=production` 时 `API_BASE_URL` 与 `SITE_ORIGIN` 必须显式设置，否则 web 进程拒绝启动**（缺 `API_BASE_URL` 会在容器内静默连自己，用户看到 503 而 healthcheck 仍报健康；详见 [docs/runbook.md](docs/runbook.md) 的「web 进程的启动门禁」）。公开页入口为 `/`、`/shikaku/`（六资格总览）、`/shikaku/{slug}/` 及各自的 `/application/`、`/exam-content/`、`/pass-rate/`、`/{year}/` 年度页，另有 `/schedule/`、`/compare/`、`/pass-rate/`、`/guide/`、`/updates/`、`/about/*` 等。完整路由清单与索引策略见 [docs/adr/0002-index-policy.md](docs/adr/0002-index-policy.md)。
 
